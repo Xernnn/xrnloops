@@ -53,7 +53,7 @@ public class ExportCSVTaskTest extends BaseTest
     @Test
     public void exportCSV() throws Throwable
     {
-        HabitFixtures.createNonDailyHabit();
+        HabitFixtures.createShortHabit();
         List<Habit> habits = Habit.getAll(true);
         ProgressBar bar = new ProgressBar(targetContext);
 
