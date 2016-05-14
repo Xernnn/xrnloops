@@ -19,10 +19,15 @@
 
 package org.isoron.uhabits.commands;
 
-import android.support.annotation.Nullable;
+import android.support.annotation.NonNull;
 
 import org.isoron.uhabits.helpers.DatabaseHelper;
+import org.isoron.uhabits.models.Habit;
+import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.util.List;
 
 public abstract class Command
 {
@@ -52,8 +57,21 @@ public abstract class Command
         return null;
     }
 
-    @Nullable
-    public JSONObject toJSON() { return null; }
+    public JSONObject toJSON()
+    {
+        try
+        {
+            JSONObject root = new JSONObject();
+            JSONObject data = new JSONObject();
+            root.put("id", getId());
+            root.put("data", data);
+            return root;
+        }
+        catch (JSONException e)
+        {
+            throw new RuntimeException(e.getMessage());
+        }
+    }
 
     public String getId()
     {
