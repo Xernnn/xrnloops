@@ -19,8 +19,18 @@
 
 package org.isoron.uhabits.tasks;
 
+/**
+ * Simple progress bar, used to indicate the progress of a task.
+ */
 public interface ProgressBar
 {
+    /**
+     * Shows the progress bar.
+     */
     void show();
+
+    /**
+     * Hides the progress bar.
+     */
     void hide();
 }
