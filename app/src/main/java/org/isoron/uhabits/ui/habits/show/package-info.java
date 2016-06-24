@@ -18,7 +18,7 @@
  */
 
 /**
- * Provides activity that display detailed habit information and related
+ * Provides activity that displays detailed habit information and related
  * classes.
  */
 package org.isoron.uhabits.ui.habits.show;

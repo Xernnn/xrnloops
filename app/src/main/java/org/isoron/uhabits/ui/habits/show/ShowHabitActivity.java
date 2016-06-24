@@ -22,12 +22,11 @@ package org.isoron.uhabits.ui.habits.show;
 import android.content.*;
 import android.net.*;
 import android.os.*;
-import android.support.v7.app.*;
+import android.support.annotation.*;
 
 import org.isoron.uhabits.*;
 import org.isoron.uhabits.models.*;
 import org.isoron.uhabits.ui.*;
-import org.isoron.uhabits.utils.*;
 
 import javax.inject.*;
 
@@ -38,25 +37,8 @@ import javax.inject.*;
  */
 public class ShowHabitActivity extends BaseActivity
 {
-    private Habit habit;
-
     @Inject
     HabitList habitList;
-
-    public Habit getHabit()
-    {
-        return habit;
-    }
-
-    public void setupHabitActionBar()
-    {
-        if (habit == null) return;
-
-        ActionBar actionBar = getSupportActionBar();
-        if (actionBar == null) return;
-
-        actionBar.setTitle(habit.getName());
-    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -64,13 +46,17 @@ public class ShowHabitActivity extends BaseActivity
         super.onCreate(savedInstanceState);
         HabitsApplication.getComponent().inject(this);
 
+        Habit habit = getHabitFromIntent();
+        ShowHabitScreen screen = new ShowHabitScreen(this, habit);
+        setScreen(screen);
+    }
+
+    @NonNull
+    private Habit getHabitFromIntent()
+    {
         Uri data = getIntent().getData();
-        habit = habitList.getById(ContentUris.parseId(data));
-
-        setContentView(R.layout.show_habit_activity);
-        BaseScreen.setupActionBarColor(this,
-            ColorUtils.getColor(this, habit.getColor()));
-
-        setupHabitActionBar();
+        Habit habit = habitList.getById(ContentUris.parseId(data));
+        if (habit == null) throw new RuntimeException("habit not found");
+        return habit;
     }
 }
