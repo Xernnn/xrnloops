@@ -43,15 +43,9 @@ public class CheckmarkWidget extends BaseWidget
     }
 
     @Override
-    public int getLayoutId()
-    {
-        return R.layout.widget_wrapper;
-    }
-
-    @Override
     public PendingIntent getOnClickPendingIntent(Context context)
     {
-        return HabitBroadcastReceiver.buildCheckIntent(context, habit, null);
+        return HabitPendingIntents.toggleCheckmark(context, habit, null);
     }
 
     @Override
@@ -86,11 +80,5 @@ public class CheckmarkWidget extends BaseWidget
     protected int getDefaultWidth()
     {
         return 125;
-    }
-
-    @Override
-    protected String getTitle()
-    {
-        return habit.getName();
     }
 }

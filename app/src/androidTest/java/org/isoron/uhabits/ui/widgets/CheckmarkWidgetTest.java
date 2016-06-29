@@ -19,7 +19,6 @@
 
 package org.isoron.uhabits.ui.widgets;
 
-import android.content.*;
 import android.support.test.runner.*;
 import android.test.suitebuilder.annotation.*;
 import android.widget.*;
@@ -70,16 +69,13 @@ public class CheckmarkWidgetTest extends BaseViewTest
         button.performClick();
         sleep(1000);
 
-        assertThat(checkmarks.getTodayValue(), equalTo(CHECKED_IMPLICITLY));
+        assertThat(checkmarks.getTodayValue(), equalTo(UNCHECKED));
     }
 
     @Test
     public void testIsInstalled()
     {
-        ComponentName provider =
-            new ComponentName(targetContext, CheckmarkWidgetProvider.class);
-
-        assertWidgetProviderIsInstalled(provider);
+        assertWidgetProviderIsInstalled(CheckmarkWidgetProvider.class);
     }
 
     @Test
