@@ -40,9 +40,10 @@ public class CreateHabitDialogFragment extends BaseDialogFragment
             prefs.getDefaultHabitColor(modifiedHabit.getColor()));
     }
 
+    @Override
     protected void saveHabit()
     {
-        Command command = new CreateHabitCommand(modifiedHabit);
+        Command command = new CreateHabitCommand(habitList, modifiedHabit);
         commandRunner.execute(command, null);
     }
 }
