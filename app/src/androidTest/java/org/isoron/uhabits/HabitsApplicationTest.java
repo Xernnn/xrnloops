@@ -33,7 +33,7 @@ import static org.hamcrest.MatcherAssert.*;
 import static org.hamcrest.Matchers.*;
 
 @RunWith(AndroidJUnit4.class)
-@SmallTest
+@MediumTest
 public class HabitsApplicationTest extends BaseAndroidTest
 {
     @Test

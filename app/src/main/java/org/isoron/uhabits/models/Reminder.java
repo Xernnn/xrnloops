@@ -38,8 +38,8 @@ public final class Reminder
      * Returns the days of the week the reminder should be shown.
      * <p>
      * This field can be converted to a list of booleans using the method
-     * DateHelper.unpackWeekdayList and converted back to an integer by using
-     * the method DateHelper.packWeekdayList.
+     * DateUtils.unpackWeekdayList and converted back to an integer by using the
+     * method DateUtils.packWeekdayList.
      */
     public int getDays()
     {
