@@ -45,7 +45,7 @@ public class HabitLogger
         int min = Math.min(3, habit.getName().length());
         String name = habit.getName().substring(0, min);
 
-        DateFormat df = DateUtils.getBackupDateFormat();
+        DateFormat df = DateFormats.getBackupDateFormat();
         String time = df.format(new Date(reminderTime));
 
         Log.i("ReminderHelper",

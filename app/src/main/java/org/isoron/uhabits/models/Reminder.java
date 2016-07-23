@@ -19,29 +19,25 @@
 
 package org.isoron.uhabits.models;
 
+import android.support.annotation.*;
+
 public final class Reminder
 {
     private final int hour;
 
     private final int minute;
 
-    private final int days;
+    private final WeekdayList days;
 
-    public Reminder(int hour, int minute, int days)
+    public Reminder(int hour, int minute, @NonNull WeekdayList days)
     {
         this.hour = hour;
         this.minute = minute;
         this.days = days;
     }
 
-    /**
-     * Returns the days of the week the reminder should be shown.
-     * <p>
-     * This field can be converted to a list of booleans using the method
-     * DateUtils.unpackWeekdayList and converted back to an integer by using the
-     * method DateUtils.packWeekdayList.
-     */
-    public int getDays()
+    @NonNull
+    public WeekdayList getDays()
     {
         return days;
     }
