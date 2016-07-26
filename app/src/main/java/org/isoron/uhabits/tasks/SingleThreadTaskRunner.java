@@ -21,8 +21,20 @@ package org.isoron.uhabits.tasks;
 
 import java.util.concurrent.*;
 
+import javax.inject.*;
+
+import dagger.*;
+
+@Module
 public class SingleThreadTaskRunner implements TaskRunner
 {
+    @Provides
+    @Singleton
+    public static SingleThreadTaskRunner getInstance()
+    {
+        return new SingleThreadTaskRunner();
+    }
+
     @Override
     public void execute(Task task)
     {
