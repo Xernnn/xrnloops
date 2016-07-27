@@ -19,10 +19,13 @@
 
 package org.isoron.uhabits.ui.habits.edit;
 
+import com.google.auto.factory.*;
+
 import org.isoron.uhabits.*;
 import org.isoron.uhabits.commands.*;
 import org.isoron.uhabits.models.*;
 
+@AutoFactory(allowSubclasses = true)
 public class CreateHabitDialog extends BaseDialog
 {
     @Override

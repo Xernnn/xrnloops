@@ -26,8 +26,6 @@ import org.isoron.uhabits.models.*;
 import org.isoron.uhabits.ui.*;
 import org.isoron.uhabits.ui.habits.edit.*;
 
-import java.io.*;
-
 import javax.inject.*;
 
 public class DialogFactory
@@ -47,27 +45,8 @@ public class DialogFactory
     }
 
     @NonNull
-    public ConfirmDeleteDialog buildConfirmDeleteDialog(
-        @NonNull ConfirmDeleteDialog.Callback callback)
-    {
-        return new ConfirmDeleteDialog(context, callback);
-    }
-
-    @NonNull
-    public CreateHabitDialog buildCreateHabitDialog()
-    {
-        return new CreateHabitDialog();
-    }
-
-    @NonNull
     public EditHabitDialog buildEditHabitDialog(Habit habit)
     {
         return EditHabitDialog.newInstance(habit);
-    }
-
-    @NonNull
-    public FilePickerDialog buildFilePicker(File dir)
-    {
-        return new FilePickerDialog(context, dir);
     }
 }
