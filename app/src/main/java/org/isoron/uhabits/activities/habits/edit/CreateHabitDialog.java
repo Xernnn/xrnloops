@@ -46,7 +46,7 @@ public class CreateHabitDialog extends BaseDialog
     @Override
     protected void saveHabit()
     {
-        Command command = component
+        Command command = appComponent
             .getCreateHabitCommandFactory()
             .create(habitList, modifiedHabit);
         commandRunner.execute(command, null);
