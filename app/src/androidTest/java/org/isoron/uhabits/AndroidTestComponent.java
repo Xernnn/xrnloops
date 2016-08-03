@@ -23,11 +23,9 @@ package org.isoron.uhabits;
 import org.isoron.uhabits.models.sqlite.*;
 import org.isoron.uhabits.tasks.*;
 
-import javax.inject.*;
-
 import dagger.*;
 
-@Singleton
+@AppScope
 @Component(modules = {
     AppModule.class, SingleThreadTaskRunner.class, SQLModelFactory.class
 })
