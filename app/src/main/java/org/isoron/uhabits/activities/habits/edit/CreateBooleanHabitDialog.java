@@ -39,8 +39,7 @@ public class CreateBooleanHabitDialog extends BooleanHabitDialog
     {
         modifiedHabit = modelFactory.buildHabit();
         modifiedHabit.setFrequency(Frequency.DAILY);
-        modifiedHabit.setColor(
-            prefs.getDefaultHabitColor(modifiedHabit.getColor()));
+        modifiedHabit.setColor(prefs.getDefaultHabitColor(modifiedHabit.getColor()));
     }
 
     @Override
