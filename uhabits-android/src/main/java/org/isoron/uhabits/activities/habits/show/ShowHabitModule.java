@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 Álinson Santos Xavier <isoron@gmail.com>
+ * Copyright (C) 2017 Álinson Santos Xavier <isoron@gmail.com>
  *
  * This file is part of Loop Habit Tracker.
  *
@@ -19,17 +19,20 @@
 
 package org.isoron.uhabits.activities.habits.show;
 
+import android.support.annotation.*;
+
 import org.isoron.androidbase.activities.*;
 import org.isoron.uhabits.models.*;
+import org.isoron.uhabits.ui.habits.show.*;
 
 import dagger.*;
 
 @Module
 public class ShowHabitModule extends ActivityModule
 {
-    private final Habit habit;
+    private Habit habit;
 
-    public ShowHabitModule(BaseActivity activity, Habit habit)
+    public ShowHabitModule(@NonNull BaseActivity activity, @NonNull Habit habit)
     {
         super(activity);
         this.habit = habit;
@@ -39,5 +42,23 @@ public class ShowHabitModule extends ActivityModule
     public Habit getHabit()
     {
         return habit;
+    }
+
+    @Provides
+    public ShowHabitBehavior.Screen getScreen(ShowHabitScreen screen)
+    {
+        return screen;
+    }
+
+    @Provides
+    public ShowHabitMenuBehavior.Screen getMenuScreen(ShowHabitScreen screen)
+    {
+        return screen;
+    }
+
+    @Provides
+    public ShowHabitMenuBehavior.System getSystem(BaseActivity activity)
+    {
+        return (ShowHabitActivity) activity;
     }
 }

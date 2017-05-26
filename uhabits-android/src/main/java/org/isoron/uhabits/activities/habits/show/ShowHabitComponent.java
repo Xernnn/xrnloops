@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 Álinson Santos Xavier <isoron@gmail.com>
+ * Copyright (C) 2017 Álinson Santos Xavier <isoron@gmail.com>
  *
  * This file is part of Loop Habit Tracker.
  *
@@ -19,6 +19,8 @@
 
 package org.isoron.uhabits.activities.habits.show;
 
+import android.support.annotation.*;
+
 import org.isoron.androidbase.activities.*;
 import org.isoron.uhabits.*;
 
@@ -29,11 +31,15 @@ import dagger.*;
            dependencies = { AppComponent.class })
 public interface ShowHabitComponent
 {
+    @NonNull
     ShowHabitController getController();
 
+    @NonNull
     ShowHabitsMenu getMenu();
 
+    @NonNull
     ShowHabitRootView getRootView();
 
+    @NonNull
     ShowHabitScreen getScreen();
 }
