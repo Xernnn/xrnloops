@@ -26,6 +26,18 @@ import org.isoron.uhabits.tasks.*;
 
 import dagger.*;
 
+@AppScope
+@Component(modules = {
+    AppModule.class,
+    HabitsModule.class,
+    SingleThreadModule.class,
+    SQLModelFactory.class
+})
+public interface AndroidTestComponent extends HabitsComponent
+{
+
+}
+
 @Module
 class SingleThreadModule
 {
@@ -35,12 +47,4 @@ class SingleThreadModule
     {
         return new SingleThreadTaskRunner();
     }
-}
-
-@AppScope
-@Component(modules = {
-    AppModule.class, SingleThreadModule.class, SQLModelFactory.class
-})
-public interface AndroidTestComponent extends AppComponent
-{
 }
