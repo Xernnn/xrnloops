@@ -19,7 +19,9 @@
 
 package org.isoron.uhabits;
 
+import org.isoron.uhabits.notifications.*;
 import org.isoron.uhabits.preferences.*;
+import org.isoron.uhabits.ui.*;
 
 import dagger.*;
 
@@ -32,4 +34,13 @@ public class HabitsModule
     {
         return preferences;
     }
+
+
+    @Provides
+    @AppScope
+    public static NotificationTray getTray(AndroidNotificationTray tray)
+    {
+        return tray;
+    }
 }
+
