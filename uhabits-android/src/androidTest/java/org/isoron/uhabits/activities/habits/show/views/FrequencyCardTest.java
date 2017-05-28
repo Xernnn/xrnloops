@@ -43,7 +43,7 @@ public class FrequencyCardTest extends BaseViewTest
     public void setUp()
     {
         super.setUp();
-        habit = fixtures.createLongHabit();
+           habit = fixtures.createLongHabit();
 
         view = (FrequencyCard) LayoutInflater
             .from(targetContext)

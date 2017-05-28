@@ -23,6 +23,7 @@ import org.isoron.uhabits.core.commands.*;
 import org.isoron.uhabits.core.models.*;
 import org.isoron.uhabits.core.models.memory.*;
 import org.isoron.uhabits.core.tasks.*;
+import org.isoron.uhabits.core.test.*;
 import org.isoron.uhabits.core.utils.*;
 import org.junit.*;
 import org.junit.runner.*;
