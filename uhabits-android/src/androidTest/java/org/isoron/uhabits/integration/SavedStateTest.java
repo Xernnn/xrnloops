@@ -32,7 +32,7 @@ import static java.lang.Thread.*;
 
 @RunWith(AndroidJUnit4.class)
 @LargeTest
-public class SavedStateTest extends BaseUIAutomatorTest
+public class SavedStateTest extends BaseUserInterfaceTest
 {
     /**
      * Make sure that the main activity can be recreated by using
