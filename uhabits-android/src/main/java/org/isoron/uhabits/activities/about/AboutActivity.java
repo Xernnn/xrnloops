@@ -21,9 +21,7 @@ package org.isoron.uhabits.activities.about;
 
 import android.os.*;
 
-import org.isoron.uhabits.*;
 import org.isoron.uhabits.activities.*;
-import org.isoron.uhabits.core.ui.screens.about.*;
 
 /**
  * Activity that allows the user to see information about the app itself.
@@ -35,11 +33,8 @@ public class AboutActivity extends HabitsActivity
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
-        HabitsApplicationComponent cmp = getAppComponent();
-        AboutScreen screen = new AboutScreen(this, cmp.getIntentFactory());
-        AboutBehavior behavior = new AboutBehavior(cmp.getPreferences(), screen);
-        AboutRootView rootView = new AboutRootView(this, behavior);
-        screen.setRootView(rootView);
+        AboutScreen screen = getActivityComponent().getAboutScreen();
+        screen.setRootView(getActivityComponent().getAboutRootView());
         setScreen(screen);
     }
 }
