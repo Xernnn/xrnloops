@@ -23,7 +23,6 @@ package org.isoron.uhabits;
 import org.isoron.androidbase.*;
 import org.isoron.uhabits.core.*;
 import org.isoron.uhabits.core.tasks.*;
-import org.isoron.uhabits.models.sqlite.*;
 
 import dagger.*;
 
@@ -32,7 +31,6 @@ import dagger.*;
     AppContextModule.class,
     HabitsModule.class,
     SingleThreadModule.class,
-    SQLModelFactory.class
 })
 public interface AndroidTestComponent extends HabitsApplicationComponent
 {

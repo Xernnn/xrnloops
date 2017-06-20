@@ -24,7 +24,7 @@ package org.isoron.uhabits;
 import android.content.*;
 import android.database.sqlite.*;
 
-import org.isoron.androidbase.storage.*;
+import org.isoron.uhabits.database.*;
 
 
 public class HabitsDatabaseOpener extends BaseSQLiteOpenHelper
