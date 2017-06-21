@@ -41,4 +41,8 @@ public interface Database
     void setTransactionSuccessful();
 
     void endTransaction();
+
+    void close();
+
+    int getVersion();
 }
