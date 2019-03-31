@@ -19,9 +19,7 @@
 
 package org.isoron.platform.io
 
-import org.isoron.platform.io.*
-import kotlin.test.Test
-import kotlin.test.assertEquals
+import kotlin.test.*
 
 class StringsTest {
     @Test
