@@ -19,4 +19,4 @@
 
 package org.isoron.uhabits
 
-const val LOOP_DATABASE_VERSION = 22
+const val LOOP_DATABASE_VERSION = 23
