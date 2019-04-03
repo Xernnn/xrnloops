@@ -20,6 +20,6 @@
 package org.isoron.uhabits.models
 
 enum class HabitType(val code: Int) {
-    YES_NO_HABIT(0),
+    BOOLEAN_HABIT(0),
     NUMERICAL_HABIT(1),
 }
