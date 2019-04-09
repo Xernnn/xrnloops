@@ -26,50 +26,19 @@ import java.io.*
 import javax.imageio.*
 
 
-class JavaCanvasTest {
+class JavaCanvasTest : CanvasTest.Platform {
+    private val commonTest = CanvasTest(this)
+
     @Test
-    fun testDrawing() {
-        val image = BufferedImage(500, 400, BufferedImage.TYPE_INT_RGB)
-        val canvas = JavaCanvas(image.createGraphics(), 500, 400, pixelScale=1.0)
+    fun testDrawing() = commonTest.testDrawing()
 
-        canvas.setColor(Color(0x303030))
-        canvas.fillRect(0.0, 0.0, 500.0, 400.0)
+    override fun createCanvas(width: Int, height: Int): Canvas {
+        val image = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+        return JavaCanvas(image, pixelScale=1.0)
+    }
 
-        canvas.setColor(Color(0x606060))
-        canvas.setStrokeWidth(25.0)
-        canvas.drawRect(100.0, 100.0, 300.0, 200.0)
-
-        canvas.setColor(Color(0xFFFF00))
-        canvas.setStrokeWidth(1.0)
-        canvas.drawRect(0.0, 0.0, 100.0, 100.0)
-        canvas.fillCircle(50.0, 50.0, 30.0)
-        canvas.drawRect(0.0, 100.0, 100.0, 100.0)
-        canvas.fillArc(50.0, 150.0, 30.0, 90.0, 135.0)
-        canvas.drawRect(0.0, 200.0, 100.0, 100.0)
-        canvas.fillArc(50.0, 250.0, 30.0, 90.0, -135.0)
-        canvas.drawRect(0.0, 300.0, 100.0, 100.0)
-        canvas.fillArc(50.0, 350.0, 30.0, 45.0, 90.0)
-
-        canvas.setColor(Color(0xFF0000))
-        canvas.setStrokeWidth(2.0)
-        canvas.drawLine(0.0, 0.0, 500.0, 400.0)
-        canvas.drawLine(500.0, 0.0, 0.0, 400.0)
-
-        canvas.setFont(Font.BOLD)
-        canvas.setFontSize(50.0)
-        canvas.setColor(Color(0x00FF00))
-        canvas.setTextAlign(TextAlign.CENTER)
-        canvas.drawText("HELLO", 250.0, 100.0)
-
-        canvas.setTextAlign(TextAlign.RIGHT)
-        canvas.drawText("HELLO", 250.0, 150.0)
-
-        canvas.setTextAlign(TextAlign.LEFT)
-        canvas.drawText("HELLO", 250.0, 200.0)
-
-        canvas.setFont(Font.FONT_AWESOME)
-        canvas.drawText(FontAwesome.CHECK, 250.0, 300.0)
-
-        ImageIO.write(image, "png", File("/tmp/JavaCanvasTest.png"))
+    override fun writePng(canvas: Canvas, filename: String) {
+        val javaCanvas = canvas as JavaCanvas
+        ImageIO.write(javaCanvas.image, "png", File("/tmp/JavaCanvasTest.png"))
     }
 }
