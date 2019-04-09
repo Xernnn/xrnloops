@@ -27,38 +27,6 @@ import kotlin.test.assertEquals
 class JavaDatabaseTest : BaseTest() {
     @Test
     fun testUsage() {
-        db.setVersion(0)
-        assertEquals(db.getVersion(), 0)
-
-        db.setVersion(23)
-        assertEquals(db.getVersion(), 23)
-
-        var stmt = db.prepareStatement("drop table if exists demo")
-        stmt.step()
-        stmt.finalize()
-
-        stmt = db.prepareStatement("create table if not exists demo(key int, value text)")
-        stmt.step()
-        stmt.finalize()
-
-        stmt = db.prepareStatement("insert into demo(key, value) values (?, ?)")
-        stmt.bindInt(0, 42)
-        stmt.bindText(1, "Hello World")
-        stmt.step()
-        stmt.finalize()
-
-        stmt = db.prepareStatement("select * from demo where key > ?")
-        stmt.bindInt(0, 10)
-
-        var result = stmt.step()
-        assertEquals(result, StepResult.ROW)
-        assertEquals(stmt.getInt(0), 42)
-        assertEquals(stmt.getText(1), "Hello World")
-
-        result = stmt.step()
-        assertEquals(result, StepResult.DONE)
-
-        stmt.finalize()
-        db.close()
+        DatabaseTest(db).testUsage()
     }
 }
