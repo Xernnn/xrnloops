@@ -19,20 +19,13 @@
 
 package org.isoron.platform
 
-import org.isoron.uhabits.BaseTest
-import org.junit.Test
-import kotlin.test.assertEquals
+import org.isoron.platform.io.*
+import org.isoron.uhabits.*
+import org.junit.*
 
 class JavaFilesTest : BaseTest() {
     @Test
     fun testReadLines() {
-        val hello = fileOpener.openResourceFile("hello.txt")
-        var lines = hello.readLines()
-        assertEquals("Hello World!", lines[0])
-        assertEquals("This is a resource.", lines[1])
-
-        val migration = fileOpener.openResourceFile("migrations/012.sql")
-        lines = migration.readLines()
-        assertEquals("delete from Score", lines[0])
+        FilesTest(fileOpener).testReadLines()
     }
 }
