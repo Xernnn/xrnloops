@@ -23,15 +23,14 @@ import org.isoron.*
 import kotlin.test.*
 
 class FilesTest() : BaseTest() {
-    @Test
-    fun testReadLines() {
+    suspend fun testLines() {
         val hello = fileOpener.openResourceFile("hello.txt")
-        var lines = hello.readLines()
+        var lines = hello.lines()
         assertEquals("Hello World!", lines[0])
         assertEquals("This is a resource.", lines[1])
 
         val migration = fileOpener.openResourceFile("migrations/012.sql")
-        lines = migration.readLines()
+        lines = migration.lines()
         assertEquals("delete from Score", lines[0])
     }
 }
