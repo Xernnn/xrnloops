@@ -35,5 +35,4 @@ class StandardLog : Log {
     override fun debug(tag: String, msg: String) {
         println("D/$tag $msg")
     }
-
 }
