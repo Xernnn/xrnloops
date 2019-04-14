@@ -29,7 +29,8 @@ enum class Locale {
 
 interface CanvasHelper {
     fun createCanvas(width: Int, height: Int): Canvas
-    fun exportCanvas(canvas: Canvas, filename: String)
+    suspend fun exportCanvas(canvas: Canvas, filename: String)
+    suspend fun compare(imageFile: ResourceFile, canvas: Canvas): Double
 }
 
 expect object DependencyResolver {
