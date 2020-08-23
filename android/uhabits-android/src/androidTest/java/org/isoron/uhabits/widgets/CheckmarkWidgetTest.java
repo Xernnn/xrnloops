@@ -51,11 +51,12 @@ public class CheckmarkWidgetTest extends BaseViewTest
     {
         super.setUp();
         setTheme(R.style.WidgetTheme);
+        prefs.setWidgetOpacity(255);
 
-        habit = fixtures.createShortHabit();
+        habit = fixtures.createVeryLongHabit();
         checkmarks = habit.getCheckmarks();
         CheckmarkWidget widget = new CheckmarkWidget(targetContext, 0, habit);
-        view = convertToView(widget, 200, 250);
+        view = convertToView(widget, 150, 200);
 
         assertThat(checkmarks.getTodayValue(), equalTo(CHECKED_EXPLICITLY));
     }
