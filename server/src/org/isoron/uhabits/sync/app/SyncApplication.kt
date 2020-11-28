@@ -24,11 +24,18 @@ import io.ktor.features.*
 import io.ktor.jackson.*
 import io.ktor.routing.*
 import org.isoron.uhabits.sync.*
+import org.isoron.uhabits.sync.repository.*
+import org.isoron.uhabits.sync.server.*
+import java.nio.file.*
 
 fun Application.main() = SyncApplication().apply { main() }
 
+val REPOSITORY_PATH: Path = Paths.get(System.getenv("LOOP_REPO_PATH")!!)
+
 class SyncApplication(
-    val server: AbstractSyncServer = MemorySyncServer(),
+    val server: AbstractSyncServer = RepositorySyncServer(
+        FileRepository(REPOSITORY_PATH),
+    ),
 ) {
     fun Application.main() {
         install(DefaultHeaders)
