@@ -46,6 +46,7 @@ class SyncApplication(
         routing {
             registration(this@SyncApplication)
             storage(this@SyncApplication)
+            links(this@SyncApplication)
         }
     }
 }
