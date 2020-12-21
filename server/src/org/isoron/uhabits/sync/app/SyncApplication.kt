@@ -47,6 +47,7 @@ class SyncApplication(
             registration(this@SyncApplication)
             storage(this@SyncApplication)
             links(this@SyncApplication)
+            metrics(this@SyncApplication)
         }
     }
 }
