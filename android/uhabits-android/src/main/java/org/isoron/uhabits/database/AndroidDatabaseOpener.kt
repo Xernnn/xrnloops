@@ -26,7 +26,12 @@ import javax.inject.*
 
 class AndroidDatabaseOpener @Inject constructor() : DatabaseOpener {
     override fun open(file: File): AndroidDatabase {
-        return AndroidDatabase(SQLiteDatabase.openDatabase(
-                file.absolutePath, null, SQLiteDatabase.OPEN_READWRITE))
+        return AndroidDatabase(
+                db = SQLiteDatabase.openDatabase(
+                        file.absolutePath,
+                        null,
+                        SQLiteDatabase.OPEN_READWRITE,
+                ),
+                file = file)
     }
 }
