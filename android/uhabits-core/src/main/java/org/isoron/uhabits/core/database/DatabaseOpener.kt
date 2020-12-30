@@ -21,5 +21,5 @@ package org.isoron.uhabits.core.database
 import java.io.File
 
 interface DatabaseOpener {
-    fun open(file: File): Database?
+    fun open(file: File): Database
 }
