@@ -25,6 +25,7 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.View.GONE
+import android.view.View.VISIBLE
 import android.widget.PopupWindow
 import org.isoron.platform.gui.ScreenLocation
 import org.isoron.uhabits.R
@@ -59,6 +60,7 @@ class CheckmarkPopup(
     }
 
     init {
+        view.booleanButtons.visibility = VISIBLE
         initColors()
         initTypefaces()
         hideDisabledButtons()
