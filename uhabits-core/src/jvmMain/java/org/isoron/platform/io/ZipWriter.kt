@@ -20,7 +20,6 @@
 package org.isoron.platform.io
 
 import java.io.ByteArrayOutputStream
-import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 actual class ZipWriter {
@@ -28,7 +27,7 @@ actual class ZipWriter {
     private val zos = ZipOutputStream(baos)
 
     actual fun addEntry(name: String, content: String) {
-        zos.putNextEntry(ZipEntry(name))
+        zos.putNextEntry(java.util.zip.ZipEntry(name))
         zos.write(content.toByteArray())
         zos.closeEntry()
     }
