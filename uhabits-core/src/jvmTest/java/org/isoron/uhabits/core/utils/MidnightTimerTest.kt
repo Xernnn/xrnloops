@@ -5,6 +5,8 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.isoron.platform.time.DateUtils
+import org.isoron.platform.time.computeToday
+import org.isoron.platform.time.getToday
 import org.isoron.platform.time.unixTime
 import org.isoron.uhabits.core.BaseUnitTest
 import org.isoron.uhabits.core.io.StandardLogging
@@ -56,5 +58,19 @@ class MidnightTimerTest : BaseUnitTest() {
             // Then
             assertEquals(true, suspendedListener)
         }
+    }
+
+    @Test
+    fun testRefreshIfDayChanged_catchesUpOnce() {
+        // BaseUnitTest pins today to 2015, like a process that outlived that midnight.
+        var calls = 0
+        val timer = MidnightTimer(StandardLogging(), mock<Preferences>()).apply { addListener { calls++ } }
+
+        timer.refreshIfDayChanged()
+        assertEquals(1, calls)
+        assertEquals(computeToday(0, 0), getToday())
+
+        timer.refreshIfDayChanged()
+        assertEquals(1, calls)
     }
 }

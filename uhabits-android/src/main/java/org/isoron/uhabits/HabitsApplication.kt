@@ -26,6 +26,8 @@ import org.isoron.platform.time.setToday
 import org.isoron.uhabits.core.database.UnsupportedDatabaseVersionException
 import org.isoron.uhabits.core.reminders.ReminderScheduler
 import org.isoron.uhabits.core.ui.NotificationTray
+import org.isoron.uhabits.xrnhabit.TodayRefresher
+import org.isoron.uhabits.xrnhabit.XrnhabitNotifier
 import org.isoron.uhabits.inject.HabitsApplicationComponent
 import org.isoron.uhabits.inject.create
 import org.isoron.uhabits.utils.DatabaseUtils
@@ -41,6 +43,7 @@ class HabitsApplication : Application() {
     private lateinit var widgetUpdater: WidgetUpdater
     private lateinit var reminderScheduler: ReminderScheduler
     private lateinit var notificationTray: NotificationTray
+    private lateinit var xrnhabitNotifier: XrnhabitNotifier
 
     override fun onCreate() {
         super.onCreate()
@@ -84,6 +87,10 @@ class HabitsApplication : Application() {
         notificationTray = component.notificationTray
         notificationTray.startListening()
 
+        xrnhabitNotifier = XrnhabitNotifier(context, component.commandRunner)
+        xrnhabitNotifier.startListening()
+        registerActivityLifecycleCallbacks(TodayRefresher(component.midnightTimer))
+
         val taskRunner = component.taskRunner
         taskRunner.execute {
             reminderScheduler.scheduleAll()
@@ -95,6 +102,7 @@ class HabitsApplication : Application() {
         reminderScheduler.stopListening()
         widgetUpdater.stopListening()
         notificationTray.stopListening()
+        xrnhabitNotifier.stopListening()
         super.onTerminate()
     }
 
@@ -103,6 +111,9 @@ class HabitsApplication : Application() {
 
     companion object {
         lateinit var component: HabitsApplicationComponent
+
+        /** False until [onCreate] has built [component]; content providers can be called earlier. */
+        fun isComponentReady(): Boolean = ::component.isInitialized
 
         fun isTestMode(): Boolean {
             return try {

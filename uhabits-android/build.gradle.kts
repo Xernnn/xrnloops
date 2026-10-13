@@ -17,12 +17,21 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.agp)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.ktlint.plugin)
     alias(libs.plugins.mokkery)
+}
+
+// xrnloops: an optional signing key shared with xrnhabit (both apps must carry the same signature), kept
+// outside both repos in ../xrn-signing.properties (see XRNLOOPS.md). Without that file,
+// builds are signed with this machine's debug key.
+val xrnSigning: Properties? = rootProject.file("../xrn-signing.properties").takeIf { it.isFile }?.let { f ->
+    Properties().apply { f.inputStream().use { load(it) } }
 }
 
 tasks.compileLint {
@@ -55,11 +64,20 @@ android {
         versionName = "2.3.1"
         minSdk = 28
         targetSdk = 36
-        applicationId = "org.isoron.uhabits"
+        // xrnloops: its own app id so it installs next to the store Loop (XRNLOOPS.md).
+        applicationId = "com.xern.xrnloops"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
+        if (xrnSigning != null) {
+            create("xrn") {
+                storeFile = rootProject.file("..").resolve(xrnSigning.getProperty("storeFile"))
+                storePassword = xrnSigning.getProperty("storePassword")
+                keyAlias = xrnSigning.getProperty("keyAlias")
+                keyPassword = xrnSigning.getProperty("keyPassword")
+            }
+        }
         if (System.getenv("LOOP_KEY_ALIAS") != null) {
             create("release") {
                 keyAlias = System.getenv("LOOP_KEY_ALIAS")
@@ -76,11 +94,14 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.txt")
             if (signingConfigs.findByName("release") != null) {
                 signingConfig = signingConfigs.getByName("release")
+            } else {
+                signingConfigs.findByName("xrn")?.let { signingConfig = it }
             }
         }
 
         debug {
             enableUnitTestCoverage = true
+            signingConfigs.findByName("xrn")?.let { signingConfig = it }
         }
     }
 
@@ -140,4 +161,6 @@ dependencies {
 
     testImplementation(libs.kotlin.inject.runtime)
     testImplementation(libs.junit.junit)
+    // xrnloops: upstream's unit tests use kotlinx.coroutines.test but never declared it (XRNLOOPS.md).
+    testImplementation(libs.kotlinx.coroutines.test)
 }

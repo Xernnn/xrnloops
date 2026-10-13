@@ -21,6 +21,7 @@ package org.isoron.uhabits.core.utils
 import me.tatarka.inject.annotations.Inject
 import org.isoron.platform.time.DateUtils
 import org.isoron.platform.time.computeToday
+import org.isoron.platform.time.getToday
 import org.isoron.platform.time.setToday
 import org.isoron.uhabits.core.AppScope
 import org.isoron.uhabits.core.io.Logging
@@ -71,6 +72,16 @@ open class MidnightTimer(
 
     @Synchronized
     open fun removeListener(listener: MidnightListener) = this.listeners.remove(listener)
+
+    /**
+     * xrnloops: catches up on a new day that started while no timer was running. The timer only
+     * runs while the habit list is on screen, so a process that stays alive in the background
+     * past midnight otherwise keeps showing (and checking) yesterday as today.
+     */
+    @Synchronized
+    open fun refreshIfDayChanged() {
+        if (computeToday(preferences.midnightDelayHours, 0) != getToday()) notifyListeners()
+    }
 
     @Synchronized
     private fun notifyListeners() {
