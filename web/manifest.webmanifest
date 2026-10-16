@@ -1,0 +1,13 @@
+{
+  "name": "xrnloops",
+  "short_name": "Habits",
+  "description": "Your xrnloops habits, synced with the phone.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f5f2",
+  "theme_color": "#f6f5f2",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

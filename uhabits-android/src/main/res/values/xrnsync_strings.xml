@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- xrnloops only (XRNLOOPS.md): English, not sent to Loop's translators. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="xrnsync_title">Sync with home server</string>
+    <string name="xrnsync_url">Server address</string>
+    <string name="xrnsync_url_hint">The xrnloops-sync address, e.g. https://your-server/xrnloops</string>
+    <string name="xrnsync_user">User</string>
+    <string name="xrnsync_password">Password</string>
+    <string name="xrnsync_password_set">Set</string>
+    <string name="xrnsync_password_unset">Not set</string>
+    <string name="xrnsync_now">Sync now</string>
+    <string name="xrnsync_not_configured">Fill in the address, user and password to sync</string>
+    <string name="xrnsync_never">Not synced yet</string>
+    <string name="xrnsync_running">Syncing…</string>
+    <string name="xrnsync_last">%1$s · %2$s</string>
+</resources>

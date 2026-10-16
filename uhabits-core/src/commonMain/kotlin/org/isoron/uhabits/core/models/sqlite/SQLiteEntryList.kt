@@ -19,6 +19,7 @@
 
 package org.isoron.uhabits.core.models.sqlite
 
+import org.isoron.platform.Synchronized
 import org.isoron.platform.time.LocalDate
 import org.isoron.uhabits.core.database.EntryData
 import org.isoron.uhabits.core.database.EntryRepository
@@ -30,6 +31,7 @@ class SQLiteEntryList(val repository: EntryRepository) : EntryList() {
     var habitId: Long? = null
     var isLoaded = false
 
+    @Synchronized
     private fun loadRecords() {
         if (isLoaded) return
         val habitId = habitId ?: throw IllegalStateException("habitId must be set")

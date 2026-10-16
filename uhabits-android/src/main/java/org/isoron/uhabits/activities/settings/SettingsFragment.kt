@@ -53,6 +53,7 @@ import org.isoron.uhabits.utils.StyledResources
 import org.isoron.uhabits.utils.applyBottomInset
 import org.isoron.uhabits.utils.startActivitySafely
 import org.isoron.uhabits.widgets.WidgetUpdater
+import org.isoron.uhabits.xrnsync.XrnSyncPreferences
 import java.util.Locale
 
 class SettingsFragment : PreferenceFragmentCompat(), OnSharedPreferenceChangeListener {
@@ -95,6 +96,7 @@ class SettingsFragment : PreferenceFragmentCompat(), OnSharedPreferenceChangeLis
         setResultOnPreferenceClick("exportDB", RESULT_EXPORT_DB)
         setResultOnPreferenceClick("repairDB", RESULT_REPAIR_DB)
         setResultOnPreferenceClick("bugReport", RESULT_BUG_REPORT)
+        XrnSyncPreferences.attach(this)
     }
 
     override fun onCreatePreferences(bundle: Bundle?, s: String?) {

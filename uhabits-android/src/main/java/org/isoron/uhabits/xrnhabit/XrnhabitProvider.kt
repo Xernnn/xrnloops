@@ -21,9 +21,11 @@ package org.isoron.uhabits.xrnhabit
 
 import android.content.ContentProvider
 import android.content.ContentValues
+import android.content.pm.PackageManager
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import android.os.Bundle
 import org.isoron.platform.time.LocalDate
 import org.isoron.platform.time.getToday
 import org.isoron.uhabits.HabitsApplication
@@ -39,6 +41,7 @@ import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_NAME
 import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_NUMERICAL
 import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_POSITION
 import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_UUID
+import org.isoron.uhabits.xrnsync.XrnSync
 
 /**
  * Read-only list of every habit with whether it is done on one date, for xrnhabit. Exported,
@@ -122,6 +125,25 @@ class XrnhabitProvider : ContentProvider() {
         return LocalDate(parts[0], parts[1], parts[2])
     }
 
+    /**
+     * [XrnhabitContract.METHOD_SYNC]. Android doesn't apply the provider's read permission to
+     * `call`, so it's checked here.
+     */
+    override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
+        if (method != XrnhabitContract.METHOD_SYNC) return null
+        val context = context ?: return null
+        if (context.checkCallingPermission(XrnhabitContract.PERMISSION) != PackageManager.PERMISSION_GRANTED) {
+            throw SecurityException("needs ${XrnhabitContract.PERMISSION}")
+        }
+        val sync = if (HabitsApplication.isComponentReady()) XrnSync.instance else null
+        val configured = sync?.settings?.isConfigured == true
+        val synced = configured && sync!!.syncBlocking(SYNC_TIMEOUT_MS)
+        return Bundle().apply {
+            putBoolean(XrnhabitContract.KEY_CONFIGURED, configured)
+            putBoolean(XrnhabitContract.KEY_SYNCED, synced)
+        }
+    }
+
     override fun getType(uri: Uri): String = "vnd.android.cursor.dir/vnd.org.isoron.uhabits.habit"
 
     override fun insert(uri: Uri, values: ContentValues?): Uri? =
@@ -138,6 +160,8 @@ class XrnhabitProvider : ContentProvider() {
     ): Int = throw UnsupportedOperationException("read-only")
 
     companion object {
+        private const val SYNC_TIMEOUT_MS = 5_000L
+
         private val COLUMNS = arrayOf(
             COLUMN_UUID,
             COLUMN_NAME,

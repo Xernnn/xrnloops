@@ -28,6 +28,7 @@ import org.isoron.uhabits.core.reminders.ReminderScheduler
 import org.isoron.uhabits.core.ui.NotificationTray
 import org.isoron.uhabits.xrnhabit.TodayRefresher
 import org.isoron.uhabits.xrnhabit.XrnhabitNotifier
+import org.isoron.uhabits.xrnsync.XrnSync
 import org.isoron.uhabits.inject.HabitsApplicationComponent
 import org.isoron.uhabits.inject.create
 import org.isoron.uhabits.utils.DatabaseUtils
@@ -90,6 +91,8 @@ class HabitsApplication : Application() {
         xrnhabitNotifier = XrnhabitNotifier(context, component.commandRunner)
         xrnhabitNotifier.startListening()
         registerActivityLifecycleCallbacks(TodayRefresher(component.midnightTimer))
+        XrnSync(context, habitList, component.modelFactory, component.commandRunner).start(this)
+        ready = true
 
         val taskRunner = component.taskRunner
         taskRunner.execute {
@@ -112,8 +115,14 @@ class HabitsApplication : Application() {
     companion object {
         lateinit var component: HabitsApplicationComponent
 
-        /** False until [onCreate] has built [component]; content providers can be called earlier. */
-        fun isComponentReady(): Boolean = ::component.isInitialized
+        @Volatile
+        private var ready = false
+
+        /**
+         * False until [onCreate] has finished: content providers are called earlier, and
+         * [component] is set before every habit has been loaded.
+         */
+        fun isComponentReady(): Boolean = ready
 
         fun isTestMode(): Boolean {
             return try {

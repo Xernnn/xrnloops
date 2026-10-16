@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- The proxy strips the mount path, so /xrnloops and /xrnloops/ look the same to the server;
+       relative URLs need the slash. Runs before anything else loads. -->
+  <script>if (!/\/$|\.\w+$/.test(location.pathname)) location.replace(location.pathname + "/" + location.search + location.hash)</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16171a" media="(prefers-color-scheme: dark)">
+  <title>xrnloops</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div id="app"><p class="boot">Loading…</p></div>
+</body>
+</html>

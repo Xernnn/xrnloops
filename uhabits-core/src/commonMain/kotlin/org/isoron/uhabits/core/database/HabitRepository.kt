@@ -1,5 +1,6 @@
 package org.isoron.uhabits.core.database
 
+import org.isoron.platform.Synchronized
 import org.isoron.platform.io.Database
 import org.isoron.platform.io.PreparedStatement
 import org.isoron.platform.io.StepResult
@@ -27,6 +28,7 @@ data class HabitData(
     var uuid: String? = null
 )
 
+/** Locked per method for the same reason as [EntryRepository]. */
 class HabitRepository(private val db: Database) {
     private val findAllStmt by lazy {
         db.prepareStatement(
@@ -68,6 +70,7 @@ class HabitRepository(private val db: Database) {
         db.prepareStatement("DELETE FROM Habits WHERE id = ?")
     }
 
+    @Synchronized
     fun findAll(): List<HabitData> {
         findAllStmt.reset()
         val results = mutableListOf<HabitData>()
@@ -77,6 +80,7 @@ class HabitRepository(private val db: Database) {
         return results
     }
 
+    @Synchronized
     fun insert(data: HabitData): Long {
         if (data.id != null) {
             insertWithIdStmt.reset()
@@ -91,6 +95,7 @@ class HabitRepository(private val db: Database) {
         return db.queryLong("SELECT last_insert_rowid()")
     }
 
+    @Synchronized
     fun update(data: HabitData) {
         updateStmt.reset()
         bindForInsert(updateStmt, data)
@@ -98,14 +103,17 @@ class HabitRepository(private val db: Database) {
         updateStmt.step()
     }
 
+    @Synchronized
     fun delete(id: Long) {
         deleteStmt.reset()
         deleteStmt.bindLong(1, id)
         deleteStmt.step()
     }
 
+    @Synchronized
     fun execSQL(sql: String) = db.run(sql)
 
+    @Synchronized
     fun execSQL(sql: String, bind: PreparedStatement.() -> Unit) = db.run(sql, bind)
 
     private fun bindForInsert(stmt: PreparedStatement, data: HabitData, offset: Int = 0) {

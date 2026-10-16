@@ -1,5 +1,6 @@
 package org.isoron.uhabits.core.database
 
+import org.isoron.platform.Synchronized
 import org.isoron.platform.io.Database
 import org.isoron.platform.io.StepResult
 import org.isoron.platform.io.queryLong
@@ -13,6 +14,11 @@ data class EntryData(
     var notes: String = ""
 )
 
+/**
+ * One instance serves every habit, and its statements hold state between bind and step, so each
+ * method takes the repository's lock: xrnloops reads and writes entries from the sync thread and
+ * the xrnhabit provider's binder threads as well as Loop's own threads.
+ */
 class EntryRepository(private val db: Database) {
     private val findAllByHabitStmt by lazy {
         db.prepareStatement(
@@ -34,6 +40,7 @@ class EntryRepository(private val db: Database) {
         db.prepareStatement("DELETE FROM Repetitions WHERE habit = ?")
     }
 
+    @Synchronized
     fun findAllByHabitId(habitId: Long): List<EntryData> {
         findAllByHabitStmt.reset()
         findAllByHabitStmt.bindLong(1, habitId)
@@ -52,6 +59,7 @@ class EntryRepository(private val db: Database) {
         return results
     }
 
+    @Synchronized
     fun insert(data: EntryData): Long {
         insertStmt.reset()
         insertStmt.bindLong(1, data.habitId!!)
@@ -62,6 +70,7 @@ class EntryRepository(private val db: Database) {
         return db.queryLong("SELECT last_insert_rowid()")
     }
 
+    @Synchronized
     fun deleteByHabitIdAndTimestamp(habitId: Long, timestamp: Long) {
         deleteByHabitAndTimestampStmt.reset()
         deleteByHabitAndTimestampStmt.bindLong(1, habitId)
@@ -69,11 +78,13 @@ class EntryRepository(private val db: Database) {
         deleteByHabitAndTimestampStmt.step()
     }
 
+    @Synchronized
     fun deleteByHabitId(habitId: Long) {
         deleteByHabitStmt.reset()
         deleteByHabitStmt.bindLong(1, habitId)
         deleteByHabitStmt.step()
     }
 
+    @Synchronized
     fun execSQL(sql: String) = db.run(sql)
 }

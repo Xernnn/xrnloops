@@ -114,6 +114,35 @@
 
     </PreferenceCategory>
 
+    <!-- xrnloops: sync with the home server (XRNLOOPS.md). These keys live in their own
+         preferences file, see XrnSyncSettings. -->
+    <PreferenceCategory
+            android:key="xrnsyncCategory"
+            android:title="@string/xrnsync_title">
+
+        <EditTextPreference
+                android:key="xrnsync_url"
+                android:title="@string/xrnsync_url"
+                android:dialogMessage="@string/xrnsync_url_hint"
+                app:iconSpaceReserved="false" />
+
+        <EditTextPreference
+                android:key="xrnsync_user"
+                android:title="@string/xrnsync_user"
+                app:iconSpaceReserved="false" />
+
+        <Preference
+                android:key="xrnsync_password"
+                android:title="@string/xrnsync_password"
+                app:iconSpaceReserved="false" />
+
+        <Preference
+                android:key="xrnsync_now"
+                android:title="@string/xrnsync_now"
+                app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
     <PreferenceCategory
             android:key="databaseCategory"
             android:title="@string/database">

@@ -21,3 +21,4 @@ kotlin-js-store
 *.md
 !XRNLOOPS.md
 .kotlin
+__pycache__

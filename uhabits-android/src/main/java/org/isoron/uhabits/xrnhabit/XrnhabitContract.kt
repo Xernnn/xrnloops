@@ -60,4 +60,13 @@ object XrnhabitContract {
 
     /** 1 for an every-day habit (or a numeric one), where [COLUMN_GOAL_MET] equals [COLUMN_DONE]. */
     const val COLUMN_DAILY = "daily"
+
+    /**
+     * `ContentResolver.call(authority, METHOD_SYNC, null, null)`: syncs with the home server
+     * first (a few seconds at most), so ticks made in the web app are in the next query. The
+     * result has [KEY_CONFIGURED] (sync is set up here) and [KEY_SYNCED] (it worked).
+     */
+    const val METHOD_SYNC = "sync"
+    const val KEY_CONFIGURED = "configured"
+    const val KEY_SYNCED = "synced"
 }
