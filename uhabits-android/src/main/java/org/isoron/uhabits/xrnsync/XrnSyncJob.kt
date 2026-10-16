@@ -25,6 +25,7 @@ import android.app.job.JobScheduler
 import android.app.job.JobService
 import android.content.ComponentName
 import android.content.Context
+import android.util.Log
 
 /**
  * A sync about every half hour in the background, whenever there's a network, so the list, the
@@ -54,17 +55,23 @@ class XrnSyncJob : JobService() {
 
         /**
          * Schedules the job unless it already is. Scheduling again would restart its period, and
-         * this runs at every start of the app.
+         * this runs at every start of the app. It runs inside `Application.onCreate`, so a
+         * refusal (a missing permission, a vendor's limits) is logged, never thrown: the app
+         * must start without background sync rather than not at all.
          */
         fun schedule(context: Context) {
-            val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
-            if (scheduler.getPendingJob(JOB_ID) != null) return
-            val job = JobInfo.Builder(JOB_ID, ComponentName(context, XrnSyncJob::class.java))
-                .setPeriodic(PERIOD_MS)
-                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
-                .setPersisted(true)
-                .build()
-            scheduler.schedule(job)
+            try {
+                val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
+                if (scheduler.getPendingJob(JOB_ID) != null) return
+                val job = JobInfo.Builder(JOB_ID, ComponentName(context, XrnSyncJob::class.java))
+                    .setPeriodic(PERIOD_MS)
+                    .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                    .setPersisted(true)
+                    .build()
+                scheduler.schedule(job)
+            } catch (e: RuntimeException) {
+                Log.w("XrnSync", "background sync not scheduled", e)
+            }
         }
     }
 }

@@ -904,11 +904,33 @@ async function loadReview(since) {
     if (!ev.ok) throw new Error(String(ev.status));
     const events = (await ev.json()).events ?? [];
     const blocks = st.ok ? ((await st.json()).blocks ?? {}) : {};
-    if (gen === review.gen) Object.assign(review, { events, blocks, status: "ok" });
+    if (gen === review.gen) Object.assign(review, { events: distinctEvents(events), blocks, status: "ok" });
   } catch {
     if (gen === review.gen) review.status = "error";
   }
   render(true);
+}
+
+/**
+ * The events with each shared happening once. An unlock is shared, so every device that saw it
+ * end logs it: those carry the session's start (I28) and count once. A habit that earned an
+ * unlock on both devices (each reads the tracker itself) counts once if they're minutes apart.
+ */
+function distinctEvents(events) {
+  const sessions = new Set();
+  const habits = [];
+  return [...events].sort((a, b) => a.at - b.at).filter((e) => {
+    if (e.t === "unlock" && e.start) {
+      const key = `${e.block}@${e.start}`;
+      if (sessions.has(key)) return false;
+      sessions.add(key);
+    }
+    if (e.t === "habit") {
+      if (habits.some((x) => x.block === e.block && x.d !== e.d && Math.abs(x.at - e.at) < 10 * 60000)) return false;
+      habits.push(e);
+    }
+    return true;
+  });
 }
 
 /** The local calendar day (L.dayNum's numbering) of a moment. */
@@ -1021,16 +1043,17 @@ function blocksReview(days, today) {
   const prior = review.events.filter((e) => dayOfMs(e.at) < first);
   const sum = (list, t, f = () => 1) => list.filter((e) => e.t === t).reduce((a, e) => a + f(e), 0);
   const unlockMin = (list) => Math.round(sum(list, "unlock", (e) => e.ms ?? 0) / 60000);
+  // Unlock time is shared by the devices, so it's one total; blocked opens happen on one device.
   const perDay = days.map((d) => {
     const mine = inWeek.filter((e) => dayOfMs(e.at) === d);
     return {
       day: d,
-      phone: sum(mine.filter((e) => e.d === "phone"), "unlock", (e) => e.ms ?? 0) / 60000,
-      laptop: sum(mine.filter((e) => e.d !== "phone"), "unlock", (e) => e.ms ?? 0) / 60000,
-      blocked: sum(mine, "blocked"),
+      minutes: sum(mine, "unlock", (e) => e.ms ?? 0) / 60000,
+      phone: sum(mine.filter((e) => e.d === "phone"), "blocked"),
+      laptop: sum(mine.filter((e) => e.d !== "phone"), "blocked"),
     };
   });
-  const peak = Math.max(1, ...perDay.map((p) => p.phone + p.laptop));
+  const peak = Math.max(1, ...perDay.map((p) => p.minutes));
   const topBlocked = Object.entries(inWeek.filter((e) => e.t === "blocked").reduce((m, e) => {
     const key = e.name || e.target || "?";
     m[key] = (m[key] ?? 0) + 1;
@@ -1042,8 +1065,8 @@ function blocksReview(days, today) {
     return m;
   }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const blockedNow = sum(inWeek, "blocked"), blockedBefore = sum(prior, "blocked");
-  const phoneMin = Math.round(perDay.reduce((a, p) => a + p.phone, 0));
-  const laptopMin = Math.round(perDay.reduce((a, p) => a + p.laptop, 0));
+  const phoneBlocked = perDay.reduce((a, p) => a + p.phone, 0);
+  const laptopBlocked = perDay.reduce((a, p) => a + p.laptop, 0);
 
   if (!review.events.length) {
     return card(h("p", { class: "muted small" }, "Nothing logged yet. The phone and the laptop send their history once sync is set up in xrnhabit; it fills in from then."));
@@ -1053,16 +1076,14 @@ function blocksReview(days, today) {
       h("div", { class: "stat" }, h("b", {}, `${unlockMin(inWeek)} min`), h("span", {}, `Unlocked (week before: ${unlockMin(prior)})`)),
       h("div", { class: "stat" }, h("b", {}, blockedNow), h("span", {}, `Times blocked (week before: ${blockedBefore})`)),
       h("div", { class: "stat" }, h("b", {}, sum(inWeek, "habit")), h("span", {}, "Unlocks earned")),
-      h("div", { class: "stat" }, h("b", {}, `${phoneMin} / ${laptopMin}`), h("span", {}, "Minutes on phone / laptop"))),
+      h("div", { class: "stat" }, h("b", {}, `${phoneBlocked} / ${laptopBlocked}`), h("span", {}, "Blocked on phone / laptop"))),
     h("div", { class: "bars", role: "img", "aria-label": "Unlocked minutes per day" }, perDay.map((p) =>
-      h("div", { class: "dbar" + (p.day > today ? " future" : ""), title: `${Math.round(p.phone)} min on the phone, ${Math.round(p.laptop)} on the laptop, blocked ${p.blocked}×` },
-        h("div", { class: "stack" },
-          h("i", { class: "laptop", style: { height: `${(p.laptop / peak) * 100}%` } }),
-          h("i", { class: "phone", style: { height: `${(p.phone / peak) * 100}%` } })),
+      h("div", { class: "dbar" + (p.day > today ? " future" : ""), title: `${Math.round(p.minutes)} min unlocked; blocked ${p.phone}× on the phone, ${p.laptop}× on the laptop` },
+        h("div", { class: "stack" }, h("i", { class: "phone", style: { height: `${(p.minutes / peak) * 100}%` } })),
         h("span", {}, weekdayShort.format(L.dayDate(p.day))),
-        h("small", {}, p.phone + p.laptop >= 0.5 ? `${Math.round(p.phone + p.laptop)}m` : ""),
-        h("small", { class: "muted" }, p.blocked ? `${p.blocked}×` : "")))),
-    h("div", { class: "legend muted small" }, h("i", { class: "phone" }), "Phone", h("i", { class: "laptop" }), "Laptop", h("span", {}, "· × = times a blocked app was opened")),
+        h("small", {}, p.minutes >= 0.5 ? `${Math.round(p.minutes)}m` : ""),
+        h("small", { class: "muted" }, p.phone + p.laptop ? `${p.phone + p.laptop}×` : "")))),
+    h("div", { class: "legend muted small" }, h("i", { class: "phone" }), "Minutes unlocked (phone and laptop share them)", h("span", {}, "· × = times a blocked app was opened")),
     (topBlocked.length || byBlock.length) && h("div", { class: "lists" },
       topBlocked.length > 0 && h("div", {}, h("h3", {}, "Most blocked"), h("ol", {}, topBlocked.map(([name, n]) => h("li", {}, name, h("span", { class: "muted" }, ` ${n}×`))))),
       byBlock.length > 0 && h("div", {}, h("h3", {}, "Unlock time by block"), h("ol", {}, byBlock.map(([name, ms]) => h("li", {}, name, h("span", { class: "muted" }, ` ${Math.round(ms / 60000)} min`)))))));
