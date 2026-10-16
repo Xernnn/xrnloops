@@ -29,6 +29,7 @@ import org.isoron.platform.time.LocalDate
 import org.isoron.platform.time.getToday
 import org.isoron.uhabits.HabitsApplication
 import org.isoron.uhabits.core.models.Habit
+import org.isoron.uhabits.xrnsync.XrnSync
 
 /**
  * The Android BroadcastReceiver for Loop Habit Tracker.
@@ -65,11 +66,15 @@ class ReminderReceiver : BroadcastReceiver() {
                             reminderTime
                         )
                     )
-                    reminderController.onShowReminder(
-                        habit,
-                        LocalDate.fromUnixTime(timestamp),
-                        reminderTime
-                    )
+                    // xrnloops: sync first, so a habit ticked in the web app doesn't ring here
+                    val shown = habit
+                    XrnSync.beforeReminder(this) {
+                        reminderController.onShowReminder(
+                            shown,
+                            LocalDate.fromUnixTime(timestamp),
+                            reminderTime
+                        )
+                    }
                 }
                 ACTION_DISMISS_REMINDER -> {
                     if (habit == null) return

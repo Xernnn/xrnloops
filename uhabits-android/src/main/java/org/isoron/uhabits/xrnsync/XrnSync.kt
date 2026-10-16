@@ -21,6 +21,7 @@ package org.isoron.uhabits.xrnsync
 
 import android.app.Activity
 import android.app.Application
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.os.Bundle
 import android.os.Handler
@@ -69,6 +70,7 @@ class XrnSync(
 ) : CommandRunner.Listener {
 
     val settings = XrnSyncSettings(context)
+    private val appContext = context.applicationContext
     private val snapshotFile = File(context.filesDir, "xrnsync-snapshot.json")
     private val executor = Executors.newSingleThreadScheduledExecutor { r ->
         Thread(r, "xrnsync").apply { isDaemon = true }
@@ -101,6 +103,7 @@ class XrnSync(
             override fun onActivityDestroyed(activity: Activity) = Unit
         })
         requestSync(START_DELAY_MS)
+        if (settings.isConfigured) XrnSyncJob.schedule(appContext)
     }
 
     override fun onCommandFinished(command: Command) {
@@ -328,7 +331,29 @@ class XrnSync(
         var instance: XrnSync? = null
             private set
 
+        /**
+         * Runs [show] on the main thread once a sync has finished (or [REMINDER_SYNC_MS] has
+         * passed), so a habit ticked in the web app since the last sync doesn't ring here; Loop
+         * skips the reminder of a habit that's done. Without sync set up, runs it at once.
+         */
+        fun beforeReminder(receiver: BroadcastReceiver, show: () -> Unit) {
+            val sync = instance
+            if (sync == null || !sync.settings.isConfigured) return show()
+            val pending = receiver.goAsync()
+            Thread({
+                sync.syncBlocking(REMINDER_SYNC_MS)
+                sync.main.post {
+                    try {
+                        show()
+                    } finally {
+                        pending.finish()
+                    }
+                }
+            }, "xrnsync-reminder").start()
+        }
+
         private const val TAG = "XrnSync"
+        private const val REMINDER_SYNC_MS = 8_000L
         private const val DEBOUNCE_MS = 3_000L
         private const val START_DELAY_MS = 2_000L
         private const val RESUME_THROTTLE_MS = 15_000L

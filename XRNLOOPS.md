@@ -21,6 +21,7 @@ Cloned shallow from upstream `7e993e1` (2.3.1). To rebase onto a newer upstream,
 | `build.sh` targets the new app id for instrumented-test runs | `build.sh` (`PACKAGE_NAME`) |
 | Upstream fix: the Android unit tests use `kotlinx.coroutines.test` but upstream never declared it, so they didn't compile | `uhabits-android/build.gradle.kts` |
 | Two-way sync with a server of your own (2026-10-16): every habit and entry, so the web app and the phone show the same thing. Settings → "Sync with home server" (address, user, password, Sync now); the password is kept in its own preferences file, outside the cloud backup. Adds the `INTERNET` permission | `xrnsync/` (`XrnSync`, `XrnSyncApi`, `XrnSyncSettings`, `XrnSyncPreferences`), started in `HabitsApplication.onCreate`; `res/xml/preferences.xml`, `res/values/xrnsync_strings.xml`, `SettingsFragment.kt`, `AndroidManifest.xml` |
+| Background sync about every half hour, and a sync right before each reminder | `xrnsync/XrnSyncJob.kt` (in `AndroidManifest.xml`), `XrnSync.beforeReminder`, `receivers/ReminderReceiver.kt` |
 | `call("sync")` on the provider: xrnhabit asks for a sync before it reads | `xrnhabit/XrnhabitProvider.kt`, `XrnhabitContract.kt` |
 | The sync server and a web app for ticking and reviewing habits in a browser. They port Loop's auto-check, score and streak rules (`EntryList`, `ScoreList`, `StreakList`) to Python and JavaScript, checked against Loop's own test values | `server/xrnloops-sync.py` (+ `test_xrnloops_sync.py`), `web/` |
 | Reminders crashed while building their notification (2026-10-16): the `PARENT_ACTIVITY` meta-data named `.activities.habits.list.ListHabitsActivity`, and Android resolves a leading dot in that string against the app id, which is ours, not Loop's package. Now fully qualified | `AndroidManifest.xml` |
@@ -64,7 +65,8 @@ after the seq I last saw" (`GET /api/changes?since=N`, `&wait=S` to long-poll) a
 own (`POST /api/changes`). `GET /api/status?date=` answers `done` / `goal_met` / `daily` with
 the provider's meaning; xrnhabit on the laptop reads ticks from it. It serves `web/` at its
 root. On the home server it runs at `<server>/xrnloops` (port 5234 behind Tailscale Funnel),
-with Radicale's users file for logins.
+with its own htpasswd file (`~/.config/xrn-sync/users`, shared with xrnhabit-sync). Ten wrong
+passwords from one address within 15 minutes get 429 until they age out.
 
 The phone side (`xrnsync/XrnSync.kt`) finds local changes by diffing the habit list against
 `files/xrnsync-snapshot.json`, what the server last agreed to. That also catches backup
@@ -79,7 +81,14 @@ imports, which bypass `CommandRunner`. It then:
 
 Remote positions are ignored: Loop keeps positions dense, and the phone's order is pushed.
 The first sync only fills gaps on the server. A sync runs after any command (3 s later),
-when the app comes to the front, and when xrnhabit asks (`call("sync")`).
+when the app comes to the front, when xrnhabit asks (`call("sync")`), about every half hour
+in the background (`XrnSyncJob`, a JobScheduler job that needs a network, so widgets and the
+list catch up with the web app), and right before a reminder shows (`XrnSync.beforeReminder`,
+up to 8 s), so a habit ticked in the web app doesn't ring.
+
+The web app's **Review** page (`#/review`) shows a week: each habit's days and score trend,
+and, from xrnhabit-sync's event log on the same server (`/xrnhabit/events`, same login),
+unlock minutes and blocked app opens per day on the phone and the laptop.
 
 ```fish
 python3 -m unittest server/test_xrnloops_sync.py     # Loop's rules + the store + HTTP

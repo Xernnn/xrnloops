@@ -255,6 +255,20 @@ class HttpTest(unittest.TestCase):
         _, text, _ = self.request("/api/changes?since=0")
         self.assertEqual(["abc"], [h["uuid"] for h in json.loads(text)["habits"]])
 
+    def status_of(self, path, **kw):
+        try:
+            return self.request(path, **kw)[0]
+        except urllib.error.HTTPError as e:
+            return e.code
+
+    def test_wrong_passwords_lock_out_that_address_only(self):
+        guesser = {"X-Forwarded-For": "203.0.113.9"}  # as Funnel's proxy passes it on
+        for _ in range(srv.FAIL_LIMIT):
+            self.assertEqual(401, self.status_of("/api/changes?since=0", password="nope", headers=guesser))
+        # Locked out now, even with the right password; everyone else isn't.
+        self.assertEqual(429, self.status_of("/api/changes?since=0", headers=guesser))
+        self.assertEqual(200, self.status_of("/api/changes?since=0", headers={"X-Forwarded-For": "203.0.113.10"}))
+
 
 if __name__ == "__main__":
     unittest.main()

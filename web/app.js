@@ -71,6 +71,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 class AuthError extends Error {}
 
+/** The server refuses this address for a while after too many wrong passwords (HTTP 429). */
+class LockedOutError extends Error {
+  constructor() {
+    super("Too many wrong passwords from here. Wait 15 minutes, then try again.");
+  }
+}
+
 const weekdayShort = new Intl.DateTimeFormat(undefined, { weekday: "short", timeZone: "UTC" });
 const dateLong = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const monthShort = new Intl.DateTimeFormat(undefined, { month: "short", timeZone: "UTC" });
@@ -89,6 +96,7 @@ async function api(path, body) {
     cache: "no-store",
   });
   if (res.status === 401) throw new AuthError();
+  if (res.status === 429) throw new LockedOutError();
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
   return res.json();
 }
@@ -230,7 +238,7 @@ async function signIn(user, password) {
     state.loginError = "";
   } catch (e) {
     state.auth = null;
-    state.loginError = e instanceof AuthError ? "Wrong user name or password." : `Can't reach the server (${e.message}).`;
+    state.loginError = e instanceof AuthError ? "Wrong user name or password." : e instanceof LockedOutError ? e.message : `Can't reach the server (${e.message}).`;
     render();
   }
 }
@@ -304,6 +312,7 @@ function draw() {
   if (route === "habit" && habit && !habit.deleted) view = habitView(habit);
   else if (route === "edit" && habit && !habit.deleted) view = editView(habit);
   else if (route === "new") view = editView(null, id === "numerical" ? L.NUMERICAL : L.YES_NO);
+  else if (route === "review") view = reviewView(Math.max(0, Number(id) || 0));
   else view = listView();
   const scrollY = window.scrollY;
   app.replaceChildren(view);
@@ -383,6 +392,7 @@ function listView() {
       h("a", { class: "btn primary", href: "#/new" }, "New habit"));
   const view = h("div", {},
     topBar(
+      h("a", { class: "btn ghost", href: "#/review", title: "How this week went: habits, unlocks, blocks" }, "Review"),
       h("a", { class: "btn ghost", href: "../xrnhabit/", title: "What xrnhabit is blocking right now" }, "Blocks"),
       newMenuButton()),
     h("main", { class: "wrap" },
@@ -870,6 +880,192 @@ function editView(habit, newType = L.YES_NO) {
         h("h2", {}, habit ? "Edit habit" : numerical ? "New measurable habit" : "New habit"),
         form),
       habit?.data.reminder && h("p", { class: "muted small" }, "Reminders are set in xrnloops on the phone.")));
+}
+
+// ---- weekly review --------------------------------------------------------------------------
+
+/**
+ * How a week went: the habits day by day, and what xrnhabit's blocks did on the phone and the
+ * laptop. Block history comes from xrnhabit-sync's event log (/xrnhabit/events, the same login),
+ * which each device fills once sync is set up there. Weeks start on Monday, like the heatmap.
+ */
+const review = { since: null, events: [], blocks: {}, status: "idle", gen: 0 };
+
+async function loadReview(since) {
+  if (review.since === since && review.status !== "error") return;
+  const gen = ++review.gen;
+  Object.assign(review, { since, status: "loading", events: [], blocks: {} });
+  try {
+    const headers = { Authorization: state.auth, "X-Xrn-Client": "web" };
+    const [ev, st] = await Promise.all([
+      fetch(new URL(`../xrnhabit/events?since=${since}`, BASE), { headers, cache: "no-store" }),
+      fetch(new URL("../xrnhabit/state", BASE), { headers, cache: "no-store" }),
+    ]);
+    if (!ev.ok) throw new Error(String(ev.status));
+    const events = (await ev.json()).events ?? [];
+    const blocks = st.ok ? ((await st.json()).blocks ?? {}) : {};
+    if (gen === review.gen) Object.assign(review, { events, blocks, status: "ok" });
+  } catch {
+    if (gen === review.gen) review.status = "error";
+  }
+  render(true);
+}
+
+/** The local calendar day (L.dayNum's numbering) of a moment. */
+function dayOfMs(ms) {
+  const d = new Date(ms);
+  return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000;
+}
+
+/** Local midnight at the start of a day number. */
+function msOfDay(day) {
+  const d = L.dayDate(day);
+  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()).getTime();
+}
+
+/** One habit on one day: "met", "auto" (covered by the goal), "skip", "missed", or null (no data). */
+function dayResult(habit, day) {
+  if (habit.data.type === L.NUMERICAL) {
+    const value = entriesOf(habit.uuid).get(L.dayStr(day))?.value ?? L.UNKNOWN;
+    if (value === L.SKIP) return "skip";
+    const amount = value > 0 ? value / 1000 : 0;
+    const met = habit.data.targetType === L.AT_LEAST ? amount >= habit.data.targetValue : value !== L.UNKNOWN && amount <= habit.data.targetValue;
+    return met ? "met" : "missed";
+  }
+  const v = summary(habit).computed.get(day) ?? L.UNKNOWN;
+  if (v === L.YES_MANUAL) return "met";
+  if (v === L.YES_AUTO) return "auto";
+  if (v === L.SKIP) return "skip";
+  return "missed";
+}
+
+/** Met and possible habit-days in [from, to]; skips don't count against you. */
+function weekScore(habits, from, to) {
+  let met = 0, possible = 0;
+  for (const habit of habits) {
+    for (let d = from; d <= to; d++) {
+      const r = dayResult(habit, d);
+      if (r === "skip") continue;
+      possible++;
+      if (r === "met" || r === "auto") met++;
+    }
+  }
+  return { met, possible, rate: possible ? met / possible : 0 };
+}
+
+function reviewView(offset) {
+  const today = L.todayNum();
+  const weekday = (L.dayDate(today).getUTCDay() + 6) % 7; // Monday = 0
+  const start = today - weekday - offset * 7;
+  const end = start + 6;
+  const last = Math.min(end, today);
+  loadReview(msOfDay(start - 7));
+
+  const habits = visibleHabits().filter((x) => !x.data.archived);
+  const days = Array.from({ length: 7 }, (_, i) => start + i);
+  const week = weekScore(habits, start, last);
+  const before = weekScore(habits, start - 7, start - 1);
+  const pct = (x) => `${Math.round(x * 100)}%`;
+  const range = `${dateLong.format(L.dayDate(start))} – ${dateLong.format(L.dayDate(end))}`;
+  const deltaPts = Math.round((week.rate - before.rate) * 100);
+
+  const habitRows = habits.map((habit) => {
+    const sm = summary(habit);
+    const trend = sm.scoreAt(last) - sm.scoreAt(start - 1);
+    const results = days.map((d) => (d > today ? null : dayResult(habit, d)));
+    const counted = results.filter((r) => r && r !== "skip");
+    const done = counted.filter((r) => r === "met" || r === "auto").length;
+    return h("tr", {},
+      h("th", {}, h("a", { href: `#/habit/${habit.uuid}`, style: { color: color(habit) } }, habit.data.name || "Untitled")),
+      results.map((r) => h("td", { class: `rv ${r ?? "future"}`, style: r === "met" || r === "auto" ? { color: color(habit) } : {} },
+        r === "met" ? "✓" : r === "auto" ? "✓" : r === "skip" ? "»" : r === "missed" ? "·" : "")),
+      h("td", { class: "rv-count" }, counted.length ? `${done}/${counted.length}` : "–"),
+      h("td", { class: "rv-trend " + (trend > 0.005 ? "up" : trend < -0.005 ? "down" : "") },
+        `${trend >= 0 ? "+" : ""}${Math.round(trend * 100)}%`));
+  });
+
+  return h("div", {},
+    topBar(h("a", { class: "btn ghost", href: "#/" }, "← All habits")),
+    h("main", { class: "wrap" },
+      h("section", { class: "card" },
+        h("div", { class: "head review-nav" },
+          h("a", { class: "btn ghost", href: `#/review/${offset + 1}`, title: "The week before" }, "←"),
+          h("div", { class: "review-title" }, h("b", {}, offset === 0 ? "This week" : offset === 1 ? "Last week" : `${offset} weeks ago`), h("span", { class: "muted small" }, range)),
+          offset > 0 ? h("a", { class: "btn ghost", href: offset === 1 ? "#/review" : `#/review/${offset - 1}`, title: "The week after" }, "→") : h("span", { class: "btn ghost", style: { visibility: "hidden" } }, "→")),
+        h("div", { class: "stats" },
+          h("div", { class: "stat" }, h("b", {}, week.possible ? pct(week.rate) : "–"), h("span", {}, "Habit days met")),
+          h("div", { class: "stat" }, h("b", { class: deltaPts > 0 ? "up" : deltaPts < 0 ? "down" : "" }, before.possible && week.possible ? `${deltaPts >= 0 ? "+" : ""}${deltaPts}` : "–"), h("span", {}, "Points vs the week before")),
+          h("div", { class: "stat" }, h("b", {}, week.met), h("span", {}, `of ${week.possible} done`)),
+          h("div", { class: "stat" }, h("b", {}, habits.length), h("span", {}, habits.length === 1 ? "Habit" : "Habits")))),
+      h("section", { class: "card review-habits" },
+        h("h2", {}, "Habits"),
+        habits.length
+          ? h("div", { class: "table-wrap" }, h("table", {},
+            h("thead", {}, h("tr", {}, h("th", {}),
+              days.map((d) => h("th", { class: d === today ? "today" : "" }, weekdayShort.format(L.dayDate(d)), h("small", {}, L.dayDate(d).getUTCDate()))),
+              h("th", {}, "Done"), h("th", {}, "Score"))),
+            h("tbody", {}, habitRows)))
+          : h("p", { class: "muted" }, "No habits yet.")),
+      blocksReview(days, today)));
+}
+
+function blocksReview(days, today) {
+  const card = (...children) => h("section", { class: "card review-blocks" }, h("h2", {}, "Blocks"), ...children);
+  if (review.status === "loading" || review.status === "idle") return card(h("p", { class: "muted small" }, "Loading block history…"));
+  if (review.status === "error") return card(h("p", { class: "muted small" }, "Block history isn't available: xrnhabit's sync server didn't answer."));
+  const first = days[0], lastDay = days[6];
+  const inWeek = review.events.filter((e) => {
+    const d = dayOfMs(e.at);
+    return d >= first && d <= lastDay;
+  });
+  const prior = review.events.filter((e) => dayOfMs(e.at) < first);
+  const sum = (list, t, f = () => 1) => list.filter((e) => e.t === t).reduce((a, e) => a + f(e), 0);
+  const unlockMin = (list) => Math.round(sum(list, "unlock", (e) => e.ms ?? 0) / 60000);
+  const perDay = days.map((d) => {
+    const mine = inWeek.filter((e) => dayOfMs(e.at) === d);
+    return {
+      day: d,
+      phone: sum(mine.filter((e) => e.d === "phone"), "unlock", (e) => e.ms ?? 0) / 60000,
+      laptop: sum(mine.filter((e) => e.d !== "phone"), "unlock", (e) => e.ms ?? 0) / 60000,
+      blocked: sum(mine, "blocked"),
+    };
+  });
+  const peak = Math.max(1, ...perDay.map((p) => p.phone + p.laptop));
+  const topBlocked = Object.entries(inWeek.filter((e) => e.t === "blocked").reduce((m, e) => {
+    const key = e.name || e.target || "?";
+    m[key] = (m[key] ?? 0) + 1;
+    return m;
+  }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const byBlock = Object.entries(inWeek.filter((e) => e.t === "unlock").reduce((m, e) => {
+    const key = review.blocks[e.block]?.name ?? "A deleted block";
+    m[key] = (m[key] ?? 0) + (e.ms ?? 0);
+    return m;
+  }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const blockedNow = sum(inWeek, "blocked"), blockedBefore = sum(prior, "blocked");
+  const phoneMin = Math.round(perDay.reduce((a, p) => a + p.phone, 0));
+  const laptopMin = Math.round(perDay.reduce((a, p) => a + p.laptop, 0));
+
+  if (!review.events.length) {
+    return card(h("p", { class: "muted small" }, "Nothing logged yet. The phone and the laptop send their history once sync is set up in xrnhabit; it fills in from then."));
+  }
+  return card(
+    h("div", { class: "stats" },
+      h("div", { class: "stat" }, h("b", {}, `${unlockMin(inWeek)} min`), h("span", {}, `Unlocked (week before: ${unlockMin(prior)})`)),
+      h("div", { class: "stat" }, h("b", {}, blockedNow), h("span", {}, `Times blocked (week before: ${blockedBefore})`)),
+      h("div", { class: "stat" }, h("b", {}, sum(inWeek, "habit")), h("span", {}, "Unlocks earned")),
+      h("div", { class: "stat" }, h("b", {}, `${phoneMin} / ${laptopMin}`), h("span", {}, "Minutes on phone / laptop"))),
+    h("div", { class: "bars", role: "img", "aria-label": "Unlocked minutes per day" }, perDay.map((p) =>
+      h("div", { class: "dbar" + (p.day > today ? " future" : ""), title: `${Math.round(p.phone)} min on the phone, ${Math.round(p.laptop)} on the laptop, blocked ${p.blocked}×` },
+        h("div", { class: "stack" },
+          h("i", { class: "laptop", style: { height: `${(p.laptop / peak) * 100}%` } }),
+          h("i", { class: "phone", style: { height: `${(p.phone / peak) * 100}%` } })),
+        h("span", {}, weekdayShort.format(L.dayDate(p.day))),
+        h("small", {}, p.phone + p.laptop >= 0.5 ? `${Math.round(p.phone + p.laptop)}m` : ""),
+        h("small", { class: "muted" }, p.blocked ? `${p.blocked}×` : "")))),
+    h("div", { class: "legend muted small" }, h("i", { class: "phone" }), "Phone", h("i", { class: "laptop" }), "Laptop", h("span", {}, "· × = times a blocked app was opened")),
+    (topBlocked.length || byBlock.length) && h("div", { class: "lists" },
+      topBlocked.length > 0 && h("div", {}, h("h3", {}, "Most blocked"), h("ol", {}, topBlocked.map(([name, n]) => h("li", {}, name, h("span", { class: "muted" }, ` ${n}×`))))),
+      byBlock.length > 0 && h("div", {}, h("h3", {}, "Unlock time by block"), h("ol", {}, byBlock.map(([name, ms]) => h("li", {}, name, h("span", { class: "muted" }, ` ${Math.round(ms / 60000)} min`)))))));
 }
 
 // ---- boot ----------------------------------------------------------------------------------

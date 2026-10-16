@@ -93,6 +93,7 @@ object XrnSyncPreferences {
 
     private fun changed(fragment: PreferenceFragmentCompat, sync: XrnSync) {
         sync.requestSync(500)
+        if (sync.settings.isConfigured) XrnSyncJob.schedule(fragment.requireContext())
         refresh(fragment)
     }
 
