@@ -41,6 +41,7 @@ import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_NAME
 import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_NUMERICAL
 import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_POSITION
 import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_UUID
+import org.isoron.uhabits.xrnhabit.XrnhabitContract.KEY_DAY_START_HOUR
 import org.isoron.uhabits.xrnsync.XrnSync
 
 /**
@@ -66,9 +67,11 @@ class XrnhabitProvider : ContentProvider() {
         // Providers are published before Application.onCreate finishes; xrnhabit retries.
         if (!HabitsApplication.isComponentReady()) return null
 
+        val component = HabitsApplication.component
         val date = uri.getQueryParameter(XrnhabitContract.PARAM_DATE)?.let(::parseDate) ?: getToday()
         val cursor = MatrixCursor(COLUMNS)
-        for (habit in HabitsApplication.component.habitList) {
+        cursor.extras = Bundle().apply { putInt(KEY_DAY_START_HOUR, component.preferences.midnightDelayHours) }
+        for (habit in component.habitList) {
             cursor.addRow(
                 arrayOf<Any?>(
                     habit.uuid,
@@ -126,21 +129,24 @@ class XrnhabitProvider : ContentProvider() {
     }
 
     /**
-     * [XrnhabitContract.METHOD_SYNC]. Android doesn't apply the provider's read permission to
-     * `call`, so it's checked here.
+     * [XrnhabitContract.METHOD_SYNC] and [XrnhabitContract.METHOD_WATCH]. Android doesn't apply
+     * the provider's read permission to `call`, so it's checked here.
      */
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
-        if (method != XrnhabitContract.METHOD_SYNC) return null
+        if (method != XrnhabitContract.METHOD_SYNC && method != XrnhabitContract.METHOD_WATCH) return null
         val context = context ?: return null
         if (context.checkCallingPermission(XrnhabitContract.PERMISSION) != PackageManager.PERMISSION_GRANTED) {
             throw SecurityException("needs ${XrnhabitContract.PERMISSION}")
         }
         val sync = if (HabitsApplication.isComponentReady()) XrnSync.instance else null
         val configured = sync?.settings?.isConfigured == true
-        val synced = configured && sync!!.syncBlocking(SYNC_TIMEOUT_MS)
         return Bundle().apply {
             putBoolean(XrnhabitContract.KEY_CONFIGURED, configured)
-            putBoolean(XrnhabitContract.KEY_SYNCED, synced)
+            if (method == XrnhabitContract.METHOD_SYNC) {
+                putBoolean(XrnhabitContract.KEY_SYNCED, configured && sync!!.syncBlocking(SYNC_TIMEOUT_MS))
+            } else {
+                putBoolean(XrnhabitContract.KEY_CHANGED, configured && sync!!.waitForChange(WATCH_S))
+            }
         }
     }
 
@@ -161,6 +167,7 @@ class XrnhabitProvider : ContentProvider() {
 
     companion object {
         private const val SYNC_TIMEOUT_MS = 5_000L
+        private const val WATCH_S = 25
 
         private val COLUMNS = arrayOf(
             COLUMN_UUID,

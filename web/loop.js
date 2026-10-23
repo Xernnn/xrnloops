@@ -35,8 +35,22 @@ export function dayStr(n) {
   return new Date(n * DAY_MS).toISOString().slice(0, 10);
 }
 
+let dayStart = 0;
+
+/**
+ * The hour the phone's day starts: 3 with xrnloops' "Extend the day past midnight" on, else 0.
+ * Until then "today" is still the day before, as on the phone (the server passes it along).
+ */
+export function setDayStartHour(hour) {
+  dayStart = hour;
+}
+
+export function dayStartHour() {
+  return dayStart;
+}
+
 export function todayNum() {
-  const t = new Date();
+  const t = new Date(Date.now() - dayStart * 3600000);
   return Date.UTC(t.getFullYear(), t.getMonth(), t.getDate()) / DAY_MS;
 }
 

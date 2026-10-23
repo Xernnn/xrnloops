@@ -188,6 +188,22 @@ class StoreTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.store.apply({"habits": [{"uuid": "h1", "mtime": 1, "data": {"freqNum": 0}}]})
 
+    def test_day_start_hour_is_kept_and_wakes_long_polls(self):
+        self.assertEqual(0, self.store.changes(0)["dayStartHour"])
+        seq = self.store.seq()
+        threading.Timer(0.2, lambda: self.store.apply({"dayStartHour": 3})).start()
+        start = time.monotonic()
+        page = self.store.changes(seq, wait_s=5)
+        self.assertLess(time.monotonic() - start, 3)
+        self.assertEqual(3, page["dayStartHour"])
+        self.assertEqual(3, self.store.status(date(2026, 10, 16))["dayStartHour"])
+        seq = self.store.seq()
+        self.store.apply({"dayStartHour": 3, "entries": []})  # unchanged: no new seq
+        self.assertEqual(seq, self.store.seq())
+        for bad in (24, -1, "3", True):
+            with self.assertRaises(ValueError):
+                self.store.apply({"dayStartHour": bad})
+
 
 class HttpTest(unittest.TestCase):
     @classmethod

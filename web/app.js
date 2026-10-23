@@ -14,6 +14,7 @@ import * as L from "./loop.js";
 const BASE = new URL(".", location.href);
 const KEY_AUTH = "xrnloops.auth";
 const KEY_PENDING = "xrnloops.pending";
+const KEY_DAY_START = "xrnloops.dayStartHour";
 const DAYS_SHOWN = 7;
 
 const state = {
@@ -31,6 +32,7 @@ const state = {
 };
 
 const summaries = new Map(); // uuid -> L.summarize(...), dropped when that habit changes
+L.setDayStartHour(load(KEY_DAY_START, 0)); // the server confirms it with the first page
 
 // ---- small helpers ----------------------------------------------------------------------
 
@@ -113,6 +115,12 @@ function pendingEntry(habit, date) {
 
 /** Takes the server's records. A local write it hasn't seen yet stays on screen meanwhile. */
 function ingest(page) {
+  let dayMoved = false;
+  if (typeof page.dayStartHour === "number" && page.dayStartHour !== L.dayStartHour()) {
+    L.setDayStartHour(page.dayStartHour);
+    save(KEY_DAY_START, page.dayStartHour);
+    dayMoved = true;
+  }
   for (const h of page.habits) {
     const mine = state.pending.habits.find((p) => p.uuid === h.uuid);
     if (mine && mine.mtime > h.mtime) continue;
@@ -125,7 +133,7 @@ function ingest(page) {
     entriesOf(e.habit).set(e.date, { value: e.value, notes: e.notes, mtime: e.mtime });
     summaries.delete(e.habit);
   }
-  return page.habits.length + page.entries.length > 0;
+  return dayMoved || page.habits.length + page.entries.length > 0;
 }
 
 async function loadAll(gen) {
@@ -146,6 +154,7 @@ async function loadAll(gen) {
 }
 
 async function live(gen) {
+  let day = L.todayNum();
   while (gen === state.generation) {
     try {
       const page = await api(`api/changes?since=${state.seq}&wait=25`);
@@ -153,7 +162,9 @@ async function live(gen) {
       const changed = ingest(page);
       state.seq = page.seq;
       setOnline(true);
-      if (changed) render(true);
+      // A new day moves every column along, even if nothing else changed.
+      if (changed || L.todayNum() !== day) render(true);
+      day = L.todayNum();
     } catch (e) {
       if (gen !== state.generation) return;
       if (e instanceof AuthError) return signOut("Your password was refused. Sign in again.");

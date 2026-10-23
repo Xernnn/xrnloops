@@ -32,6 +32,10 @@ import android.util.Log
  * widgets and the reminders here catch up with ticks made in the web app while nobody opens
  * this app. Android may stretch the period, in Doze especially; reminders sync on their own
  * ([XrnSync.beforeReminder]).
+ *
+ * The same job, once ([schedulePush]), sends a change made here even when Android ends the
+ * process before the in-app sync gets to it: leaving the app right after a tick is enough on
+ * some phones. If the in-app sync did send it, this round just finds nothing new.
  */
 class XrnSyncJob : JobService() {
 
@@ -50,8 +54,12 @@ class XrnSyncJob : JobService() {
 
     companion object {
         private const val JOB_ID = 0x78726e // "xrn"; nothing else in this app uses JobScheduler
+        private const val PUSH_JOB_ID = JOB_ID + 1
         private const val PERIOD_MS = 30 * 60 * 1000L
         private const val TIMEOUT_MS = 60_000L
+
+        /** After the in-app sync's own wait, so that one usually gets there first. */
+        private const val PUSH_DELAY_MS = 5_000L
 
         /**
          * Schedules the job unless it already is. Scheduling again would restart its period, and
@@ -71,6 +79,25 @@ class XrnSyncJob : JobService() {
                 scheduler.schedule(job)
             } catch (e: RuntimeException) {
                 Log.w("XrnSync", "background sync not scheduled", e)
+            }
+        }
+
+        /**
+         * One sync a few seconds from now, with a network, that outlives this process. Called
+         * after every change here; scheduling again replaces the waiting one, so a burst of ticks
+         * is one round. A failed round is retried with the job's backoff.
+         */
+        fun schedulePush(context: Context) {
+            try {
+                val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
+                val job = JobInfo.Builder(PUSH_JOB_ID, ComponentName(context, XrnSyncJob::class.java))
+                    .setMinimumLatency(PUSH_DELAY_MS)
+                    .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                    .setPersisted(true)
+                    .build()
+                scheduler.schedule(job)
+            } catch (e: RuntimeException) {
+                Log.w("XrnSync", "upload job not scheduled", e)
             }
         }
     }

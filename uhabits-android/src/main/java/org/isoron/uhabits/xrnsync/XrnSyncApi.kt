@@ -25,22 +25,24 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** The two calls xrnloops-sync answers (see `server/xrnloops-sync.py`). Blocking; call off the main thread. */
+/** The calls xrnloops-sync answers (see `server/xrnloops-sync.py`). Blocking; call off the main thread. */
 class XrnSyncApi(private val baseUrl: String, user: String, password: String) {
     private val auth = "Basic " + Base64.encodeToString("$user:$password".toByteArray(), Base64.NO_WRAP)
 
     class AuthException : IOException("the server refused the user name or password")
 
-    fun pull(since: Long): JSONObject = request("GET", "/api/changes?since=$since", null)
+    /** Changes after [since]; with [waitS], the server holds the answer until there are some (long-poll). */
+    fun pull(since: Long, waitS: Int = 0): JSONObject =
+        request("GET", "/api/changes?since=$since" + if (waitS > 0) "&wait=$waitS" else "", null, waitS * 1000)
 
     fun push(body: JSONObject): JSONObject = request("POST", "/api/changes", body)
 
-    private fun request(method: String, path: String, body: JSONObject?): JSONObject {
+    private fun request(method: String, path: String, body: JSONObject?, waitMs: Int = 0): JSONObject {
         val conn = URL(baseUrl + path).openConnection() as HttpURLConnection
         try {
             conn.requestMethod = method
             conn.connectTimeout = TIMEOUT_MS
-            conn.readTimeout = TIMEOUT_MS
+            conn.readTimeout = TIMEOUT_MS + waitMs
             conn.setRequestProperty("Authorization", auth)
             conn.setRequestProperty("Accept", "application/json")
             if (body != null) {

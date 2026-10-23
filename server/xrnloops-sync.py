@@ -18,15 +18,19 @@ Records are habits (by uuid) and entries (by habit uuid + day). Each carries the
 `mtime` (wall-clock ms) and the last write wins per record. Every accepted write takes the next
 `seq`, so a client asks for "everything after the seq I last saw".
 
-    POST /api/changes          {"habits": [...], "entries": [...], "ifAbsent": false}
+    POST /api/changes          {"habits": [...], "entries": [...], "ifAbsent": false,
+                                "dayStartHour": 0}
                                -> {"seq", "rejected": {"habits": [...], "entries": [...]}}
                                A rejected record lost to a newer one, which is returned.
                                With ifAbsent, records only fill gaps (a first sync).
-    GET  /api/changes?since=N  -> {"seq", "more", "habits": [...], "entries": [...]}
+                               dayStartHour (optional): the phone's "Extend the day past
+                               midnight" setting, the hour its new day starts (0 or 3).
+    GET  /api/changes?since=N  -> {"seq", "more", "habits": [...], "entries": [...], "dayStartHour"}
                                &wait=S long-polls up to S seconds for something newer.
     GET  /api/status?date=YYYY-MM-DD
                                -> per habit: done / goal_met / daily / countable, with the
-                               meaning of XrnhabitProvider in the Android app.
+                               meaning of XrnhabitProvider in the Android app; and
+                               dayStartHour, so the laptop asks for Loop's day, not the date.
     GET  /health               200 "ok", no login (for monitoring)
     GET  /, /app.js, ...       the web app (static files, no login; the data needs one)
 
@@ -212,6 +216,10 @@ class Store:
         row = self.db.execute("SELECT value FROM meta WHERE key='seq'").fetchone()
         return row[0] if row else 0
 
+    def day_start_hour(self):
+        row = self.db.execute("SELECT value FROM meta WHERE key='day_start_hour'").fetchone()
+        return row[0] if row else 0
+
     def _next_seq(self):
         seq = self.seq() + 1
         self.db.execute("INSERT INTO meta(key, value) VALUES('seq', ?) "
@@ -230,7 +238,14 @@ class Store:
     def apply(self, body):
         if_absent = bool(body.get("ifAbsent"))
         rejected_habits, rejected_entries = [], []
+        day_start = body.get("dayStartHour")
+        if day_start is not None and (isinstance(day_start, bool) or not isinstance(day_start, int) or not 0 <= day_start <= 23):
+            raise ValueError("dayStartHour must be an hour, 0 to 23")
         with self.lock:
+            if day_start is not None and day_start != self.day_start_hour():
+                self.db.execute("INSERT INTO meta(key, value) VALUES('day_start_hour', ?) "
+                                "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (day_start,))
+                self._next_seq()  # wakes long-polls, so the web app and the laptop move their "today"
             for h in body.get("habits") or []:
                 uuid = str(h["uuid"])
                 data = json.dumps(clean_habit_data(h.get("data") or {}), sort_keys=True, ensure_ascii=False)
@@ -305,7 +320,8 @@ class Store:
                     "SELECT habit, date, value, notes, mtime FROM entries WHERE seq>? AND seq<=? ORDER BY seq",
                     (since, upto))
             ]
-            return {"seq": upto, "more": upto < latest, "habits": habits, "entries": entries}
+            return {"seq": upto, "more": upto < latest, "habits": habits, "entries": entries,
+                    "dayStartHour": self.day_start_hour()}
 
     def status(self, day):
         with self.lock:
@@ -321,7 +337,7 @@ class Store:
                             "archived": habit["archived"], "numerical": habit["type"] == NUMERICAL,
                             **habit_status(habit, entries, day)})
             out.sort(key=lambda h: (h["position"], h["name"]))
-            return {"date": day.isoformat(), "seq": self.seq(), "habits": out}
+            return {"date": day.isoformat(), "seq": self.seq(), "dayStartHour": self.day_start_hour(), "habits": out}
 
 
 def store_for(user):

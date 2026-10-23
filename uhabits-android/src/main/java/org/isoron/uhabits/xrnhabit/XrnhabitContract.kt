@@ -24,7 +24,9 @@ package org.isoron.uhabits.xrnhabit
  * until a habit is done. xrnhabit keeps an identical copy of these constants
  * (`com.xern.xrnhabit.app.loop.LoopContract`); change both together.
  *
- * - Read: `content://<applicationId>.provider/habits?date=YYYY-MM-DD` ([XrnhabitProvider]).
+ * - Read: `content://<applicationId>.provider/habits?date=YYYY-MM-DD` ([XrnhabitProvider]); the
+ *   cursor's extras carry [KEY_DAY_START_HOUR].
+ * - Wait: [METHOD_WATCH] answers when the home server has something new (a tick in the web app).
  * - Push: [ACTION_HABITS_CHANGED], sent to [XRNHABIT_PACKAGE] after every command
  *   ([XrnhabitNotifier]). It carries no data; xrnhabit re-reads the provider.
  * - Open: [ACTION_OPEN_HABIT] with [EXTRA_HABIT_UUID] shows that habit's page
@@ -42,6 +44,13 @@ object XrnhabitContract {
 
     const val PATH_HABITS = "habits"
     const val PARAM_DATE = "date"
+
+    /**
+     * In the cursor's extras: the hour this app's day starts, 3 with "Extend the day past
+     * midnight" on, else 0. Until then a tick lands on the day before, so xrnhabit asks for that
+     * date. It works the date out with its own clock, which ignores a hand-set phone clock.
+     */
+    const val KEY_DAY_START_HOUR = "day_start_hour"
 
     const val COLUMN_UUID = "uuid"
     const val COLUMN_NAME = "name"
@@ -69,4 +78,13 @@ object XrnhabitContract {
     const val METHOD_SYNC = "sync"
     const val KEY_CONFIGURED = "configured"
     const val KEY_SYNCED = "synced"
+
+    /**
+     * `ContentResolver.call(authority, METHOD_WATCH, null, null)`: waits up to ~25 s for the home
+     * server to have something this phone hasn't pulled (a tick in the web app), syncs it in and
+     * answers; [ACTION_HABITS_CHANGED] has gone out by then too. The result has [KEY_CONFIGURED]
+     * and [KEY_CHANGED]. Without sync set up it answers at once. Blocking: call off the main thread.
+     */
+    const val METHOD_WATCH = "watch"
+    const val KEY_CHANGED = "changed"
 }

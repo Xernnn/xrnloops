@@ -26,6 +26,7 @@ import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import org.isoron.platform.time.LocalDate
 import org.isoron.uhabits.core.commands.Command
@@ -43,6 +44,7 @@ import org.isoron.uhabits.core.models.NumericalHabitType
 import org.isoron.uhabits.core.models.PaletteColor
 import org.isoron.uhabits.core.models.Reminder
 import org.isoron.uhabits.core.models.WeekdayList
+import org.isoron.uhabits.core.preferences.Preferences
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -61,12 +63,18 @@ import java.util.concurrent.TimeUnit
  * sync thread, never queued behind it, so a diff can't run between "server sent X" and "X is
  * stored" and push the old value back. A record changed here since this sync read it is left
  * alone; it goes out on the next round.
+ *
+ * A change made here goes out within seconds, and a background job ([XrnSyncJob.schedulePush])
+ * sends it even if Android ends this process first. Changes from elsewhere arrive at once while
+ * one of this app's screens is open or xrnhabit's block screen waits for them ([waitForChange]),
+ * and otherwise with the next sync.
  */
 class XrnSync(
     context: Context,
     private val habitList: HabitList,
     private val modelFactory: ModelFactory,
-    private val commandRunner: CommandRunner
+    private val commandRunner: CommandRunner,
+    private val preferences: Preferences
 ) : CommandRunner.Listener {
 
     val settings = XrnSyncSettings(context)
@@ -79,6 +87,14 @@ class XrnSync(
     private var pending: ScheduledFuture<*>? = null
     private var lastResumeSyncMs = 0L
 
+    /** How far the server's feed has been read, for [waitForChange]; -1 until known. */
+    @Volatile
+    private var feedSeq = -1L
+
+    @Volatile
+    private var screensOpen = 0
+    private var watcher: Thread? = null
+
     /** Applied changes are announced as this, so widgets and lists refresh but we don't re-sync. */
     object SyncedFromServer : Command {
         override fun run() = Unit
@@ -89,15 +105,20 @@ class XrnSync(
         commandRunner.addListener(this)
         app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityResumed(activity: Activity) {
+                screensOpen++
+                watchWhileOpen()
                 val now = System.currentTimeMillis()
                 if (now - lastResumeSyncMs < RESUME_THROTTLE_MS) return
                 lastResumeSyncMs = now
                 requestSync(0)
             }
 
+            override fun onActivityPaused(activity: Activity) {
+                screensOpen = maxOf(0, screensOpen - 1)
+            }
+
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
             override fun onActivityStarted(activity: Activity) = Unit
-            override fun onActivityPaused(activity: Activity) = Unit
             override fun onActivityStopped(activity: Activity) = Unit
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
             override fun onActivityDestroyed(activity: Activity) = Unit
@@ -107,7 +128,46 @@ class XrnSync(
     }
 
     override fun onCommandFinished(command: Command) {
-        if (command !== SyncedFromServer) requestSync(DEBOUNCE_MS)
+        if (command === SyncedFromServer || !settings.isConfigured) return
+        requestSync(DEBOUNCE_MS)
+        // In case Android ends this process before then (it does, right after the app is left).
+        XrnSyncJob.schedulePush(appContext)
+    }
+
+    /**
+     * Waits up to [waitS] seconds for the server to have anything this phone hasn't pulled yet,
+     * then syncs it in; true if something came. Blocks the calling thread (a binder thread for
+     * xrnhabit, or the watcher), never the sync thread, so a tick here still goes out meanwhile.
+     */
+    fun waitForChange(waitS: Int): Boolean {
+        if (!settings.isConfigured) return false
+        return try {
+            if (feedSeq < 0) feedSeq = Snapshot.load(snapshotFile).seq
+            val page = XrnSyncApi(settings.url, settings.user, settings.password).pull(feedSeq, waitS)
+            val news = page.getJSONArray("habits").length() > 0 || page.getJSONArray("entries").length() > 0
+            if (news) syncBlocking(WATCH_SYNC_MS) else feedSeq = maxOf(feedSeq, page.getLong("seq"))
+            news
+        } catch (e: Exception) {
+            Log.w(TAG, "waiting for changes failed", e)
+            false
+        }
+    }
+
+    /** While one of our screens is open, ticks made in the web app show up here at once. */
+    @Synchronized
+    private fun watchWhileOpen() {
+        if (!settings.isConfigured || watcher?.isAlive == true) return
+        watcher = Thread({
+            while (screensOpen > 0) {
+                val start = SystemClock.elapsedRealtime()
+                if (!waitForChange(WATCH_S) && SystemClock.elapsedRealtime() - start < 2_000) {
+                    Thread.sleep(WATCH_RETRY_MS) // the server is out of reach: don't spin
+                }
+            }
+        }, "xrnsync-watch").apply {
+            isDaemon = true
+            start()
+        }
     }
 
     /** Syncs after [delayMs], replacing a sync already waiting (so a burst of ticks is one round). */
@@ -147,6 +207,7 @@ class XrnSync(
     // ---- the round ---------------------------------------------------------------------
 
     private class Round(val before: LocalState, val snap: Snapshot) {
+        var serverDayStartHour: Int? = null
         var applied = 0
         var refetchAll = false
         val touched = mutableSetOf<Habit>()
@@ -165,6 +226,12 @@ class XrnSync(
         }
         snap.initialized = true
         snap.save(snapshotFile)
+        feedSeq = snap.seq
+        // Loop's "Extend the day past midnight": the web app and the laptop need it to agree on "today".
+        val dayStart = preferences.midnightDelayHours
+        if (round.serverDayStartHour != null && round.serverDayStartHour != dayStart) {
+            api.push(JSONObject().put("dayStartHour", dayStart).put("habits", JSONArray()).put("entries", JSONArray()))
+        }
         round.touched.forEach { it.recompute() }
         if (round.touched.isNotEmpty() || round.listChanged) {
             habitList.resort()
@@ -235,6 +302,7 @@ class XrnSync(
             val page = api.pull(snap.seq)
             applyRemote(page.getJSONArray("habits"), page.getJSONArray("entries"), round)
             snap.seq = page.getLong("seq")
+            if (page.has("dayStartHour")) round.serverDayStartHour = page.getInt("dayStartHour")
             snap.save(snapshotFile)
         } while (page.optBoolean("more"))
     }
@@ -358,6 +426,9 @@ class XrnSync(
         private const val START_DELAY_MS = 2_000L
         private const val RESUME_THROTTLE_MS = 15_000L
         private const val PUSH_CHUNK = 2_000
+        private const val WATCH_S = 25
+        private const val WATCH_SYNC_MS = 10_000L
+        private const val WATCH_RETRY_MS = 15_000L
     }
 }
 
