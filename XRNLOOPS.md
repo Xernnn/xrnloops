@@ -1,9 +1,9 @@
 # xrnloops: our Loop Habit Tracker fork
 
 This is a modified copy of [Loop Habit Tracker](https://github.com/iSoron/uhabits)
-(GPLv3), renamed **xrnloops** and changed on 2026-10-05 so that xrnhabit (`../xrnhabit`,
-formerly HabitFirst) can unlock blocked apps when you tick a habit here. The modified version stays
-GPLv3. xrnhabit talks to it only over Android IPC and contains no Loop code.
+(GPLv3), renamed **xrnloops** and changed on 2026-10-05 so that xrnrule (`../xrnrule`,
+formerly xrnhabit and HabitFirst) can unlock blocked apps when you tick a habit here. The modified version stays
+GPLv3. xrnrule talks to it only over Android IPC and contains no Loop code.
 
 Cloned shallow from upstream `7e993e1` (2.3.1). To rebase onto a newer upstream, run
 `git fetch --unshallow` first.
@@ -14,24 +14,24 @@ Cloned shallow from upstream `7e993e1` (2.3.1). To rebase onto a newer upstream,
 |---|---|
 | App id `com.xern.xrnloops`, launcher name "xrnloops", so it installs next to the store Loop. Loop's Kotlin packages stay `org.isoron.uhabits` so upstream changes still merge | `uhabits-android/build.gradle.kts`, `AndroidManifest.xml`, `res/values/xrnloops.xml` |
 | Places that hardcoded `org.isoron.uhabits` now follow the app id: the FileProvider authority, `BackupManager.dataChanged`, and the About screen intent | `AndroidManifest.xml`, `utils/ViewExtensions.kt`, `activities/settings/SettingsFragment.kt`, `res/xml/preferences.xml` |
-| Read-only habit provider | `xrnhabit/XrnhabitProvider.kt` |
-| "Open this habit" entry point for xrnhabit's block screen | `xrnhabit/OpenHabitActivity.kt`, `AndroidManifest.xml` |
-| Optional signing key shared with xrnhabit, read from `../xrn-signing.properties` | `uhabits-android/build.gradle.kts` |
-| "Habits changed" broadcast after every command | `xrnhabit/XrnhabitNotifier.kt`, started in `HabitsApplication.onCreate` |
+| Read-only habit provider | `xrnrule/XrnruleProvider.kt` |
+| "Open this habit" entry point for xrnrule's block screen | `xrnrule/OpenHabitActivity.kt`, `AndroidManifest.xml` |
+| Optional signing key shared with xrnrule, read from `../xrn-signing.properties` | `uhabits-android/build.gradle.kts` |
+| "Habits changed" broadcast after every command | `xrnrule/XrnruleNotifier.kt`, started in `HabitsApplication.onCreate` |
 | `build.sh` targets the new app id for instrumented-test runs | `build.sh` (`PACKAGE_NAME`) |
 | Upstream fix: the Android unit tests use `kotlinx.coroutines.test` but upstream never declared it, so they didn't compile | `uhabits-android/build.gradle.kts` |
 | Two-way sync with a server of your own (2026-10-16): every habit and entry, so the web app and the phone show the same thing. Settings → "Sync with home server" (address, user, password, Sync now); the password is kept in its own preferences file, outside the cloud backup. Adds the `INTERNET` permission | `xrnsync/` (`XrnSync`, `XrnSyncApi`, `XrnSyncSettings`, `XrnSyncPreferences`), started in `HabitsApplication.onCreate`; `res/xml/preferences.xml`, `res/values/xrnsync_strings.xml`, `SettingsFragment.kt`, `AndroidManifest.xml` |
 | Background sync about every half hour, a sync right before each reminder, a one-off job after each change (in case Android ends the process before it is sent), and live updates from the server while a screen is open | `xrnsync/XrnSyncJob.kt` (in `AndroidManifest.xml`), `XrnSync.beforeReminder`, `XrnSync.waitForChange`, `receivers/ReminderReceiver.kt` |
-| `call("sync")` on the provider: xrnhabit asks for a sync before it reads; `call("watch")`: it waits for the next change from the server while a block screen is up; `day_start_hour` in each read, so xrnhabit reads the right day with "Extend the day past midnight" on | `xrnhabit/XrnhabitProvider.kt`, `XrnhabitContract.kt` |
+| `call("sync")` on the provider: xrnrule asks for a sync before it reads; `call("watch")`: it waits for the next change from the server while a block screen is up; `day_start_hour` in each read, so xrnrule reads the right day with "Extend the day past midnight" on | `xrnrule/XrnruleProvider.kt`, `XrnruleContract.kt` |
 | The sync server and a web app for ticking and reviewing habits in a browser. They port Loop's auto-check, score and streak rules (`EntryList`, `ScoreList`, `StreakList`) to Python and JavaScript, checked against Loop's own test values | `server/xrnloops-sync.py` (+ `test_xrnloops_sync.py`), `web/` |
 | Reminders crashed while building their notification (2026-10-16): the `PARENT_ACTIVITY` meta-data named `.activities.habits.list.ListHabitsActivity`, and Android resolves a leading dot in that string against the app id, which is ours, not Loop's package. Now fully qualified | `AndroidManifest.xml` |
-| One `EntryRepository` / `HabitRepository` serves every habit, and their statements keep state between bind and step. Upstream reads and writes from one thread at a time; the provider's binder threads and the sync thread made a second one, which crashed the app when xrnhabit woke it (a provider read during `onCreate`'s `recompute()`) and could cross two writes. Every repository method now takes the repository's lock, `SQLiteEntryList.loadRecords` its list's, and the provider waits for `onCreate` to finish | `uhabits-core/.../database/EntryRepository.kt`, `HabitRepository.kt`, `models/sqlite/SQLiteEntryList.kt`, `HabitsApplication.isComponentReady` |
-| Upstream fix: "today" went stale when the process outlived midnight in the background (upstream only recomputes it at process start, or at midnight while the habit list is on screen), so the first column was really yesterday and a tick there landed on yesterday's date. Now every screen resume catches up | `xrnhabit/TodayRefresher.kt`, `HabitsApplication.kt`, `uhabits-core/.../utils/MidnightTimer.kt` (`refreshIfDayChanged`, tested in `MidnightTimerTest`) |
+| One `EntryRepository` / `HabitRepository` serves every habit, and their statements keep state between bind and step. Upstream reads and writes from one thread at a time; the provider's binder threads and the sync thread made a second one, which crashed the app when xrnrule woke it (a provider read during `onCreate`'s `recompute()`) and could cross two writes. Every repository method now takes the repository's lock, `SQLiteEntryList.loadRecords` its list's, and the provider waits for `onCreate` to finish | `uhabits-core/.../database/EntryRepository.kt`, `HabitRepository.kt`, `models/sqlite/SQLiteEntryList.kt`, `HabitsApplication.isComponentReady` |
+| Upstream fix: "today" went stale when the process outlived midnight in the background (upstream only recomputes it at process start, or at midnight while the habit list is on screen), so the first column was really yesterday and a tick there landed on yesterday's date. Now every screen resume catches up | `xrnrule/TodayRefresher.kt`, `HabitsApplication.kt`, `uhabits-core/.../utils/MidnightTimer.kt` (`refreshIfDayChanged`, tested in `MidnightTimerTest`) |
 
 ## The contract
 
-`xrnhabit/XrnhabitContract.kt` is mirrored by xrnhabit's
-`../xrnhabit/app/.../loop/LoopHabits.kt` (`LoopContract`). Change both together.
+`xrnrule/XrnruleContract.kt` is mirrored by xrnrule's
+`../xrnrule/app/.../loop/LoopHabits.kt` (`LoopContract`). Change both together.
 
 - **Read:** `content://com.xern.xrnloops.provider/habits?date=YYYY-MM-DD` returns one
   row per habit, with columns `uuid, name, position, archived, numerical, countable, done,
@@ -43,25 +43,25 @@ Cloned shallow from upstream `7e993e1` (2.3.1). To rebase onto a newer upstream,
   `goal_met` is 1 when it's done, or, for a yes/no habit that isn't every day ("3 times a
   week"), when Loop has filled the day with an automatic check because the goal is met.
   `daily` is 1 for every-day and numerical habits, where `goal_met` equals `done`.
-- **Open:** activity action `com.xern.xrnhabit.action.OPEN_HABIT` with extra `uuid` opens that
+- **Open:** activity action `com.xern.xrnrule.action.OPEN_HABIT` with extra `uuid` opens that
   habit's page (`OpenHabitActivity`), where today or yesterday can be ticked from the history
   card; it falls back to the habit list if the habit is gone.
-- **Push:** broadcast `com.xern.xrnhabit.action.HABITS_CHANGED` to `com.xern.xrnhabit` after every
+- **Push:** broadcast `com.xern.xrnrule.action.HABITS_CHANGED` to `com.xern.xrnrule` after every
   command, which covers ticks from the list, the history card, widgets and notifications. It
-  carries no data; xrnhabit re-reads the provider.
+  carries no data; xrnrule re-reads the provider.
 - **Sync first:** `ContentResolver.call(content://com.xern.xrnloops.provider, "sync", …)` runs a
   sync with the home server and waits up to 5 s, then returns `configured` and `synced`
   booleans. Android doesn't apply the provider's permissions to `call`, so it checks the
   calling app itself.
 - **Wait:** `call(…, "watch", …)` long-polls the home server for up to 25 s and syncs as soon as
   anything arrives (then the usual broadcast goes out), returning `configured` and `changed`.
-  xrnhabit loops on it while a block screen shows a linked habit, so a tick in the web app or
+  xrnrule loops on it while a block screen shows a linked habit, so a tick in the web app or
   on the laptop opens the block within about a second.
 - **Day start:** every read's cursor extras carry `day_start_hour`: 3 with Loop's "Extend the
-  day past midnight" on, else 0. Until that hour a tick lands on the day before, so xrnhabit
+  day past midnight" on, else 0. Until that hour a tick lands on the day before, so xrnrule
   asks for that date (it works the date out with its own clock, which ignores a hand-set phone
   clock).
-- **Guard:** both apps declare the signature permission `com.xern.xrnhabit.permission.HABITS`. Only
+- **Guard:** both apps declare the signature permission `com.xern.xrnrule.permission.HABITS`. Only
   apps signed with the same key can read habits, open a habit, or send the signal.
 
 ## Sync and the web app
@@ -71,11 +71,11 @@ uuid) or an entry (habit + day), each with its writer's wall-clock `mtime`, and 
 wins per record. Every accepted write takes the next `seq`, so a client asks for "everything
 after the seq I last saw" (`GET /api/changes?since=N`, `&wait=S` to long-poll) and sends its
 own (`POST /api/changes`). `GET /api/status?date=` answers `done` / `goal_met` / `daily` with
-the provider's meaning; xrnhabit on the laptop reads ticks from it. The phone also sends the
+the provider's meaning; xrnrule on the laptop reads ticks from it. The phone also sends the
 hour its day starts (`dayStartHour`, from "Extend the day past midnight"); both answers pass
 it on, so the web app's "today" and the laptop's reads follow the phone's day. It serves `web/` at its
 root. On the home server it runs at `<server>/xrnloops` (port 5234 behind Tailscale Funnel),
-with its own htpasswd file (`~/.config/xrn-sync/users`, shared with xrnhabit-sync). Ten wrong
+with its own htpasswd file (`~/.config/xrn-sync/users`, shared with xrnrule-sync). Ten wrong
 passwords from one address within 15 minutes get 429 until they age out.
 
 The phone side (`xrnsync/XrnSync.kt`) finds local changes by diffing the habit list against
@@ -85,14 +85,14 @@ imports, which bypass `CommandRunner`. It then:
 - pushes local changes with a stamp newer than the record it replaces, so a slow phone clock
   can't lose a tick;
 - pulls and applies remote ones directly on its one sync thread, then announces them as
-  `XrnSync.SyncedFromServer`, so lists, widgets and xrnhabit refresh without triggering
+  `XrnSync.SyncedFromServer`, so lists, widgets and xrnrule refresh without triggering
   another sync;
 - leaves alone any record changed here since the round began (it goes out next time).
 
 Remote positions are ignored: Loop keeps positions dense, and the phone's order is pushed.
 The first sync only fills gaps on the server. A sync runs after any command (3 s later, and a
 one-off `XrnSyncJob` 5 s later in case Android ends the process first, which leaving the app
-right after a tick can do), when the app comes to the front, when xrnhabit asks
+right after a tick can do), when the app comes to the front, when xrnrule asks
 (`call("sync")`), about every half hour in the background (`XrnSyncJob`, a JobScheduler job
 that needs a network, so widgets and the list catch up with the web app), and right before a
 reminder shows (`XrnSync.beforeReminder`, up to 8 s), so a habit ticked in the web app doesn't
@@ -100,7 +100,7 @@ ring. While one of the app's screens is open, a long-poll (`XrnSync.waitForChang
 ticks from the web app as they happen.
 
 The web app's **Review** page (`#/review`) shows a week: each habit's days and score trend,
-and, from xrnhabit-sync's event log on the same server (`/xrnhabit/events`, same login),
+and, from xrnrule-sync's event log on the same server (`/xrnrule/events`, same login),
 unlock minutes and blocked app opens per day on the phone and the laptop.
 
 ```fish
@@ -127,4 +127,4 @@ builds read `../xrn-signing.properties` when it exists (`storeFile`, `storePassw
 3. Once you've checked everything came across, uninstall the store Loop (or keep it; the two
    apps don't interfere).
 
-Then, in xrnhabit, open a habit block's checklist and tap **Link xrnloops habit**.
+Then, in xrnrule, open a habit block's checklist and tap **Link xrnloops habit**.

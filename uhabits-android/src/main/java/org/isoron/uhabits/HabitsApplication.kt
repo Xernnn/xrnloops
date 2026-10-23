@@ -26,8 +26,8 @@ import org.isoron.platform.time.setToday
 import org.isoron.uhabits.core.database.UnsupportedDatabaseVersionException
 import org.isoron.uhabits.core.reminders.ReminderScheduler
 import org.isoron.uhabits.core.ui.NotificationTray
-import org.isoron.uhabits.xrnhabit.TodayRefresher
-import org.isoron.uhabits.xrnhabit.XrnhabitNotifier
+import org.isoron.uhabits.xrnrule.TodayRefresher
+import org.isoron.uhabits.xrnrule.XrnruleNotifier
 import org.isoron.uhabits.xrnsync.XrnSync
 import org.isoron.uhabits.inject.HabitsApplicationComponent
 import org.isoron.uhabits.inject.create
@@ -44,7 +44,7 @@ class HabitsApplication : Application() {
     private lateinit var widgetUpdater: WidgetUpdater
     private lateinit var reminderScheduler: ReminderScheduler
     private lateinit var notificationTray: NotificationTray
-    private lateinit var xrnhabitNotifier: XrnhabitNotifier
+    private lateinit var xrnruleNotifier: XrnruleNotifier
 
     override fun onCreate() {
         super.onCreate()
@@ -88,8 +88,8 @@ class HabitsApplication : Application() {
         notificationTray = component.notificationTray
         notificationTray.startListening()
 
-        xrnhabitNotifier = XrnhabitNotifier(context, component.commandRunner)
-        xrnhabitNotifier.startListening()
+        xrnruleNotifier = XrnruleNotifier(context, component.commandRunner)
+        xrnruleNotifier.startListening()
         registerActivityLifecycleCallbacks(TodayRefresher(component.midnightTimer))
         XrnSync(context, habitList, component.modelFactory, component.commandRunner, component.preferences).start(this)
         ready = true
@@ -105,7 +105,7 @@ class HabitsApplication : Application() {
         reminderScheduler.stopListening()
         widgetUpdater.stopListening()
         notificationTray.stopListening()
-        xrnhabitNotifier.stopListening()
+        xrnruleNotifier.stopListening()
         super.onTerminate()
     }
 

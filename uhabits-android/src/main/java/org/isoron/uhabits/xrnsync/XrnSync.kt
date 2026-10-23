@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2026 the xrnhabit authors
+ * Copyright (C) 2026 the xrnrule authors
  *
  * This file is part of Loop Habit Tracker.
  *
@@ -66,7 +66,7 @@ import java.util.concurrent.TimeUnit
  *
  * A change made here goes out within seconds, and a background job ([XrnSyncJob.schedulePush])
  * sends it even if Android ends this process first. Changes from elsewhere arrive at once while
- * one of this app's screens is open or xrnhabit's block screen waits for them ([waitForChange]),
+ * one of this app's screens is open or xrnrule's block screen waits for them ([waitForChange]),
  * and otherwise with the next sync.
  */
 class XrnSync(
@@ -137,7 +137,7 @@ class XrnSync(
     /**
      * Waits up to [waitS] seconds for the server to have anything this phone hasn't pulled yet,
      * then syncs it in; true if something came. Blocks the calling thread (a binder thread for
-     * xrnhabit, or the watcher), never the sync thread, so a tick here still goes out meanwhile.
+     * xrnrule, or the watcher), never the sync thread, so a tick here still goes out meanwhile.
      */
     fun waitForChange(waitS: Int): Boolean {
         if (!settings.isConfigured) return false

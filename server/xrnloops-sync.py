@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2026 the xrnhabit authors
+# Copyright (C) 2026 the xrnrule authors
 #
 # This file is part of Loop Habit Tracker (the xrnloops fork).
 #
@@ -10,7 +10,7 @@
 """xrnloops sync server: habits and their daily entries, behind HTTP Basic auth.
 
 The phone's xrnloops and the web app (served from `web/`) both read and write here; the
-laptop's xrnhabit asks `/api/status` which habits are done. Made to run on a small home server
+laptop's xrnrule asks `/api/status` which habits are done. Made to run on a small home server
 next to Radicale, published under a path (e.g. /xrnloops) by a reverse proxy such as Tailscale
 Funnel. Standard library only, plus `bcrypt` to read an htpasswd file (Radicale's works as-is).
 
@@ -29,7 +29,7 @@ Records are habits (by uuid) and entries (by habit uuid + day). Each carries the
                                &wait=S long-polls up to S seconds for something newer.
     GET  /api/status?date=YYYY-MM-DD
                                -> per habit: done / goal_met / daily / countable, with the
-                               meaning of XrnhabitProvider in the Android app; and
+                               meaning of XrnruleProvider in the Android app; and
                                dayStartHour, so the laptop asks for Loop's day, not the date.
     GET  /health               200 "ok", no login (for monitoring)
     GET  /, /app.js, ...       the web app (static files, no login; the data needs one)
@@ -347,7 +347,7 @@ def store_for(user):
         return stores[user]
 
 
-# ---- Loop's rules, ported from uhabits-core (EntryList, XrnhabitProvider) ---------------
+# ---- Loop's rules, ported from uhabits-core (EntryList, XrnruleProvider) ---------------
 
 def month_length(d):
     return calendar.monthrange(d.year, d.month)[1]

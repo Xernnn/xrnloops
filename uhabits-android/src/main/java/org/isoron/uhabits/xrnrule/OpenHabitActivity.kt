@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2026 the xrnhabit authors
+ * Copyright (C) 2026 the xrnrule authors
  *
  * This file is part of Loop Habit Tracker.
  *
@@ -17,7 +17,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.isoron.uhabits.xrnhabit
+package org.isoron.uhabits.xrnrule
 
 import android.app.Activity
 import android.os.Bundle
@@ -25,8 +25,8 @@ import org.isoron.uhabits.HabitsApplication
 import org.isoron.uhabits.intents.IntentFactory
 
 /**
- * Opens one habit's page for xrnhabit, found by its uuid (the id xrnhabit links to). Exported,
- * but guarded by the signature-level [XrnhabitContract.PERMISSION] in the manifest. Falls back
+ * Opens one habit's page for xrnrule, found by its uuid (the id xrnrule links to). Exported,
+ * but guarded by the signature-level [XrnruleContract.PERMISSION] in the manifest. Falls back
  * to the habit list when the habit is gone.
  */
 class OpenHabitActivity : Activity() {
@@ -34,7 +34,7 @@ class OpenHabitActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val app = applicationContext as HabitsApplication
-        val habit = intent.getStringExtra(XrnhabitContract.EXTRA_HABIT_UUID)
+        val habit = intent.getStringExtra(XrnruleContract.EXTRA_HABIT_UUID)
             ?.let { app.component.habitList.getByUUID(it) }
         val target = if (habit != null) {
             IntentFactory().startShowHabitActivity(this, habit)

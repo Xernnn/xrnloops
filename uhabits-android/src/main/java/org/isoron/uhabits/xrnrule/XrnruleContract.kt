@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2026 the xrnhabit authors
+ * Copyright (C) 2026 the xrnrule authors
  *
  * This file is part of Loop Habit Tracker.
  *
@@ -17,29 +17,29 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.isoron.uhabits.xrnhabit
+package org.isoron.uhabits.xrnrule
 
 /**
- * The interface between this Loop build and xrnhabit, a separate app that blocks other apps
- * until a habit is done. xrnhabit keeps an identical copy of these constants
- * (`com.xern.xrnhabit.app.loop.LoopContract`); change both together.
+ * The interface between this Loop build and xrnrule, a separate app that blocks other apps
+ * until a habit is done. xrnrule keeps an identical copy of these constants
+ * (`com.xern.xrnrule.app.loop.LoopContract`); change both together.
  *
- * - Read: `content://<applicationId>.provider/habits?date=YYYY-MM-DD` ([XrnhabitProvider]); the
+ * - Read: `content://<applicationId>.provider/habits?date=YYYY-MM-DD` ([XrnruleProvider]); the
  *   cursor's extras carry [KEY_DAY_START_HOUR].
  * - Wait: [METHOD_WATCH] answers when the home server has something new (a tick in the web app).
- * - Push: [ACTION_HABITS_CHANGED], sent to [XRNHABIT_PACKAGE] after every command
- *   ([XrnhabitNotifier]). It carries no data; xrnhabit re-reads the provider.
+ * - Push: [ACTION_HABITS_CHANGED], sent to [XRNRULE_PACKAGE] after every command
+ *   ([XrnruleNotifier]). It carries no data; xrnrule re-reads the provider.
  * - Open: [ACTION_OPEN_HABIT] with [EXTRA_HABIT_UUID] shows that habit's page
  *   ([OpenHabitActivity]), where today or yesterday can be ticked.
  *
  * Both directions are guarded by [PERMISSION], a `signature` permission that both apps declare,
  * so only apps signed with the same key can read habits or send the change signal.
  */
-object XrnhabitContract {
-    const val XRNHABIT_PACKAGE = "com.xern.xrnhabit"
-    const val PERMISSION = "com.xern.xrnhabit.permission.HABITS"
-    const val ACTION_HABITS_CHANGED = "com.xern.xrnhabit.action.HABITS_CHANGED"
-    const val ACTION_OPEN_HABIT = "com.xern.xrnhabit.action.OPEN_HABIT"
+object XrnruleContract {
+    const val XRNRULE_PACKAGE = "com.xern.xrnrule"
+    const val PERMISSION = "com.xern.xrnrule.permission.HABITS"
+    const val ACTION_HABITS_CHANGED = "com.xern.xrnrule.action.HABITS_CHANGED"
+    const val ACTION_OPEN_HABIT = "com.xern.xrnrule.action.OPEN_HABIT"
     const val EXTRA_HABIT_UUID = "uuid"
 
     const val PATH_HABITS = "habits"
@@ -47,7 +47,7 @@ object XrnhabitContract {
 
     /**
      * In the cursor's extras: the hour this app's day starts, 3 with "Extend the day past
-     * midnight" on, else 0. Until then a tick lands on the day before, so xrnhabit asks for that
+     * midnight" on, else 0. Until then a tick lands on the day before, so xrnrule asks for that
      * date. It works the date out with its own clock, which ignores a hand-set phone clock.
      */
     const val KEY_DAY_START_HOUR = "day_start_hour"
@@ -61,10 +61,10 @@ object XrnhabitContract {
     /** 0 for an "at most" numerical habit, which Loop never counts as completed. */
     const val COLUMN_COUNTABLE = "countable"
 
-    /** 1 when the habit is done on the requested date (see [XrnhabitProvider.isDone]). */
+    /** 1 when the habit is done on the requested date (see [XrnruleProvider.isDone]). */
     const val COLUMN_DONE = "done"
 
-    /** 1 when it's done, or the day is covered by a met goal ("3 times a week"); see [XrnhabitProvider.isGoalMet]. */
+    /** 1 when it's done, or the day is covered by a met goal ("3 times a week"); see [XrnruleProvider.isGoalMet]. */
     const val COLUMN_GOAL_MET = "goal_met"
 
     /** 1 for an every-day habit (or a numeric one), where [COLUMN_GOAL_MET] equals [COLUMN_DONE]. */

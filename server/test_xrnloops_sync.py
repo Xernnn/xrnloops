@@ -1,4 +1,4 @@
-# Copyright (C) 2026 the xrnhabit authors
+# Copyright (C) 2026 the xrnrule authors
 #
 # This file is part of Loop Habit Tracker (the xrnloops fork). GPLv3 or later; see
 # xrnloops-sync.py for the notice.

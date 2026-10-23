@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2026 the xrnhabit authors
+ * Copyright (C) 2026 the xrnrule authors
  *
  * This file is part of Loop Habit Tracker.
  *
@@ -17,7 +17,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.isoron.uhabits.xrnhabit
+package org.isoron.uhabits.xrnrule
 
 import android.content.ContentProvider
 import android.content.ContentValues
@@ -32,27 +32,27 @@ import org.isoron.uhabits.HabitsApplication
 import org.isoron.uhabits.core.models.Entry
 import org.isoron.uhabits.core.models.Habit
 import org.isoron.uhabits.core.models.NumericalHabitType
-import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_ARCHIVED
-import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_COUNTABLE
-import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_DAILY
-import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_DONE
-import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_GOAL_MET
-import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_NAME
-import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_NUMERICAL
-import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_POSITION
-import org.isoron.uhabits.xrnhabit.XrnhabitContract.COLUMN_UUID
-import org.isoron.uhabits.xrnhabit.XrnhabitContract.KEY_DAY_START_HOUR
+import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_ARCHIVED
+import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_COUNTABLE
+import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_DAILY
+import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_DONE
+import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_GOAL_MET
+import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_NAME
+import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_NUMERICAL
+import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_POSITION
+import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_UUID
+import org.isoron.uhabits.xrnrule.XrnruleContract.KEY_DAY_START_HOUR
 import org.isoron.uhabits.xrnsync.XrnSync
 
 /**
- * Read-only list of every habit with whether it is done on one date, for xrnhabit. Exported,
- * but guarded by the signature-level [XrnhabitContract.PERMISSION] in the manifest.
+ * Read-only list of every habit with whether it is done on one date, for xrnrule. Exported,
+ * but guarded by the signature-level [XrnruleContract.PERMISSION] in the manifest.
  *
  * Reads go through the app's own [org.isoron.uhabits.core.models.HabitList], whose iterator
  * hands out a copy and whose entry lookups are synchronized, so serving them on a binder
  * thread is safe.
  */
-class XrnhabitProvider : ContentProvider() {
+class XrnruleProvider : ContentProvider() {
 
     override fun onCreate(): Boolean = true
 
@@ -63,12 +63,12 @@ class XrnhabitProvider : ContentProvider() {
         selectionArgs: Array<out String>?,
         sortOrder: String?
     ): Cursor? {
-        if (uri.pathSegments != listOf(XrnhabitContract.PATH_HABITS)) return null
-        // Providers are published before Application.onCreate finishes; xrnhabit retries.
+        if (uri.pathSegments != listOf(XrnruleContract.PATH_HABITS)) return null
+        // Providers are published before Application.onCreate finishes; xrnrule retries.
         if (!HabitsApplication.isComponentReady()) return null
 
         val component = HabitsApplication.component
-        val date = uri.getQueryParameter(XrnhabitContract.PARAM_DATE)?.let(::parseDate) ?: getToday()
+        val date = uri.getQueryParameter(XrnruleContract.PARAM_DATE)?.let(::parseDate) ?: getToday()
         val cursor = MatrixCursor(COLUMNS)
         cursor.extras = Bundle().apply { putInt(KEY_DAY_START_HOUR, component.preferences.midnightDelayHours) }
         for (habit in component.habitList) {
@@ -129,23 +129,23 @@ class XrnhabitProvider : ContentProvider() {
     }
 
     /**
-     * [XrnhabitContract.METHOD_SYNC] and [XrnhabitContract.METHOD_WATCH]. Android doesn't apply
+     * [XrnruleContract.METHOD_SYNC] and [XrnruleContract.METHOD_WATCH]. Android doesn't apply
      * the provider's read permission to `call`, so it's checked here.
      */
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
-        if (method != XrnhabitContract.METHOD_SYNC && method != XrnhabitContract.METHOD_WATCH) return null
+        if (method != XrnruleContract.METHOD_SYNC && method != XrnruleContract.METHOD_WATCH) return null
         val context = context ?: return null
-        if (context.checkCallingPermission(XrnhabitContract.PERMISSION) != PackageManager.PERMISSION_GRANTED) {
-            throw SecurityException("needs ${XrnhabitContract.PERMISSION}")
+        if (context.checkCallingPermission(XrnruleContract.PERMISSION) != PackageManager.PERMISSION_GRANTED) {
+            throw SecurityException("needs ${XrnruleContract.PERMISSION}")
         }
         val sync = if (HabitsApplication.isComponentReady()) XrnSync.instance else null
         val configured = sync?.settings?.isConfigured == true
         return Bundle().apply {
-            putBoolean(XrnhabitContract.KEY_CONFIGURED, configured)
-            if (method == XrnhabitContract.METHOD_SYNC) {
-                putBoolean(XrnhabitContract.KEY_SYNCED, configured && sync!!.syncBlocking(SYNC_TIMEOUT_MS))
+            putBoolean(XrnruleContract.KEY_CONFIGURED, configured)
+            if (method == XrnruleContract.METHOD_SYNC) {
+                putBoolean(XrnruleContract.KEY_SYNCED, configured && sync!!.syncBlocking(SYNC_TIMEOUT_MS))
             } else {
-                putBoolean(XrnhabitContract.KEY_CHANGED, configured && sync!!.waitForChange(WATCH_S))
+                putBoolean(XrnruleContract.KEY_CHANGED, configured && sync!!.waitForChange(WATCH_S))
             }
         }
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2026 the xrnhabit authors
+ * Copyright (C) 2026 the xrnrule authors
  *
  * This file is part of Loop Habit Tracker.
  *
@@ -17,7 +17,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.isoron.uhabits.xrnhabit
+package org.isoron.uhabits.xrnrule
 
 import android.app.Activity
 import android.app.Application
@@ -27,7 +27,7 @@ import org.isoron.uhabits.core.utils.MidnightTimer
 /**
  * Moves Loop's "today" forward whenever one of its screens comes back. Upstream only recomputes
  * it at process start and at midnight while the habit list is on screen, so a process that
- * outlives midnight in the background (xrnhabit's reads keep it warm) shows yesterday as the
+ * outlives midnight in the background (xrnrule's reads keep it warm) shows yesterday as the
  * first column, and a tick there lands on yesterday's date.
  */
 class TodayRefresher(private val midnightTimer: MidnightTimer) : Application.ActivityLifecycleCallbacks {

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2016-2025 Álinson Santos Xavier <git@axavier.org>
- * Copyright (C) 2026 the xrnhabit authors
+ * Copyright (C) 2026 the xrnrule authors
  *
  * This file is part of Loop Habit Tracker (the xrnloops fork).
  *

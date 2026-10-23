@@ -27,7 +27,7 @@ plugins {
     alias(libs.plugins.mokkery)
 }
 
-// xrnloops: an optional signing key shared with xrnhabit (both apps must carry the same signature), kept
+// xrnloops: an optional signing key shared with xrnrule (both apps must carry the same signature), kept
 // outside both repos in ../xrn-signing.properties (see XRNLOOPS.md). Without that file,
 // builds are signed with this machine's debug key.
 val xrnSigning: Properties? = rootProject.file("../xrn-signing.properties").takeIf { it.isFile }?.let { f ->

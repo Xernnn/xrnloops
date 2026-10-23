@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2026 the xrnhabit authors
+ * Copyright (C) 2026 the xrnrule authors
  *
  * This file is part of Loop Habit Tracker (the xrnloops fork). GPLv3 or later; see loop.js.
  */
@@ -404,7 +404,7 @@ function listView() {
   const view = h("div", {},
     topBar(
       h("a", { class: "btn ghost", href: "#/review", title: "How this week went: habits, unlocks, blocks" }, "Review"),
-      h("a", { class: "btn ghost", href: "../xrnhabit/", title: "What xrnhabit is blocking right now" }, "Blocks"),
+      h("a", { class: "btn ghost", href: "../xrnrule/", title: "What xrnrule is blocking right now" }, "Blocks"),
       newMenuButton()),
     h("main", { class: "wrap" },
       grid,
@@ -896,8 +896,8 @@ function editView(habit, newType = L.YES_NO) {
 // ---- weekly review --------------------------------------------------------------------------
 
 /**
- * How a week went: the habits day by day, and what xrnhabit's blocks did on the phone and the
- * laptop. Block history comes from xrnhabit-sync's event log (/xrnhabit/events, the same login),
+ * How a week went: the habits day by day, and what xrnrule's blocks did on the phone and the
+ * laptop. Block history comes from xrnrule-sync's event log (/xrnrule/events, the same login),
  * which each device fills once sync is set up there. Weeks start on Monday, like the heatmap.
  */
 const review = { since: null, events: [], blocks: {}, status: "idle", gen: 0 };
@@ -909,8 +909,8 @@ async function loadReview(since) {
   try {
     const headers = { Authorization: state.auth, "X-Xrn-Client": "web" };
     const [ev, st] = await Promise.all([
-      fetch(new URL(`../xrnhabit/events?since=${since}`, BASE), { headers, cache: "no-store" }),
-      fetch(new URL("../xrnhabit/state", BASE), { headers, cache: "no-store" }),
+      fetch(new URL(`../xrnrule/events?since=${since}`, BASE), { headers, cache: "no-store" }),
+      fetch(new URL("../xrnrule/state", BASE), { headers, cache: "no-store" }),
     ]);
     if (!ev.ok) throw new Error(String(ev.status));
     const events = (await ev.json()).events ?? [];
@@ -1045,7 +1045,7 @@ function reviewView(offset) {
 function blocksReview(days, today) {
   const card = (...children) => h("section", { class: "card review-blocks" }, h("h2", {}, "Blocks"), ...children);
   if (review.status === "loading" || review.status === "idle") return card(h("p", { class: "muted small" }, "Loading block history…"));
-  if (review.status === "error") return card(h("p", { class: "muted small" }, "Block history isn't available: xrnhabit's sync server didn't answer."));
+  if (review.status === "error") return card(h("p", { class: "muted small" }, "Block history isn't available: xrnrule's sync server didn't answer."));
   const first = days[0], lastDay = days[6];
   const inWeek = review.events.filter((e) => {
     const d = dayOfMs(e.at);
@@ -1080,7 +1080,7 @@ function blocksReview(days, today) {
   const laptopBlocked = perDay.reduce((a, p) => a + p.laptop, 0);
 
   if (!review.events.length) {
-    return card(h("p", { class: "muted small" }, "Nothing logged yet. The phone and the laptop send their history once sync is set up in xrnhabit; it fills in from then."));
+    return card(h("p", { class: "muted small" }, "Nothing logged yet. The phone and the laptop send their history once sync is set up in xrnrule; it fills in from then."));
   }
   return card(
     h("div", { class: "stats" },

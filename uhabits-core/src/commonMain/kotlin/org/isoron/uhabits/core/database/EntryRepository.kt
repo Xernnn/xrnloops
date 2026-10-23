@@ -17,7 +17,7 @@ data class EntryData(
 /**
  * One instance serves every habit, and its statements hold state between bind and step, so each
  * method takes the repository's lock: xrnloops reads and writes entries from the sync thread and
- * the xrnhabit provider's binder threads as well as Loop's own threads.
+ * the xrnrule provider's binder threads as well as Loop's own threads.
  */
 class EntryRepository(private val db: Database) {
     private val findAllByHabitStmt by lazy {
