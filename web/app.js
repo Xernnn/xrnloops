@@ -75,6 +75,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 class AuthError extends Error {}
 
+const WRONG_LOGIN = "Wrong user name or password.";
+
 /** The server refuses this address for a while after too many wrong passwords (HTTP 429). */
 class LockedOutError extends Error {
   constructor() {
@@ -264,7 +266,7 @@ async function signIn(user, password) {
   } catch (e) {
     state.signedIn = false;
     save(KEY_SIGNED_IN, null);
-    state.loginError = e instanceof AuthError ? "Wrong user name or password." : e instanceof LockedOutError ? e.message : `Can't reach the server (${e.message}).`;
+    state.loginError = e instanceof AuthError ? WRONG_LOGIN : e instanceof LockedOutError ? e.message : `Can't reach the server (${e.message}).`;
     render();
   }
 }
