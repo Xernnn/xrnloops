@@ -7,18 +7,20 @@
 // The xrnloops web app: Loop's habit list, a page per habit, and an editor. It talks to
 // xrnloops-sync next to it (`api/...`): the whole history once, then a long-poll for changes,
 // so a tick on the phone shows up here within a few seconds. Writes are queued in
-// localStorage until the server has them.
+// localStorage until the server has them. The login is a cookie the server sets
+// (xrnloops-sync.py, "api/session"), which no script can read: the password is never kept.
 
 import * as L from "./loop.js";
 
 const BASE = new URL(".", location.href);
-const KEY_AUTH = "xrnloops.auth";
+const KEY_SIGNED_IN = "xrn.signedIn"; // a hint only: whether to try the cookie or show the form
+const KEY_OLD_AUTH = "xrnloops.auth"; // the password, as this page kept it before the cookie
 const KEY_PENDING = "xrnloops.pending";
 const KEY_DAY_START = "xrnloops.dayStartHour";
 const DAYS_SHOWN = 7;
 
 const state = {
-  auth: load(KEY_AUTH, null),
+  signedIn: load(KEY_SIGNED_IN, false) === true,
   habits: new Map(), // uuid -> {uuid, data, mtime, deleted}
   entries: new Map(), // uuid -> Map(day string -> {value, notes, mtime})
   seq: 0,
@@ -90,8 +92,7 @@ async function api(path, body) {
   const res = await fetch(new URL(path, BASE), {
     method: body ? "POST" : "GET",
     headers: {
-      Authorization: state.auth,
-      "X-Xrn-Client": "web",
+      "X-Xrn-Client": "web", // what makes the login cookie count
       ...(body ? { "Content-Type": "application/json" } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -167,7 +168,7 @@ async function live(gen) {
       day = L.todayNum();
     } catch (e) {
       if (gen !== state.generation) return;
-      if (e instanceof AuthError) return signOut("Your password was refused. Sign in again.");
+      if (e instanceof AuthError) return signOut("You were signed out. Sign in again.");
       setOnline(false);
       await sleep(5000);
     }
@@ -213,7 +214,7 @@ function writeHabit(uuid, data, deleted = false) {
 let flushing = false;
 
 async function flush() {
-  if (flushing || !state.auth) return;
+  if (flushing || !state.signedIn) return;
   const batch = { habits: [...state.pending.habits], entries: [...state.pending.entries] };
   if (!batch.habits.length && !batch.entries.length) return;
   flushing = true;
@@ -227,7 +228,7 @@ async function flush() {
     if (ingest({ habits: result.rejected.habits, entries: result.rejected.entries })) render(true);
     setOnline(true);
   } catch (e) {
-    if (e instanceof AuthError) return signOut("Your password was refused. Sign in again.");
+    if (e instanceof AuthError) return signOut("You were signed out. Sign in again.");
     setOnline(false);
     setTimeout(flush, 10000);
   } finally {
@@ -241,14 +242,28 @@ window.addEventListener("online", flush);
 
 // ---- auth ----------------------------------------------------------------------------------
 
+/** Trades a password ("Basic …") for the login cookie. */
+async function session(basic) {
+  const res = await fetch(new URL("api/session", BASE), {
+    method: "POST",
+    headers: { Authorization: basic, "X-Xrn-Client": "web" },
+    cache: "no-store",
+  });
+  if (res.status === 401) throw new AuthError();
+  if (res.status === 429) throw new LockedOutError();
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  state.signedIn = true;
+  save(KEY_SIGNED_IN, true);
+}
+
 async function signIn(user, password) {
-  state.auth = "Basic " + btoa(unescape(encodeURIComponent(`${user}:${password}`)));
   try {
+    await session("Basic " + btoa(unescape(encodeURIComponent(`${user}:${password}`))));
     await start();
-    save(KEY_AUTH, state.auth);
     state.loginError = "";
   } catch (e) {
-    state.auth = null;
+    state.signedIn = false;
+    save(KEY_SIGNED_IN, null);
     state.loginError = e instanceof AuthError ? "Wrong user name or password." : e instanceof LockedOutError ? e.message : `Can't reach the server (${e.message}).`;
     render();
   }
@@ -256,10 +271,11 @@ async function signIn(user, password) {
 
 function signOut(message = "") {
   state.generation++;
-  state.auth = null;
+  state.signedIn = false;
   state.loaded = false;
   state.loginError = message;
-  save(KEY_AUTH, null);
+  save(KEY_SIGNED_IN, null);
+  fetch(new URL("api/session", BASE), { method: "DELETE", headers: { "X-Xrn-Client": "web" } }).catch(() => {});
   render();
 }
 
@@ -315,7 +331,7 @@ function render(fromServer = false) {
 
 function draw() {
   const app = document.getElementById("app");
-  if (!state.auth) return app.replaceChildren(loginView());
+  if (!state.signedIn) return app.replaceChildren(loginView());
   if (!state.loaded) return app.replaceChildren(h("p", { class: "boot" }, "Loading your habits…"));
   const [, route, id] = location.hash.match(/^#\/(\w+)?\/?(.*)$/) ?? [];
   const habit = id ? state.habits.get(id) : null;
@@ -907,7 +923,7 @@ async function loadReview(since) {
   const gen = ++review.gen;
   Object.assign(review, { since, status: "loading", events: [], blocks: {} });
   try {
-    const headers = { Authorization: state.auth, "X-Xrn-Client": "web" };
+    const headers = { "X-Xrn-Client": "web" }; // the login cookie goes along by itself
     const [ev, st] = await Promise.all([
       fetch(new URL(`../xrnrule/events?since=${since}`, BASE), { headers, cache: "no-store" }),
       fetch(new URL("../xrnrule/state", BASE), { headers, cache: "no-store" }),
@@ -1102,9 +1118,20 @@ function blocksReview(days, today) {
 
 // ---- boot ----------------------------------------------------------------------------------
 
-if (state.auth) {
+async function boot() {
+  // A password kept by an older version of this page: traded for the cookie, then dropped.
+  const old = load(KEY_OLD_AUTH, null);
+  if (old) {
+    try {
+      await session(old);
+      save(KEY_OLD_AUTH, null);
+    } catch (e) {
+      if (e instanceof AuthError) save(KEY_OLD_AUTH, null);
+    }
+  }
+  if (!state.signedIn) return render();
   start().catch((e) => {
-    if (e instanceof AuthError) signOut("Your password was refused. Sign in again.");
+    if (e instanceof AuthError) signOut("You were signed out. Sign in again.");
     else {
       state.loginError = "";
       document.getElementById("app").replaceChildren(h("div", { class: "wrap login" },
@@ -1113,6 +1140,6 @@ if (state.auth) {
         h("button", { class: "btn primary", onclick: () => location.reload() }, "Try again")));
     }
   });
-} else {
-  render();
 }
+
+boot();

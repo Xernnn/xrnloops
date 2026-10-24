@@ -8,6 +8,9 @@ last-writer-wins store, and the HTTP layer.
     python3 -m unittest server/test_xrnloops_sync.py     (from the repo root)
 """
 import base64
+import gzip
+import hashlib
+import http.client
 import importlib.util
 import json
 import os
@@ -220,6 +223,7 @@ class HttpTest(unittest.TestCase):
             f.write("<!doctype html>hi")
         srv.args = type("Args", (), {"data": os.path.join(cls.tmp.name, "data"), "users": users, "web": web})()
         srv.FAIL_DELAY_S = 0
+        srv.session_key = srv.load_session_key()
         cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), srv.Handler)
         cls.base = f"http://127.0.0.1:{cls.httpd.server_address[1]}"
         threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
@@ -284,6 +288,65 @@ class HttpTest(unittest.TestCase):
         # Locked out now, even with the right password; everyone else isn't.
         self.assertEqual(429, self.status_of("/api/changes?since=0", headers=guesser))
         self.assertEqual(200, self.status_of("/api/changes?since=0", headers={"X-Forwarded-For": "203.0.113.10"}))
+
+    def raw(self, method, path, body=b"", headers=None):
+        conn = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1], timeout=10)
+        conn.request(method, path, body=body, headers=headers or {})
+        res = conn.getresponse()
+        res.read()
+        conn.close()
+        return res.status, res
+
+    def basic(self, password="secret"):
+        return "Basic " + base64.b64encode(f"sonn:{password}".encode()).decode()
+
+    def test_the_web_app_signs_in_with_a_cookie_scripts_cannot_read(self):
+        status, res = self.raw("POST", "/xrnloops/api/session", headers={"Authorization": self.basic(), "X-Xrn-Client": "web"})
+        self.assertEqual(200, status)
+        set_cookie = res.getheader("Set-Cookie")
+        for flag in ("HttpOnly", "Secure", "SameSite=Strict", "Path=/"):
+            self.assertIn(flag, set_cookie)
+        cookie = set_cookie.split(";")[0]
+        web = {"Cookie": cookie, "X-Xrn-Client": "web"}
+        self.assertEqual(200, self.raw("GET", "/api/changes?since=0", headers=web)[0])
+        # Without the header another site's page can't add, the cookie is worth nothing.
+        self.assertEqual(401, self.raw("GET", "/api/changes?since=0", headers={"Cookie": cookie})[0])
+        # Nor does a forged, tampered or missing one, and a cookie can't mint a new one.
+        who, expires, mac = cookie.partition("=")[2].split(".")
+        for bad in (f"{who}.{int(expires) + 1}.{mac}", f"{who}.{expires}.{'0' * 64}", "junk", ""):
+            self.assertEqual(401, self.raw("GET", "/api/changes?since=0", headers={"Cookie": f"{srv.SESSION_COOKIE}={bad}", "X-Xrn-Client": "web"})[0])
+        self.assertEqual(401, self.raw("POST", "/api/session", headers=web)[0])
+        self.assertEqual(401, self.raw("POST", "/api/session", headers={"Authorization": self.basic("nope"), "X-Xrn-Client": "web"})[0])
+        status, res = self.raw("DELETE", "/api/session", headers=web)
+        self.assertEqual(200, status)
+        self.assertIn("Max-Age=0", res.getheader("Set-Cookie"))
+
+    def test_pages_cannot_be_framed_or_sniffed(self):
+        _, res = self.raw("GET", "/")
+        self.assertEqual("DENY", res.getheader("X-Frame-Options"))
+        self.assertEqual("nosniff", res.getheader("X-Content-Type-Options"))
+        self.assertEqual("no-referrer", res.getheader("Referrer-Policy"))
+
+    def test_the_content_policy_allows_index_html_inline_scripts_by_hash(self):
+        with tempfile.TemporaryDirectory() as web:
+            with open(os.path.join(web, "index.html"), "w") as f:
+                f.write("<head><script>go()</script><script type=module src=app.js></script></head>")
+            policy = srv.content_policy(web)
+        digest = base64.b64encode(hashlib.sha256(b"go()").digest()).decode()
+        self.assertIn(f"script-src 'self' 'sha256-{digest}';", policy)
+        self.assertIn("frame-ancestors 'none'", policy)
+
+    def test_gzip_bodies_are_unpacked_only_so_far(self):
+        headers = {"Authorization": self.basic(), "Content-Type": "application/json", "Content-Encoding": "gzip"}
+        old, srv.MAX_BODY = srv.MAX_BODY, 64 * 1024
+        try:
+            bomb = gzip.compress(b'{"habits": [], "pad": "' + b"0" * (srv.MAX_BODY * 4) + b'"}')
+            self.assertEqual(400, self.raw("POST", "/api/changes", bomb, headers)[0])
+            self.assertEqual(400, self.raw("POST", "/api/changes", b"not gzip", headers)[0])
+            fine = gzip.compress(json.dumps({"habits": [], "entries": []}).encode())
+            self.assertEqual(200, self.raw("POST", "/api/changes", fine, headers)[0])
+        finally:
+            srv.MAX_BODY = old
 
 
 if __name__ == "__main__":

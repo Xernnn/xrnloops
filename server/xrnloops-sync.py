@@ -31,8 +31,18 @@ Records are habits (by uuid) and entries (by habit uuid + day). Each carries the
                                -> per habit: done / goal_met / daily / countable, with the
                                meaning of XrnruleProvider in the Android app; and
                                dayStartHour, so the laptop asks for Loop's day, not the date.
+    POST /api/session          with Basic auth: sets the web app's login cookie (below)
+    DELETE /api/session        signs the browser out
     GET  /health               200 "ok", no login (for monitoring)
     GET  /, /app.js, ...       the web app (static files, no login; the data needs one)
+
+The phone sends Basic auth with every request. The web app signs in once and then carries an
+HttpOnly cookie, `xrn_session`, so the password never sits where a page's script could read it:
+the host is shared with other apps, and a script bug in any of them could read the pages'
+storage. The cookie counts only with an `X-Xrn-Client` header, which another site's page can't
+send. It's signed with `session.key`, made next to the users file on first start, which
+xrnrule-sync shares (its status page is on the same host), so either sign-in works for both. A
+new password ends every session; so does deleting session.key.
 
     habit:  {"uuid", "mtime", "deleted", "data": {"name", "question", "description", "color",
              "freqNum", "freqDen", "type", "targetType", "targetValue", "unit", "archived",
@@ -50,13 +60,16 @@ import base64
 import calendar
 import gzip
 import hashlib
+import hmac
 import json
 import mimetypes
 import os
+import re
 import sqlite3
 import sys
 import threading
 import time
+import zlib
 from datetime import date, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs
@@ -69,6 +82,8 @@ FAIL_LIMIT = 10  # wrong logins from one address within FAIL_WINDOW_S, then 429 
 FAIL_WINDOW_S = 15 * 60
 PAGE_ROWS = 5000
 PREFIX = "/xrnloops"
+SESSION_COOKIE = "xrn_session"
+SESSION_S = 30 * 86400
 
 UNKNOWN, NO, YES_AUTO, YES_MANUAL, SKIP = -1, 0, 1, 2, 3
 YES_NO, NUMERICAL = 0, 1
@@ -80,6 +95,27 @@ fail_lock = threading.Lock()
 failures = {}  # client address -> monotonic times of its recent wrong logins
 stores = {}
 stores_lock = threading.Lock()
+session_key = b""  # signs the web app's login cookies; see load_session_key()
+
+SECURITY_HEADERS = {  # on every answer; main() adds the web app's Content-Security-Policy
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+}
+
+
+def content_policy(web):
+    """The web app's CSP: its own files only, plus index.html's inline scripts by hash."""
+    hashes = []
+    try:
+        with open(os.path.join(web, "index.html"), encoding="utf-8") as f:
+            for script in re.findall(r"<script>(.*?)</script>", f.read(), re.S):
+                digest = base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()
+                hashes.append(f" 'sha256-{digest}'")
+    except OSError:
+        pass
+    return ("default-src 'self'; script-src 'self'" + "".join(hashes) + "; style-src 'self'; img-src 'self' data:; "
+            "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 
 
 # ---- login ---------------------------------------------------------------------------------
@@ -147,6 +183,75 @@ def check_login(header):
     except (OSError, ValueError):
         pass
     return None
+
+
+def load_session_key():
+    """The key that signs login cookies: random, made on first start next to the users file, so
+    every server reading that file (xrnrule-sync too) takes the others' cookies."""
+    path = os.path.join(os.path.dirname(args.users), "session.key")
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        pass
+    else:
+        with os.fdopen(fd, "wb") as f:
+            f.write(os.urandom(32))
+    for _ in range(50):  # the other server may be writing it this very moment
+        with open(path, "rb") as f:
+            key = f.read()
+        if len(key) >= 32:
+            return key
+        time.sleep(0.1)
+    raise SystemExit(f"{path} is too short to sign with")
+
+
+def password_tag(user):
+    """A fingerprint of [user]'s password hash, so a new password ends the old sessions."""
+    try:
+        with open(args.users, encoding="utf-8") as f:
+            for line in f:
+                name, _, hashed = line.strip().partition(":")
+                if name == user and hashed:
+                    return hashlib.sha256(hashed.encode()).hexdigest()
+    except OSError:
+        pass
+    return None
+
+
+def session_mac(body, tag):
+    return hmac.new(session_key, f"{body}|{tag}".encode(), hashlib.sha256).hexdigest()
+
+
+def make_session(user):
+    """A login cookie's value for [user]: who, until when, and a signature over both."""
+    who = base64.urlsafe_b64encode(user.encode()).decode().rstrip("=")
+    body = f"{who}.{int(time.time()) + SESSION_S}"
+    return f"{body}.{session_mac(body, password_tag(user))}"
+
+
+def check_session(cookie_header):
+    """The user a request's login cookie names, if it's ours, unexpired and the password unchanged."""
+    token = ""
+    for part in (cookie_header or "").split(";"):
+        name, _, value = part.strip().partition("=")
+        if name == SESSION_COOKIE:
+            token = value
+    try:
+        who, expires, mac = token.split(".")
+        user = base64.urlsafe_b64decode(who + "=" * (-len(who) % 4)).decode("utf-8")
+        if int(expires) < time.time():
+            return None
+    except ValueError:  # also a bad base64 or UTF-8
+        return None
+    tag = password_tag(user)
+    if tag is None or not hmac.compare_digest(session_mac(f"{who}.{expires}", tag), mac):
+        return None
+    return user
+
+
+def session_cookie(value, max_age):
+    # Path=/: xrnrule's status page (/xrnrule) is signed in by this too.
+    return f"{SESSION_COOKIE}={value}; Path=/; Max-Age={max_age}; HttpOnly; Secure; SameSite=Strict"
 
 
 # ---- storage -------------------------------------------------------------------------------
@@ -458,6 +563,8 @@ class Handler(BaseHTTPRequestHandler):
             headers = {**(headers or {}), "Content-Encoding": "gzip"}
         self.send_response(code)
         self.send_header("Cache-Control", "no-store")
+        for k, v in SECURITY_HEADERS.items():
+            self.send_header(k, v)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         for k, v in (headers or {}).items():
@@ -470,6 +577,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send(code, json.dumps(obj, ensure_ascii=False, separators=(",", ":")), "application/json; charset=utf-8")
 
     def login(self):
+        # The web app: its login cookie, with the header another site's page couldn't add.
+        if not self.headers.get("Authorization") and self.headers.get("X-Xrn-Client"):
+            user = check_session(self.headers.get("Cookie"))
+            if not user:
+                self.send(401, "login required")
+            return user
         addr = client_address(self)
         if locked_out(addr):
             time.sleep(FAIL_DELAY_S)
@@ -494,7 +607,16 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("body missing or too large")
         raw = self.rfile.read(length)
         if (self.headers.get("Content-Encoding") or "").lower() == "gzip":
-            raw = gzip.decompress(raw)
+            # Unpacked only up to MAX_BODY: a few megabytes of gzip can unpack to gigabytes.
+            unpack = zlib.decompressobj(wbits=16 + zlib.MAX_WBITS)
+            try:
+                raw = unpack.decompress(raw, MAX_BODY + 1)
+            except zlib.error:
+                raise ValueError("bad gzip") from None
+            if len(raw) > MAX_BODY:
+                raise ValueError("body too large")
+            if not unpack.eof:
+                raise ValueError("bad gzip")
         body = json.loads(raw)
         if not isinstance(body, dict):
             raise ValueError("body must be a JSON object")
@@ -524,6 +646,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path, _ = self.route()
+        if path == "/api/session":
+            # Only a password signs in: a cookie can't be stretched into a new one.
+            if not self.headers.get("Authorization"):
+                return self.send(401, "login required")
+            user = self.login()
+            if user:
+                self.send(200, '{"ok":true}', "application/json",
+                          {"Set-Cookie": session_cookie(make_session(user), SESSION_S)})
+            return
         user = self.login()
         if not user:
             return
@@ -538,6 +669,12 @@ class Handler(BaseHTTPRequestHandler):
             sys.stderr.write(f"write failed: {e!r}\n")
             return self.send(500, "server error")
         self.send_json(result)
+
+    def do_DELETE(self):
+        path, _ = self.route()
+        if path != "/api/session":
+            return self.send(404, "not found")
+        self.send(200, '{"ok":true}', "application/json", {"Set-Cookie": session_cookie("", 0)})
 
     def static(self, path):
         if path in ("", "/"):
@@ -557,7 +694,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global args
+    global args, session_key
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=5234)
@@ -570,6 +707,8 @@ def main():
     args.users = os.path.expanduser(args.users)
     args.web = os.path.abspath(os.path.expanduser(args.web))
     mimetypes.add_type("text/javascript", ".js")
+    SECURITY_HEADERS["Content-Security-Policy"] = content_policy(args.web)
+    session_key = load_session_key()
     srv = ThreadingHTTPServer((args.host, args.port), Handler)
     srv.daemon_threads = True
     sys.stderr.write(f"xrnloops-sync on http://{args.host}:{args.port}, data in {args.data}\n")
