@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- xrnloops launcher icon (GPLv3, part of the xrnloops fork of Loop Habit Tracker): a loop arrow
+     around a check, so it can't be mistaken for the store Loop's blue icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M66.53,40.06 A19.5,19.5 0 1,1 41.99,39.63"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="7.5" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M49.87,33.48 L45,49.98 L32.69,34.22 Z" />
+    <path
+        android:pathData="M46.5,55.5 L51.5,60.5 L61.5,50.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
