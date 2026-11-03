@@ -166,6 +166,52 @@ class StoreTest(unittest.TestCase):
         finally:
             srv.PAGE_ROWS = old_page
 
+    def test_a_write_from_the_stored_version_wins_whatever_the_clock(self):
+        first = self.store.apply({"entries": [self.entry(5000, 100)]})["accepted"]["entries"][0]["seq"]
+        # Made from the stored version: taken, though its clock is behind.
+        result = self.store.apply({"entries": [{**self.entry(7000, 50), "baseSeq": first}]})
+        self.assertEqual([], result["rejected"]["entries"])
+        second = result["accepted"]["entries"][0]["seq"]
+        self.assertGreater(second, first)
+        # Made from the old version: refused, though its clock is ahead; the newer one comes back.
+        result = self.store.apply({"entries": [{**self.entry(6000, 999), "baseSeq": first}]})
+        self.assertEqual([], result["accepted"]["entries"])
+        self.assertEqual({"value": 7000, "seq": second},
+                         {k: result["rejected"]["entries"][0][k] for k in ("value", "seq")})
+        self.assertEqual(second, self.store.changes(0)["entries"][0]["seq"])
+
+    def test_a_client_past_the_seq_gets_everyone_a_new_epoch(self):
+        self.store.apply({"entries": [self.entry(YES_MANUAL, 1)]})
+        first = self.store.changes(0)
+        epoch = first["epoch"]
+        self.assertEqual(epoch, self.store.changes(first["seq"], epoch=epoch)["epoch"])  # nothing went back
+        # Restored from a backup: a client has read further than the server has written.
+        answer = self.store.changes(first["seq"] + 5, wait_s=30, epoch=epoch)  # answers at once
+        self.assertNotEqual(epoch, answer["epoch"])
+        # Another client, behind the server's seq, still hears of it; the new epoch stays put.
+        self.assertEqual(answer["epoch"], self.store.changes(0, epoch=epoch)["epoch"])
+        self.assertEqual(answer["epoch"], self.store.changes(first["seq"] + 5, epoch=epoch)["epoch"])
+        self.assertEqual(answer["epoch"], self.store.changes(0)["epoch"])
+
+    def test_a_write_that_fails_half_way_leaves_nothing(self):
+        with self.assertRaises(ValueError):
+            self.store.apply({"entries": [self.entry(YES_MANUAL, 1), {"habit": "h1", "date": "not a day", "value": 2, "mtime": 1}]})
+        self.store.apply({"entries": [self.entry(NO, 5, "2026-10-01")]})
+        self.assertEqual(["2026-10-01"], [e["date"] for e in self.store.changes(0)["entries"]])
+
+    def test_a_habit_write_keeps_the_fields_it_leaves_out(self):
+        self.store.apply({"habits": [{"uuid": "h1", "mtime": 1, "data": {"name": "Read", "icon": "book", "timer": True}}]})
+        # xrnloops doesn't know icon and timer: an edit from it keeps them.
+        self.store.apply({"habits": [{"uuid": "h1", "mtime": 2, "data": {"name": "Read more"}}]})
+        data = self.store.changes(0)["habits"][0]["data"]
+        self.assertEqual(("Read more", "book", True), (data["name"], data["icon"], data["timer"]))
+        result = self.store.apply({"habits": [{"uuid": "h1", "mtime": 3, "baseSeq": 0, "data": {"name": "Stale"}}]})
+        self.assertEqual("Read more", result["rejected"]["habits"][0]["data"]["name"])
+
+    def test_bad_base_seq_is_refused(self):
+        with self.assertRaises(ValueError):
+            self.store.apply({"entries": [{**self.entry(1, 1), "baseSeq": "3"}]})
+
     def test_identical_write_does_not_bump_seq(self):
         self.store.apply({"entries": [self.entry(YES_MANUAL, 100)]})
         seq = self.store.seq()

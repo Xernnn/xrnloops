@@ -16,16 +16,24 @@ Funnel. Standard library only, plus `bcrypt` to read an htpasswd file (Radicale'
 
 Records are habits (by uuid) and entries (by habit uuid + day). Each carries the writer's
 `mtime` (wall-clock ms) and the last write wins per record. Every accepted write takes the next
-`seq`, so a client asks for "everything after the seq I last saw".
+`seq`, so a client asks for "everything after the seq I last saw". Every record it gets back
+carries its `seq`; a write that names the version it was made from (`baseSeq`) is taken only if
+that is still the stored version, whatever the clocks say, and is otherwise rejected with the
+newer one. xrnrule writes this way, so an amount it adds on top of an old value gets added again
+to the new one instead of replacing it. A habit write keeps the stored value of every field it
+leaves out, so an older client (xrnloops) can't wipe fields it doesn't know (`icon`, `timer`).
 
     POST /api/changes          {"habits": [...], "entries": [...], "ifAbsent": false,
                                 "dayStartHour": 0}
-                               -> {"seq", "rejected": {"habits": [...], "entries": [...]}}
+                               -> {"seq", "rejected": {"habits": [...], "entries": [...]},
+                                   "accepted": {"habits": [{"uuid", "seq"}],
+                                                "entries": [{"habit", "date", "seq"}]}}
                                A rejected record lost to a newer one, which is returned.
+                               An accepted one is stored at that seq.
                                With ifAbsent, records only fill gaps (a first sync).
                                dayStartHour (optional): the phone's "Extend the day past
                                midnight" setting, the hour its new day starts (0 or 3).
-    GET  /api/changes?since=N  -> {"seq", "more", "habits": [...], "entries": [...], "dayStartHour"}
+    GET  /api/changes?since=N[&epoch=E] -> {"seq", "more", "habits": [...], "entries": [...], "dayStartHour", "epoch"}
                                &wait=S long-polls up to S seconds for something newer.
     GET  /api/status?date=YYYY-MM-DD
                                -> per habit: done / goal_met / daily / countable, with the
@@ -44,10 +52,14 @@ send. It's signed with `session.key`, made next to the users file on first start
 xrnrule-sync shares (its status page is on the same host), so either sign-in works for both. A
 new password ends every session; so does deleting session.key.
 
-    habit:  {"uuid", "mtime", "deleted", "data": {"name", "question", "description", "color",
-             "freqNum", "freqDen", "type", "targetType", "targetValue", "unit", "archived",
-             "position", "reminder": null | {"hour", "minute", "days"}}}
-    entry:  {"habit", "date": "YYYY-MM-DD", "value", "notes", "mtime"}
+    habit:  {"uuid", "mtime", "deleted", "seq", "data": {"name", "question", "description",
+             "color", "freqNum", "freqDen", "type", "targetType", "targetValue", "unit",
+             "archived", "position", "reminder": null | {"hour", "minute", "days"},
+             "icon", "timer"}}
+    entry:  {"habit", "date": "YYYY-MM-DD", "value", "notes", "mtime", "seq"}
+
+`icon` and `timer` are xrnrule's: an icon name, and whether a numerical habit counts minutes
+with its focus timer. Writes may add "baseSeq" to any record (see above).
 
 Entry values are Loop's: UNKNOWN=-1, NO=0, YES_AUTO=1, YES_MANUAL=2, SKIP=3; numerical habits
 store the amount x1000.
@@ -65,6 +77,7 @@ import json
 import mimetypes
 import os
 import re
+import secrets
 import sqlite3
 import sys
 import threading
@@ -271,7 +284,7 @@ CREATE INDEX IF NOT EXISTS entries_seq ON entries(seq);
 HABIT_FIELDS = {
     "name": "", "question": "", "description": "", "color": 8, "freqNum": 1, "freqDen": 1,
     "type": YES_NO, "targetType": AT_LEAST, "targetValue": 0.0, "unit": "", "archived": False,
-    "position": 0, "reminder": None,
+    "position": 0, "reminder": None, "icon": "", "timer": False,
 }
 
 
@@ -332,76 +345,141 @@ class Store:
         return seq
 
     @staticmethod
-    def _wins(incoming_mtime, incoming_key, stored_mtime, stored_key, if_absent):
-        """Last writer wins; an exact tie goes to the larger content so every server agrees."""
+    def _wins(incoming_mtime, incoming_key, stored_mtime, stored_key, if_absent, base_seq=None, stored_seq=None):
+        """Last writer wins; an exact tie goes to the larger content so every server agrees.
+
+        A write that names the version it was made from wins exactly when that version is still
+        the stored one: it saw everything there, so it is newer whatever the clocks say."""
         if if_absent:
             return False
+        if base_seq is not None:
+            return base_seq == stored_seq
         if incoming_mtime != stored_mtime:
             return incoming_mtime > stored_mtime
         return incoming_key > stored_key
 
+    @staticmethod
+    def _base_seq(record):
+        value = record.get("baseSeq")
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("baseSeq must be a number")
+        return value
+
     def apply(self, body):
+        with self.lock:
+            try:
+                return self._apply(body)
+            except BaseException:
+                # Nothing of a write that fails half way stays, or the next one would commit it.
+                self.db.rollback()
+                raise
+
+    def _apply(self, body):
+        """`apply` under the lock."""
         if_absent = bool(body.get("ifAbsent"))
         rejected_habits, rejected_entries = [], []
+        accepted_habits, accepted_entries = [], []
         day_start = body.get("dayStartHour")
         if day_start is not None and (isinstance(day_start, bool) or not isinstance(day_start, int) or not 0 <= day_start <= 23):
             raise ValueError("dayStartHour must be an hour, 0 to 23")
-        with self.lock:
-            if day_start is not None and day_start != self.day_start_hour():
-                self.db.execute("INSERT INTO meta(key, value) VALUES('day_start_hour', ?) "
-                                "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (day_start,))
-                self._next_seq()  # wakes long-polls, so the web app and the laptop move their "today"
-            for h in body.get("habits") or []:
-                uuid = str(h["uuid"])
-                data = json.dumps(clean_habit_data(h.get("data") or {}), sort_keys=True, ensure_ascii=False)
-                deleted = 1 if h.get("deleted") else 0
-                mtime = int(h["mtime"])
-                row = self.db.execute("SELECT data, mtime, deleted FROM habits WHERE uuid=?", (uuid,)).fetchone()
-                if row is None:
-                    self.db.execute("INSERT INTO habits(uuid, data, mtime, deleted, seq) VALUES(?,?,?,?,?)",
-                                    (uuid, data, mtime, deleted, self._next_seq()))
-                elif (row[0], row[2]) == (data, deleted):
-                    if mtime > row[1]:
-                        self.db.execute("UPDATE habits SET mtime=? WHERE uuid=?", (mtime, uuid))
-                elif self._wins(mtime, f"{deleted}{data}", row[1], f"{row[2]}{row[0]}", if_absent):
-                    self.db.execute("UPDATE habits SET data=?, mtime=?, deleted=?, seq=? WHERE uuid=?",
-                                    (data, mtime, deleted, self._next_seq(), uuid))
-                else:
-                    rejected_habits.append(self._habit_row(uuid))
-            for e in body.get("entries") or []:
-                habit = str(e["habit"])
-                day = parse_day(e["date"]).isoformat()
-                value = int(e["value"])
-                notes = str(e.get("notes") or "")
-                mtime = int(e["mtime"])
-                row = self.db.execute("SELECT value, notes, mtime FROM entries WHERE habit=? AND date=?",
-                                      (habit, day)).fetchone()
-                if row is None:
-                    self.db.execute("INSERT INTO entries(habit, date, value, notes, mtime, seq) VALUES(?,?,?,?,?,?)",
-                                    (habit, day, value, notes, mtime, self._next_seq()))
-                elif (row[0], row[1]) == (value, notes):
-                    if mtime > row[2]:
-                        self.db.execute("UPDATE entries SET mtime=? WHERE habit=? AND date=?", (mtime, habit, day))
-                elif self._wins(mtime, f"{value}:{notes}", row[2], f"{row[0]}:{row[1]}", if_absent):
-                    self.db.execute("UPDATE entries SET value=?, notes=?, mtime=?, seq=? WHERE habit=? AND date=?",
-                                    (value, notes, mtime, self._next_seq(), habit, day))
-                else:
-                    rejected_entries.append(self._entry_row(habit, day))
-            self.db.commit()
-            self.changed.notify_all()
-            return {"seq": self.seq(), "rejected": {"habits": rejected_habits, "entries": rejected_entries}}
+        if day_start is not None and day_start != self.day_start_hour():
+            self.db.execute("INSERT INTO meta(key, value) VALUES('day_start_hour', ?) "
+                            "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (day_start,))
+            self._next_seq()  # wakes long-polls, so the web app and the laptop move their "today"
+        for h in body.get("habits") or []:
+            uuid = str(h["uuid"])
+            base_seq = self._base_seq(h)
+            incoming = h.get("data") or {}
+            if not isinstance(incoming, dict):
+                raise ValueError("habit data must be an object")
+            deleted = 1 if h.get("deleted") else 0
+            mtime = int(h["mtime"])
+            row = self.db.execute("SELECT data, mtime, deleted, seq FROM habits WHERE uuid=?", (uuid,)).fetchone()
+            # Fields the writer left out keep their stored values (see the module docstring).
+            stored = json.loads(row[0]) if row is not None else {}
+            data = json.dumps(clean_habit_data({**stored, **incoming}), sort_keys=True, ensure_ascii=False)
+            if row is None:
+                seq = self._next_seq()
+                self.db.execute("INSERT INTO habits(uuid, data, mtime, deleted, seq) VALUES(?,?,?,?,?)",
+                                (uuid, data, mtime, deleted, seq))
+                accepted_habits.append({"uuid": uuid, "seq": seq})
+            elif (row[0], row[2]) == (data, deleted):
+                if mtime > row[1]:
+                    self.db.execute("UPDATE habits SET mtime=? WHERE uuid=?", (mtime, uuid))
+                accepted_habits.append({"uuid": uuid, "seq": row[3]})
+            elif self._wins(mtime, f"{deleted}{data}", row[1], f"{row[2]}{row[0]}", if_absent, base_seq, row[3]):
+                seq = self._next_seq()
+                self.db.execute("UPDATE habits SET data=?, mtime=?, deleted=?, seq=? WHERE uuid=?",
+                                (data, mtime, deleted, seq, uuid))
+                accepted_habits.append({"uuid": uuid, "seq": seq})
+            else:
+                rejected_habits.append(self._habit_row(uuid))
+        for e in body.get("entries") or []:
+            habit = str(e["habit"])
+            day = parse_day(e["date"]).isoformat()
+            base_seq = self._base_seq(e)
+            value = int(e["value"])
+            notes = str(e.get("notes") or "")
+            mtime = int(e["mtime"])
+            row = self.db.execute("SELECT value, notes, mtime, seq FROM entries WHERE habit=? AND date=?",
+                                  (habit, day)).fetchone()
+            if row is None:
+                seq = self._next_seq()
+                self.db.execute("INSERT INTO entries(habit, date, value, notes, mtime, seq) VALUES(?,?,?,?,?,?)",
+                                (habit, day, value, notes, mtime, seq))
+                accepted_entries.append({"habit": habit, "date": day, "seq": seq})
+            elif (row[0], row[1]) == (value, notes):
+                if mtime > row[2]:
+                    self.db.execute("UPDATE entries SET mtime=? WHERE habit=? AND date=?", (mtime, habit, day))
+                accepted_entries.append({"habit": habit, "date": day, "seq": row[3]})
+            elif self._wins(mtime, f"{value}:{notes}", row[2], f"{row[0]}:{row[1]}", if_absent, base_seq, row[3]):
+                seq = self._next_seq()
+                self.db.execute("UPDATE entries SET value=?, notes=?, mtime=?, seq=? WHERE habit=? AND date=?",
+                                (value, notes, mtime, seq, habit, day))
+                accepted_entries.append({"habit": habit, "date": day, "seq": seq})
+            else:
+                rejected_entries.append(self._entry_row(habit, day))
+        self.db.commit()
+        self.changed.notify_all()
+        return {"seq": self.seq(), "rejected": {"habits": rejected_habits, "entries": rejected_entries},
+                "accepted": {"habits": accepted_habits, "entries": accepted_entries}}
 
     def _habit_row(self, uuid):
-        row = self.db.execute("SELECT uuid, data, mtime, deleted FROM habits WHERE uuid=?", (uuid,)).fetchone()
-        return {"uuid": row[0], "data": json.loads(row[1]), "mtime": row[2], "deleted": bool(row[3])}
+        row = self.db.execute("SELECT uuid, data, mtime, deleted, seq FROM habits WHERE uuid=?", (uuid,)).fetchone()
+        return {"uuid": row[0], "data": json.loads(row[1]), "mtime": row[2], "deleted": bool(row[3]), "seq": row[4]}
 
     def _entry_row(self, habit, day):
-        row = self.db.execute("SELECT habit, date, value, notes, mtime FROM entries WHERE habit=? AND date=?",
+        row = self.db.execute("SELECT habit, date, value, notes, mtime, seq FROM entries WHERE habit=? AND date=?",
                               (habit, day)).fetchone()
-        return {"habit": row[0], "date": row[1], "value": row[2], "notes": row[3], "mtime": row[4]}
+        return {"habit": row[0], "date": row[1], "value": row[2], "notes": row[3], "mtime": row[4], "seq": row[5]}
 
-    def changes(self, since, wait_s=0):
+    def epoch(self):
+        """
+        A number that changes when this server's history went back (restored from a backup): a
+        client that knew another one reads everything again and sends back what was lost.
+        """
+        row = self.db.execute("SELECT value FROM meta WHERE key='epoch'").fetchone()
+        return row[0] if row else self._new_epoch()
+
+    def _new_epoch(self):
+        epoch = secrets.randbits(53)  # exact in JavaScript too
+        self.db.execute("INSERT INTO meta(key, value) VALUES('epoch', ?) "
+                        "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (epoch,))
+        self.db.commit()
+        return epoch
+
+    def changes(self, since, wait_s=0, epoch=None):
         with self.lock:
+            current = self.epoch()
+            if epoch is not None and epoch == current and since > self.seq():
+                # The client has read further than this server ever wrote, so its history went
+                # back. A new epoch makes every client, not only this one, read it all again.
+                current = self._new_epoch()
+                sys.stderr.write(f"since={since} is past seq={self.seq()}: restored from a backup? new epoch\n")
+            if epoch is not None and epoch != current:
+                wait_s = 0  # that client starts over: tell it now
             deadline = time.monotonic() + min(max(wait_s, 0), MAX_WAIT_S)
             while self.seq() <= since:
                 left = deadline - time.monotonic()
@@ -415,18 +493,19 @@ class Store:
                 "ORDER BY seq LIMIT 1 OFFSET ?", (since, since, PAGE_ROWS - 1)).fetchone()
             upto = cut[0] if cut else latest
             habits = [
-                {"uuid": r[0], "data": json.loads(r[1]), "mtime": r[2], "deleted": bool(r[3])}
+                {"uuid": r[0], "data": json.loads(r[1]), "mtime": r[2], "deleted": bool(r[3]), "seq": r[4]}
                 for r in self.db.execute(
-                    "SELECT uuid, data, mtime, deleted FROM habits WHERE seq>? AND seq<=? ORDER BY seq", (since, upto))
+                    "SELECT uuid, data, mtime, deleted, seq FROM habits WHERE seq>? AND seq<=? ORDER BY seq",
+                    (since, upto))
             ]
             entries = [
-                {"habit": r[0], "date": r[1], "value": r[2], "notes": r[3], "mtime": r[4]}
+                {"habit": r[0], "date": r[1], "value": r[2], "notes": r[3], "mtime": r[4], "seq": r[5]}
                 for r in self.db.execute(
-                    "SELECT habit, date, value, notes, mtime FROM entries WHERE seq>? AND seq<=? ORDER BY seq",
+                    "SELECT habit, date, value, notes, mtime, seq FROM entries WHERE seq>? AND seq<=? ORDER BY seq",
                     (since, upto))
             ]
             return {"seq": upto, "more": upto < latest, "habits": habits, "entries": entries,
-                    "dayStartHour": self.day_start_hour()}
+                    "dayStartHour": self.day_start_hour(), "epoch": current}
 
     def status(self, day):
         with self.lock:
@@ -636,7 +715,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/changes":
                 since = int(query.get("since", 0))
                 wait = float(query.get("wait", 0))
-                return self.send_json(store.changes(since, wait))
+                epoch = int(query["epoch"]) if "epoch" in query else None
+                return self.send_json(store.changes(since, wait, epoch))
             if path == "/api/status":
                 day = parse_day(query["date"]) if "date" in query else date.today()
                 return self.send_json(store.status(day))
