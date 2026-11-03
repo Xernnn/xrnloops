@@ -158,12 +158,14 @@ async function loadAll(gen) {
 
 async function live(gen) {
   let day = L.todayNum();
+  let failures = 0;
   while (gen === state.generation) {
     try {
       const page = await api(`api/changes?since=${state.seq}&wait=25`);
       if (gen !== state.generation) return;
       const changed = ingest(page);
       state.seq = page.seq;
+      failures = 0;
       setOnline(true);
       // A new day moves every column along, even if nothing else changed.
       if (changed || L.todayNum() !== day) render(true);
@@ -171,8 +173,11 @@ async function live(gen) {
     } catch (e) {
       if (gen !== state.generation) return;
       if (e instanceof AuthError) return signOut("You were signed out. Sign in again.");
+      if (e instanceof LockedOutError) return signOut(e.message);
       setOnline(false);
-      await sleep(5000);
+      // 5 s, then doubling to a minute: a server that's down isn't asked every 5 s all night.
+      await sleep(Math.min(5000 * 2 ** failures, 60000));
+      failures = Math.min(failures + 1, 4);
     }
   }
 }

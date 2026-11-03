@@ -91,6 +91,16 @@ class XrnSync(
     @Volatile
     private var feedSeq = -1L
 
+    // The long-poll's backoff after a failure: see waitForChange and pollBackoffMs.
+    @Volatile
+    private var pollFailures = 0
+
+    @Volatile
+    private var pollHoldUntil = 0L
+
+    @Volatile
+    private var pollFailedWith = ""
+
     @Volatile
     private var screensOpen = 0
     private var watcher: Thread? = null
@@ -141,17 +151,50 @@ class XrnSync(
      */
     fun waitForChange(waitS: Int): Boolean {
         if (!settings.isConfigured) return false
+        val key = credentialsKey()
+        val holdMs = pollHoldUntil - SystemClock.elapsedRealtime()
+        if (holdMs > 0 && key == pollFailedWith) {
+            // A recent poll failed. Callers poll again straight away (our watcher, and anything
+            // using the provider's `watch`), so sit out the wait asked for instead of asking.
+            try {
+                Thread.sleep(minOf(holdMs, waitS * 1000L))
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+            return false
+        }
         return try {
             if (feedSeq < 0) feedSeq = Snapshot.load(snapshotFile).seq
             val page = XrnSyncApi(settings.url, settings.user, settings.password).pull(feedSeq, waitS)
+            pollFailures = 0
+            pollHoldUntil = 0
             val news = page.getJSONArray("habits").length() > 0 || page.getJSONArray("entries").length() > 0
             if (news) syncBlocking(WATCH_SYNC_MS) else feedSeq = maxOf(feedSeq, page.getLong("seq"))
             news
         } catch (e: Exception) {
             Log.w(TAG, "waiting for changes failed", e)
+            pollFailures++
+            pollFailedWith = key
+            pollHoldUntil = SystemClock.elapsedRealtime() + pollBackoffMs(e, pollFailures)
             false
         }
     }
+
+    /**
+     * How long the long-poll stays away after its [failures]th failure in a row. A wrong password
+     * won't fix itself, and the server counts each try towards locking this address out (then
+     * answers 429 for 15 minutes), so those wait until the settings change (see [credentialsKey]);
+     * anything else (no network, server down) backs off from 15 s to 5 minutes.
+     */
+    private fun pollBackoffMs(e: Exception, failures: Int): Long = when {
+        e is XrnSyncApi.AuthException -> AUTH_RETRY_MS
+        e is XrnSyncApi.ServerException && e.code == 429 -> LOCKED_OUT_RETRY_MS
+        else -> minOf(WATCH_RETRY_MS shl minOf(failures - 1, 5), WATCH_RETRY_MAX_MS)
+    }
+
+    /** What a failed poll's hold applies to: new settings (a corrected password) end it at once. */
+    private fun credentialsKey(): String =
+        "${settings.url}\n${settings.user}\n${settings.password.hashCode()}"
 
     /** While one of our screens is open, ticks made in the web app show up here at once. */
     @Synchronized
@@ -160,8 +203,10 @@ class XrnSync(
         watcher = Thread({
             while (screensOpen > 0) {
                 val start = SystemClock.elapsedRealtime()
+                // Failures hold back inside waitForChange; this catches a server (or a proxy in
+                // front of it) that answers at once instead of holding the poll open.
                 if (!waitForChange(WATCH_S) && SystemClock.elapsedRealtime() - start < 2_000) {
-                    Thread.sleep(WATCH_RETRY_MS) // the server is out of reach: don't spin
+                    Thread.sleep(WATCH_RETRY_MS)
                 }
             }
         }, "xrnsync-watch").apply {
@@ -429,6 +474,9 @@ class XrnSync(
         private const val WATCH_S = 25
         private const val WATCH_SYNC_MS = 10_000L
         private const val WATCH_RETRY_MS = 15_000L
+        private const val WATCH_RETRY_MAX_MS = 5 * 60_000L
+        private const val AUTH_RETRY_MS = 30 * 60_000L
+        private const val LOCKED_OUT_RETRY_MS = 15 * 60_000L
     }
 }
 

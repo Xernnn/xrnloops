@@ -31,6 +31,9 @@ class XrnSyncApi(private val baseUrl: String, user: String, password: String) {
 
     class AuthException : IOException("the server refused the user name or password")
 
+    /** Any other answer outside 2xx; [code] 429 means too many wrong passwords from this address. */
+    class ServerException(val code: Int, message: String) : IOException(message)
+
     /** Changes after [since]; with [waitS], the server holds the answer until there are some (long-poll). */
     fun pull(since: Long, waitS: Int = 0): JSONObject =
         request("GET", "/api/changes?since=$since" + if (waitS > 0) "&wait=$waitS" else "", null, waitS * 1000)
@@ -54,7 +57,7 @@ class XrnSyncApi(private val baseUrl: String, user: String, password: String) {
             if (code == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthException()
             if (code !in 200..299) {
                 val text = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                throw IOException("server answered $code ${text.take(200)}")
+                throw ServerException(code, "server answered $code ${text.take(200)}")
             }
             return JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
         } finally {

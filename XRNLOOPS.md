@@ -109,7 +109,12 @@ right after a tick can do), when the app comes to the front, when xrnrule asks
 that needs a network, so widgets and the list catch up with the web app), and right before a
 reminder shows (`XrnSync.beforeReminder`, up to 8 s), so a habit ticked in the web app doesn't
 ring. While one of the app's screens is open, a long-poll (`XrnSync.waitForChange`) brings in
-ticks from the web app as they happen.
+ticks from the web app as they happen. After a failed poll it stays away from the server
+(2026-11-03): 15 s doubling to 5 minutes when the server can't be reached, 15 minutes after a
+429, and 30 minutes after a wrong password, cut short as soon as the sync settings change. It
+used to retry only after failures quicker than 2 s, and the server holds a wrong-password answer
+for 2 s, so a phone with an old password sent 246 requests in 12 minutes. The web app's live
+updates back off from 5 s to a minute the same way.
 
 The web app's **Review** page (`#/review`) shows a week: each habit's days and score trend,
 and, from xrnrule-sync's event log on the same server (`/xrnrule/events`, same login),
