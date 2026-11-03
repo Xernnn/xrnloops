@@ -2,5 +2,4 @@
 <!-- xrnloops: a distinct name so it can sit next to the store Loop while moving data over. -->
 <resources>
     <string name="xrnloops_app_name" translatable="false">xrnloops</string>
-    <color name="xrnloops_icon_background">#1C1C1E</color>
 </resources>

@@ -1,22 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- xrnloops launcher icon (GPLv3, part of the xrnloops fork of Loop Habit Tracker): a loop arrow
-     around a check, so it can't be mistaken for the store Loop's blue icon. -->
+<!-- Themed (monochrome) launcher icon: the glyph alone; the launcher tints it. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:pathData="M66.53,40.06 A19.5,19.5 0 1,1 41.99,39.63"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="7.5" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M49.87,33.48 L45,49.98 L32.69,34.22 Z" />
-    <path
-        android:pathData="M46.5,55.5 L51.5,60.5 L61.5,50.5"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="6"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+    <group android:translateX="18" android:translateY="18"
+        android:scaleX="0.72" android:scaleY="0.72">
+        <group android:translateX="10" android:translateY="10"
+            android:scaleX="0.8" android:scaleY="0.8">
+            <path
+                android:pathData="M64.55,39.79 A19,19 0 1 1 39.93,35.89"
+                android:strokeColor="#FFFFFF"
+                android:strokeWidth="10" />
+            <path
+                android:pathData="M49.26,30.06 L42.69,45.96 L32.09,29 Z"
+                android:fillColor="#FFFFFF" />
+        </group>
+    </group>
 </vector>
