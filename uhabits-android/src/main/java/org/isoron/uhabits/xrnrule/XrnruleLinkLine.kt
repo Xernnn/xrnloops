@@ -25,6 +25,7 @@ import android.text.format.DateFormat
 import android.util.TypedValue
 import android.view.View
 import android.widget.TextView
+import androidx.appcompat.widget.AppCompatTextView
 import org.isoron.uhabits.R
 import org.isoron.uhabits.core.models.Habit
 import org.isoron.uhabits.utils.dp
@@ -37,9 +38,10 @@ import java.util.Date
  * "Social · needs more" (this habit is done, the block wants another part), an open lock and
  * "Social · ready", "Social · till 14:30" or, for an unlock that's so much use rather than time,
  * "Social · 12 min left". Gone for a habit no block uses. While it shows,
- * the name keeps to one line, so the card stays the height of its checkmarks.
+ * the name keeps to one line, so the card stays the height of its checkmarks. A tap on it opens
+ * that block in xrnrule ([XrnruleLinks.openBlock]); the rest of the card still opens the habit.
  */
-class XrnruleLinkLine(context: Context, private val name: TextView) : TextView(context) {
+class XrnruleLinkLine(context: Context, private val name: TextView) : AppCompatTextView(context) {
 
     private var habitUuid: String? = null
     private var tint = 0
@@ -52,6 +54,14 @@ class XrnruleLinkLine(context: Context, private val name: TextView) : TextView(c
         ellipsize = TextUtils.TruncateAt.END
         compoundDrawablePadding = dp(4f).toInt()
         visibility = View.GONE
+        // A little taller than the text, so it's a fair target; the name above stays the card's.
+        val pad = dp(3f).toInt()
+        setPadding(0, pad, 0, pad)
+        background = context.obtainStyledAttributes(intArrayOf(android.R.attr.selectableItemBackground)).let {
+            val ripple = it.getDrawable(0)
+            it.recycle()
+            ripple
+        }
     }
 
     fun bind(habit: Habit, color: Int) {
@@ -75,6 +85,8 @@ class XrnruleLinkLine(context: Context, private val name: TextView) : TextView(c
         val links = XrnruleLinks.instance?.forHabit(habitUuid).orEmpty()
         val link = mostUseful(links)
         if (link == null) {
+            setOnClickListener(null)
+            isClickable = false
             visibility = View.GONE
             name.maxLines = 2
             return
@@ -87,6 +99,7 @@ class XrnruleLinkLine(context: Context, private val name: TextView) : TextView(c
         icon.setBounds(0, 0, size, size)
         icon.setTint(tint)
         setCompoundDrawablesRelative(icon, null, null, null)
+        setOnClickListener { XrnruleLinks.openBlock(context, link.blockId) }
         val line = describe(link)
         text = if (links.size > 1) context.getString(R.string.xrnlink_more, line, links.size - 1) else line
     }
@@ -98,7 +111,7 @@ class XrnruleLinkLine(context: Context, private val name: TextView) : TextView(c
                 link.selfPaced -> context.getString(
                     R.string.xrnlink_left,
                     what,
-                    minutes(((link.useLeftMs + 59_999) / 60_000).toInt())
+                    minutes(context, ((link.useLeftMs + 59_999) / 60_000).toInt())
                 )
                 link.openUntil > 0 -> context.getString(
                     R.string.xrnlink_open,
@@ -111,22 +124,23 @@ class XrnruleLinkLine(context: Context, private val name: TextView) : TextView(c
             else -> if (link.habitDone) {
                 context.getString(R.string.xrnlink_done_locked, what)
             } else {
-                context.getString(R.string.xrnlink_locked, what, minutes(link.unlockMinutes))
+                context.getString(R.string.xrnlink_locked, what, minutes(context, link.unlockMinutes))
             }
         }
     }
 
-    private fun minutes(total: Int): String {
-        val h = total / 60
-        val m = total % 60
-        return when {
-            h == 0 -> context.getString(R.string.xrnlink_minutes, m)
-            m == 0 -> context.getString(R.string.xrnlink_hours, h)
-            else -> context.getString(R.string.xrnlink_hours_minutes, h, m)
-        }
-    }
-
     companion object {
+        /** "30 min", "1 h", "1 h 30 min". */
+        fun minutes(context: Context, total: Int): String {
+            val h = total / 60
+            val m = total % 60
+            return when {
+                h == 0 -> context.getString(R.string.xrnlink_minutes, m)
+                m == 0 -> context.getString(R.string.xrnlink_hours, h)
+                else -> context.getString(R.string.xrnlink_hours_minutes, h, m)
+            }
+        }
+
         /**
          * Several blocks can want one habit. Show the one the habit still has to do something
          * for, then one waiting to be opened, then one that's open, then one where this habit

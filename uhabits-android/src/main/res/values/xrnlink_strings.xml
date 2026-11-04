@@ -14,4 +14,13 @@
     <string name="xrnlink_minutes">%d min</string>
     <string name="xrnlink_hours">%d h</string>
     <string name="xrnlink_hours_minutes">%1$d h %2$d min</string>
+
+    <!-- The banner after a tick that did something in xrnrule. -->
+    <string name="xrnlink_banner_earned">Earned %1$s of %2$s</string>
+    <string name="xrnlink_banner_open_till">%1$s is open till %2$s</string>
+    <string name="xrnlink_banner_open_left">%1$s is open · %2$s left</string>
+    <string name="xrnlink_banner_open">%1$s is open</string>
+    <string name="xrnlink_banner_counted">Counted towards %1$s · it needs more</string>
+    <string name="xrnlink_banner_more">%1$s (+%2$d more)</string>
+    <string name="xrnlink_banner_action">Open</string>
 </resources>

@@ -23,6 +23,7 @@ import android.content.Context
 import android.content.Intent
 import org.isoron.uhabits.core.commands.Command
 import org.isoron.uhabits.core.commands.CommandRunner
+import org.isoron.uhabits.core.commands.CreateRepetitionCommand
 
 /**
  * Tells xrnrule that habits changed. Every check — list screen, history card, widget,
@@ -35,6 +36,8 @@ class XrnruleNotifier(
 ) : CommandRunner.Listener {
 
     override fun onCommandFinished(command: Command) {
+        // So the answer xrnrule sends back can say what this tick earned (XrnruleBanner).
+        if (command is CreateRepetitionCommand) XrnruleLinks.instance?.noteEntered(command.habit.uuid.orEmpty())
         val intent = Intent(XrnruleContract.ACTION_HABITS_CHANGED)
             .setPackage(XrnruleContract.XRNRULE_PACKAGE)
         context.sendBroadcast(intent, XrnruleContract.PERMISSION)

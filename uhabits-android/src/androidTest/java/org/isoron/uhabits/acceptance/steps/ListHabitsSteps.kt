@@ -98,7 +98,9 @@ object ListHabitsSteps {
                         val v = vg.getChildAt(i)
                         if (v is ViewGroup) stack.push(v)
                         if (cls.isInstance(v) && countRemaining > 0) {
-                            v.performLongClick()
+                            // xrnloops: touch opens the flick menu now and a long press the day's
+                            // sheet (XRNLOOPS.md); toggle as Loop's long press did.
+                            if (v is CheckmarkButtonView) v.performToggle() else v.performLongClick()
                             uiController.loopMainThreadUntilIdle()
                             countRemaining--
                         }

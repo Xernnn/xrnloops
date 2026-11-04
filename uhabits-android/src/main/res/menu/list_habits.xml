@@ -29,6 +29,14 @@
         app:showAsAction="always"/>
 
     <group android:id="@+id/actionItems">
+        <!-- xrnloops: there only while sync is failing (XRNLOOPS.md). -->
+        <item
+            android:id="@+id/actionXrnSyncTrouble"
+            android:icon="@drawable/xrn_ic_cloud_off"
+            android:title="@string/xrnsync_trouble"
+            android:visible="false"
+            app:showAsAction="always"/>
+
         <item
             android:id="@+id/actionCreateHabit"
             android:enabled="true"

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- xrnloops (XRNLOOPS.md): what a tap on a day does, and the flick menu a short hold opens. -->
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <string name="xrntap_title">Tap on a day</string>
     <!-- %s is the picked choice (ListPreference fills it in). -->
     <string name="xrntap_summary">%s. Hold a day for a moment and slide: up ✓, down ✗, left – (skip), right for the note; let go in the middle for ?.</string>

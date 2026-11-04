@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- xrnloops (XRNLOOPS.md): a day's note and value (xrnnote/NoteSheet.kt). -->
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <string name="xrnnote_done">Done</string>
     <string name="xrnnote_not_done">Not done</string>
     <string name="xrnnote_skip">Skip</string>

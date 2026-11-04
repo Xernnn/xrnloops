@@ -160,7 +160,7 @@ class HabitCardView(
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
             addView(label)
-            addView(linkLine, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+            addView(linkLine, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT)) // only the text taps
         }
 
         checkmarkPanel = checkmarkPanelFactory.create().apply {
@@ -191,6 +191,12 @@ class HabitCardView(
                 triggerRipple(date)
                 val location = getAbsoluteButtonLocation(date)
                 habit?.let { behavior.onEdit(it, date, location.x, location.y) }
+            }
+            // xrnloops: the number flick menu sets a value straight away (XRNLOOPS.md).
+            onToggle = { date, value, notes ->
+                triggerRipple(date)
+                val location = getAbsoluteButtonLocation(date)
+                habit?.let { behavior.onToggle(it, date, value, notes, location.x, location.y) }
             }
         }
 

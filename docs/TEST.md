@@ -24,3 +24,20 @@ Note that instrumented tests are designed to run on a clean install, inside an e
 - All animations must be manually disabled.
 
 If there are failing view tests (that is, if some custom views do not render exactly like the prerendered images we have), then both the actual and expected images will be automatically downloaded from the device to the folder `uhabits-android/build/outputs`. After verifying the differences, if you feel that the actual images are actually fine and should replace the prerendered ones, then run `./build.sh android-accept-images`.
+
+## xrnloops
+
+The prerendered images are drawn on API 35 (`./build.sh android-setup 35`, the Google APIs image on a Nexus 4). `build.sh` needs `ts` from moreutils and opens the emulator in a window; to run headless, start it yourself and run the same steps:
+
+```sh
+emulator -avd uhabitsTest35 -port 5590 -no-snapshot -no-window -no-audio -gpu swiftshader_indirect &
+export ANDROID_SERIAL=emulator-5590
+adb root && adb shell settings put global window_animation_scale 0   # and the other two scales
+./gradlew :uhabits-android:assembleDebug :uhabits-android:assembleDebugAndroidTest
+adb install -t -r uhabits-android/build/outputs/apk/debug/uhabits-android-debug.apk
+adb install -r uhabits-android/build/outputs/apk/androidTest/debug/uhabits-android-debug-androidTest.apk
+adb shell am instrument -r -e size medium -w com.xern.xrnloops.test/androidx.test.runner.AndroidJUnitRunner
+adb shell am instrument -r -e size large -w com.xern.xrnloops.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+Failed view tests leave their images in `/sdcard/Android/data/com.xern.xrnloops/files/test-screenshots/`; pull that folder to `uhabits-android/build/outputs/` and run `./build.sh android-accept-images` to take them. GitHub runs only the tests that need no emulator (`.github/workflows/tests.yml`).

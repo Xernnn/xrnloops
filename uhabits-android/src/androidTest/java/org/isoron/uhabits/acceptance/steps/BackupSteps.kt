@@ -33,7 +33,8 @@ import org.isoron.uhabits.acceptance.steps.ListHabitsSteps.clickMenu
 import org.junit.Assert.assertTrue
 import java.io.File
 
-const val BACKUP_FOLDER = "/sdcard/Android/data/org.isoron.uhabits/files/Backups/"
+// xrnloops: under the app id (com.xern.xrnloops), not the code's package (XRNLOOPS.md).
+const val BACKUP_FOLDER = "/sdcard/Android/data/com.xern.xrnloops/files/Backups/"
 const val DOWNLOAD_FOLDER = "/sdcard/Download/"
 
 fun exportFullBackup() {

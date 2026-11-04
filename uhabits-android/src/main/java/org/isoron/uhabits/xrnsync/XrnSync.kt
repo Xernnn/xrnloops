@@ -240,12 +240,15 @@ class XrnSync(
         true
     } catch (e: Exception) {
         Log.w(TAG, "sync failed", e)
-        val message = when (e) {
-            is XrnSyncApi.AuthException -> "Wrong user name or password"
-            is IOException -> "Can't reach the server (${e.message})"
+        val locked = e is XrnSyncApi.ServerException && e.code == 429
+        val message = when {
+            e is XrnSyncApi.AuthException -> "Wrong user name or password"
+            locked -> "Locked out after wrong passwords; the server waits 15 minutes"
+            e is XrnSyncApi.ServerException -> "The server answered ${e.code}"
+            e is IOException -> "Can't reach the server (${e.message})"
             else -> "Failed: $e"
         }
-        settings.recordAttempt(false, message)
+        settings.recordAttempt(false, message, needsYou = e is XrnSyncApi.AuthException || locked)
         false
     }
 

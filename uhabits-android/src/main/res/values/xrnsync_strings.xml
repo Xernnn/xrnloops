@@ -13,4 +13,11 @@
     <string name="xrnsync_never">Not synced yet</string>
     <string name="xrnsync_running">Syncing…</string>
     <string name="xrnsync_last">%1$s · %2$s</string>
+
+    <!-- The habit list's toolbar while sync is failing. -->
+    <string name="xrnsync_trouble">Sync isn\'t working</string>
+    <string name="xrnsync_trouble_message">Sync failed %1$s: %2$s</string>
+    <string name="xrnsync_trouble_just_now">just now</string>
+    <string name="xrnsync_trouble_retry">Retry</string>
+    <string name="xrnsync_trouble_settings">Settings</string>
 </resources>

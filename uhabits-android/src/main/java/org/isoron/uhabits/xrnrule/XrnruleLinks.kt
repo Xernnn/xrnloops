@@ -21,6 +21,7 @@ package org.isoron.uhabits.xrnrule
 
 import android.app.Activity
 import android.app.Application
+import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -30,8 +31,11 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
+import java.lang.ref.WeakReference
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 
@@ -45,6 +49,8 @@ import java.util.concurrent.Executors
  *   habit block, guarded by [XrnruleContract.PERMISSION] like the rest of the link.
  * - Push: [ACTION_LINKS_CHANGED], sent to us when a row would change (a block opens, closes,
  *   gets a new habit). It carries no data; we read the provider again.
+ * - Open: `xrnrule://open?block=<block_id>` ([OPEN_SCHEME], [OPEN_HOST], [OPEN_PARAM_BLOCK]) starts
+ *   xrnrule on that block; an xrnrule that doesn't know the id just opens.
  */
 object XrnruleLinksContract {
     const val AUTHORITY = "com.xern.xrnrule.links"
@@ -80,6 +86,10 @@ object XrnruleLinksContract {
     const val STATE_LOCKED = "locked"
     const val STATE_READY = "ready"
     const val STATE_OPEN = "open"
+
+    const val OPEN_SCHEME = "xrnrule"
+    const val OPEN_HOST = "open"
+    const val OPEN_PARAM_BLOCK = "block"
 }
 
 data class XrnruleLink(
@@ -95,6 +105,20 @@ data class XrnruleLink(
     val useLeftMs: Long
 )
 
+/** What xrnrule made of a day just entered here; [XrnruleBanner] says it. */
+data class XrnruleEarned(val link: XrnruleLink, val kind: Kind) {
+    enum class Kind {
+        /** The block was earned: the unlock waits in xrnrule to be used. */
+        EARNED,
+
+        /** The block opened straight away. */
+        OPEN,
+
+        /** This habit's part is done, but the block wants more. */
+        COUNTED
+    }
+}
+
 /**
  * Keeps xrnrule's links in memory for the habit list. Read again when one of our screens comes
  * to the front and when xrnrule says something changed; listeners run on the main thread, and
@@ -108,6 +132,14 @@ class XrnruleLinks(private val context: Context) {
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
     private val executor = Executors.newSingleThreadExecutor { Thread(it, "xrnrule-links") }
     private val main = Handler(Looper.getMainLooper())
+
+    /** Habit uuid to when one of its days was last entered here (elapsed realtime). */
+    private val enteredAt = ConcurrentHashMap<String, Long>()
+    private var resumed: WeakReference<Activity>? = null
+
+    /** False until the first read: what's there at start was not earned just now. */
+    @Volatile
+    private var loaded = false
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) = refresh()
@@ -125,10 +157,17 @@ class XrnruleLinks(private val context: Context) {
             ContextCompat.RECEIVER_EXPORTED
         )
         app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
-            override fun onActivityResumed(activity: Activity) = refresh()
+            override fun onActivityResumed(activity: Activity) {
+                resumed = WeakReference(activity)
+                refresh()
+            }
+
+            override fun onActivityPaused(activity: Activity) {
+                if (resumed?.get() === activity) resumed = null
+            }
+
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
             override fun onActivityStarted(activity: Activity) = Unit
-            override fun onActivityPaused(activity: Activity) = Unit
             override fun onActivityStopped(activity: Activity) = Unit
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
             override fun onActivityDestroyed(activity: Activity) = Unit
@@ -143,12 +182,28 @@ class XrnruleLinks(private val context: Context) {
 
     fun removeListener(listener: () -> Unit) = listeners.remove(listener)
 
+    /**
+     * A day of [habitUuid] was just entered here ([XrnruleNotifier]). If xrnrule earns or opens a
+     * block for it within [ENTERED_WINDOW_MS], the screen on top says so ([XrnruleBanner]).
+     */
+    fun noteEntered(habitUuid: String) {
+        enteredAt[habitUuid] = SystemClock.elapsedRealtime()
+    }
+
     fun refresh() {
         executor.execute {
+            val old = byHabit
             val fresh = read()
-            if (fresh == byHabit) return@execute
+            val first = !loaded
+            loaded = true
+            if (fresh == old) return@execute
             byHabit = fresh
-            main.post { listeners.forEach { it() } }
+            val news = if (first) emptyList() else earned(old, fresh, enteredAt, SystemClock.elapsedRealtime())
+            main.post {
+                listeners.forEach { it() }
+                val activity = resumed?.get()
+                if (news.isNotEmpty() && activity != null) XrnruleBanner.show(activity, news)
+            }
         }
     }
 
@@ -190,6 +245,50 @@ class XrnruleLinks(private val context: Context) {
 
     companion object {
         private const val TAG = "XrnruleLinks"
+
+        /** How long after a day is entered xrnrule's answer still counts as its doing. */
+        const val ENTERED_WINDOW_MS = 120_000L
+
+        /**
+         * Blocks that went from locked to earned, open or one part nearer since [old], for a habit
+         * entered in the last [ENTERED_WINDOW_MS]: one per block, the biggest news first.
+         */
+        fun earned(
+            old: Map<String, List<XrnruleLink>>,
+            fresh: Map<String, List<XrnruleLink>>,
+            enteredAt: Map<String, Long>,
+            now: Long
+        ): List<XrnruleEarned> = fresh.values.flatten().mapNotNull { link ->
+            val at = enteredAt[link.habitUuid] ?: return@mapNotNull null
+            if (now - at > ENTERED_WINDOW_MS) return@mapNotNull null
+            val before = old[link.habitUuid]?.firstOrNull { it.blockId == link.blockId } ?: return@mapNotNull null
+            if (before.state != XrnruleLinksContract.STATE_LOCKED) return@mapNotNull null
+            when {
+                link.state == XrnruleLinksContract.STATE_READY -> XrnruleEarned(link, XrnruleEarned.Kind.EARNED)
+                link.state == XrnruleLinksContract.STATE_OPEN -> XrnruleEarned(link, XrnruleEarned.Kind.OPEN)
+                link.state == XrnruleLinksContract.STATE_LOCKED && link.habitDone && !before.habitDone ->
+                    XrnruleEarned(link, XrnruleEarned.Kind.COUNTED)
+                else -> null
+            }
+        }.sortedBy { it.kind == XrnruleEarned.Kind.COUNTED }.distinctBy { it.link.blockId }
+
+        /** Starts xrnrule on [blockId] (see [XrnruleLinksContract.OPEN_SCHEME]). */
+        fun openBlock(context: Context, blockId: String) {
+            val uri = Uri.Builder()
+                .scheme(XrnruleLinksContract.OPEN_SCHEME)
+                .authority(XrnruleLinksContract.OPEN_HOST)
+                .appendQueryParameter(XrnruleLinksContract.OPEN_PARAM_BLOCK, blockId)
+                .build()
+            val intent = Intent(Intent.ACTION_VIEW, uri)
+                .setPackage(XrnruleContract.XRNRULE_PACKAGE)
+                // Like xrnrule's own links: back to its open screen, which reads the new intent.
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            try {
+                context.startActivity(intent)
+            } catch (e: ActivityNotFoundException) {
+                Log.w(TAG, "xrnrule can't be opened", e)
+            }
+        }
 
         @Volatile
         var instance: XrnruleLinks? = null
