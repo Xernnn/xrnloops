@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Copyright (C) 2026 the xrnrule authors
+  ~
+  ~ This file is part of Loop Habit Tracker.
+  ~
+  ~ Loop Habit Tracker is free software: you can redistribute it and/or modify
+  ~ it under the terms of the GNU General Public License as published by the
+  ~ Free Software Foundation, either version 3 of the License, or (at your
+  ~ option) any later version.
+  ~
+  ~ Loop Habit Tracker is distributed in the hope that it will be useful, but
+  ~ WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+  ~ or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+  ~ more details.
+  ~
+  ~ You should have received a copy of the GNU General Public License along
+  ~ with this program. If not, see <http://www.gnu.org/licenses/>.
+  -->
+
+<!--
+  xrnloops only (XRNLOOPS.md): the xrn family look for the whole app. Each theme extends Loop's
+  own and only overrides colours and fonts, so upstream's attributes keep their meaning:
+  contrast0 is the background, contrast100 the strongest text; cardBgColor fills list rows,
+  cards and widgets. Palettes are xrnrule's (dark: zinc + green 22C55E; light: F2F2F4 + green
+  16A34A). AndroidThemeSwitcher picks these instead of AppBaseTheme*; xrnlook/XrnThemes.kt has
+  the matching colours for the charts Loop draws itself.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <color name="xrn_light_bg">#F2F2F4</color>
+    <color name="xrn_light_surface">#FFFFFF</color>
+    <color name="xrn_light_surface_high">#EBEBEF</color>
+    <color name="xrn_light_outline">#E3E3E8</color>
+    <color name="xrn_light_line">#C9C9CF</color>
+    <color name="xrn_light_muted">#6B6B73</color>
+    <color name="xrn_light_strong">#3F3F46</color>
+    <color name="xrn_light_text">#1B1B1E</color>
+    <color name="xrn_light_green">#16A34A</color>
+    <color name="xrn_line">#4A4A50</color>
+    <color name="xrn_soft">#D4D4D8</color>
+
+    <!-- The edge of a habit list row (drawable/xrn_row.xml): none where the row's colour already
+         stands out from the background, a hairline on pure black, where it can't. -->
+    <attr name="xrnRowEdge" format="color" />
+
+    <style name="XrnAppTheme" parent="AppBaseTheme">
+        <item name="aboutScreenColor">@color/xrn_light_green</item>
+        <item name="colorAccent">@color/xrn_light_green</item>
+        <item name="colorSecondary">@color/xrn_light_green</item>
+        <item name="colorPrimary">@color/xrn_bg</item>
+        <item name="colorPrimaryDark">@color/xrn_ink</item>
+        <item name="actionModeBackground">@color/xrn_surface</item>
+        <item name="android:textColor">@color/xrn_light_text</item>
+        <item name="android:textColorAlertDialogListItem">@color/xrn_light_text</item>
+        <item name="cardBackground">@drawable/xrn_card_light</item>
+        <item name="cardBgColor">@color/xrn_light_surface</item>
+        <item name="xrnRowEdge">@android:color/transparent</item>
+        <item name="headerBackgroundColor">@color/xrn_light_bg</item>
+        <item name="highlightedBackgroundColor">@color/xrn_light_surface_high</item>
+        <item name="contrast0">@color/xrn_light_surface</item>
+        <item name="contrast20">@color/xrn_light_outline</item>
+        <item name="contrast40">@color/xrn_light_line</item>
+        <item name="contrast60">@color/xrn_light_muted</item>
+        <item name="contrast80">@color/xrn_light_strong</item>
+        <item name="contrast100">@color/xrn_light_text</item>
+        <item name="windowBackgroundColor">@color/xrn_light_bg</item>
+        <item name="android:colorBackground">@color/xrn_light_bg</item>
+        <item name="android:windowBackground">@color/xrn_light_bg</item>
+        <item name="android:fontFamily">@font/xrn_nunito</item>
+        <item name="toolbarStyle">@style/XrnToolbar</item>
+    </style>
+
+    <style name="XrnAppThemeDark" parent="AppBaseThemeDark">
+        <item name="aboutScreenColor">@color/xrn_green</item>
+        <item name="colorAccent">@color/xrn_green</item>
+        <item name="colorSecondary">@color/xrn_green</item>
+        <item name="colorPrimary">@color/xrn_bg</item>
+        <item name="colorPrimaryDark">@color/xrn_bg</item>
+        <item name="actionModeBackground">@color/xrn_surface</item>
+        <item name="android:textColor">@color/xrn_text</item>
+        <item name="android:textColorAlertDialogListItem">@color/xrn_text</item>
+        <item name="textColorAlertDialogListItem">@color/xrn_text</item>
+        <item name="cardBackground">@drawable/xrn_card_dark</item>
+        <item name="cardBgColor">@color/xrn_surface</item>
+        <item name="xrnRowEdge">@android:color/transparent</item>
+        <item name="headerBackgroundColor">@color/xrn_bg</item>
+        <item name="highlightedBackgroundColor">@color/xrn_surface_high</item>
+        <item name="contrast0">@color/xrn_bg</item>
+        <item name="contrast20">@color/xrn_surface_high</item>
+        <item name="contrast40">@color/xrn_line</item>
+        <item name="contrast60">@color/xrn_muted</item>
+        <item name="contrast80">@color/xrn_soft</item>
+        <item name="contrast100">@color/xrn_text</item>
+        <item name="popupMenuBackground">@color/xrn_surface</item>
+        <item name="windowBackgroundColor">@color/xrn_bg</item>
+        <item name="android:colorBackground">@color/xrn_bg</item>
+        <item name="android:windowBackground">@color/xrn_bg</item>
+        <item name="android:fontFamily">@font/xrn_nunito</item>
+        <item name="toolbarStyle">@style/XrnToolbar</item>
+    </style>
+
+    <!-- AMOLED: Loop's black, with the green accent and Nunito. -->
+    <style name="XrnAppThemeDark.PureBlack" parent="AppBaseThemeDark.PureBlack">
+        <item name="aboutScreenColor">@color/xrn_green</item>
+        <item name="colorAccent">@color/xrn_green</item>
+        <item name="colorSecondary">@color/xrn_green</item>
+        <item name="cardBackground">@drawable/xrn_card_black</item>
+        <item name="xrnRowEdge">@color/xrn_surface</item>
+        <item name="android:fontFamily">@font/xrn_nunito</item>
+        <item name="toolbarStyle">@style/XrnToolbar</item>
+    </style>
+
+    <!-- Home screen widgets: the zinc card instead of Loop's grey. -->
+    <style name="XrnWidgetTheme" parent="WidgetTheme">
+        <item name="cardBgColor">@color/xrn_surface</item>
+        <item name="android:fontFamily">@font/xrn_nunito</item>
+    </style>
+
+    <!-- A day's note and value (xrnnote/NoteSheet.kt), over the app's light, dark or black theme. -->
+    <style name="XrnNoteSheet" parent="ThemeOverlay.MaterialComponents.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/XrnNoteSheet.Sheet</item>
+        <item name="colorPrimary">?attr/colorAccent</item>
+        <item name="textInputStyle">@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+    </style>
+
+    <style name="XrnNoteSheet.Sheet" parent="Widget.MaterialComponents.BottomSheet.Modal">
+        <item name="backgroundTint">?attr/cardBgColor</item>
+        <item name="shapeAppearanceOverlay">@style/XrnNoteSheet.Shape</item>
+    </style>
+
+    <style name="XrnNoteSheet.Shape" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">24dp</item>
+        <item name="cornerSizeTopRight">24dp</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style>
+
+    <style name="XrnToolbar" parent="Widget.AppCompat.Toolbar">
+        <item name="titleTextAppearance">@style/XrnToolbar.Title</item>
+        <item name="subtitleTextAppearance">@style/XrnToolbar.Subtitle</item>
+    </style>
+
+    <style name="XrnToolbar.Title" parent="TextAppearance.Widget.AppCompat.Toolbar.Title">
+        <item name="android:fontFamily">@font/xrn_nunito</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">21sp</item>
+    </style>
+
+    <style name="XrnToolbar.Subtitle" parent="TextAppearance.Widget.AppCompat.Toolbar.Subtitle">
+        <item name="android:fontFamily">@font/xrn_nunito</item>
+    </style>
+</resources>

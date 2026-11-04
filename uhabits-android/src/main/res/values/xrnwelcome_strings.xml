@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- xrnloops only (XRNLOOPS.md): English, not sent to Loop's translators. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="xrnwelcome_menu">Welcome &amp; setup</string>
+    <string name="xrnwelcome_skip">Skip</string>
+    <string name="xrnwelcome_back">Back</string>
+    <string name="xrnwelcome_next">Next</string>
+    <string name="xrnwelcome_start">Start</string>
+    <string name="xrnwelcome_done">Done</string>
+
+    <!-- 1. Hello -->
+    <string name="xrnwelcome_hello_title">xrnloops</string>
+    <string name="xrnwelcome_hello_tagline">Do it. Tick it. Unlock.</string>
+    <string name="xrnwelcome_hello_body">My own Loop. The same streaks and scores, wired into xrnrule and my home server.</string>
+
+    <!-- 2. The loop -->
+    <string name="xrnwelcome_loop_eyebrow">The loop</string>
+    <string name="xrnwelcome_loop_title">A habit is the key</string>
+    <string name="xrnwelcome_step_blocked">Blocked</string>
+    <string name="xrnwelcome_step_blocked_body">xrnrule holds back the apps and sites put behind a habit.</string>
+    <string name="xrnwelcome_step_done">Done</string>
+    <string name="xrnwelcome_step_done_body">Do the habit, then tick it here, from a widget or in the web app.</string>
+    <string name="xrnwelcome_step_open">Open</string>
+    <string name="xrnwelcome_step_open_body">The block lifts for the time it allows, then closes again on its own.</string>
+    <string name="xrnwelcome_xrnrule_found">xrnrule is installed</string>
+    <string name="xrnwelcome_xrnrule_found_body">In xrnrule, open a block\'s checklist and tap Link xrnloops habit.</string>
+    <string name="xrnwelcome_xrnrule_missing">xrnrule isn\'t installed</string>
+    <string name="xrnwelcome_xrnrule_missing_body">Ticks still count here. They just don\'t unlock anything yet.</string>
+    <string name="xrnwelcome_open_xrnrule">Open xrnrule</string>
+
+    <!-- 3. Your habits -->
+    <string name="xrnwelcome_habits_eyebrow">Your habits</string>
+    <string name="xrnwelcome_habits_title">Bring them home</string>
+    <string name="xrnwelcome_server">Home server</string>
+    <string name="xrnwelcome_server_off">Sign in and every habit and tick comes back, in the same order.</string>
+    <string name="xrnwelcome_server_syncing">Syncing…</string>
+    <string name="xrnwelcome_server_ok">%1$s · %2$s · synced %3$s</string>
+    <string name="xrnwelcome_just_now">just now</string>
+    <string name="xrnwelcome_sign_in">Sign in</string>
+    <string name="xrnwelcome_change">Change</string>
+    <string name="xrnwelcome_backup">Loop backup</string>
+    <string name="xrnwelcome_backup_body">From the store Loop: Settings → Export full backup, then pick the file here.</string>
+    <string name="xrnwelcome_import">Import file</string>
+    <string name="xrnwelcome_habits_empty">Or skip both and start with an empty list.</string>
+    <plurals name="xrnwelcome_habit_count">
+        <item quantity="one">%d habit</item>
+        <item quantity="other">%d habits</item>
+    </plurals>
+    <string name="xrnwelcome_sign_in_title">Home server</string>
+
+    <!-- 4. Your day -->
+    <string name="xrnwelcome_day_eyebrow">Your day</string>
+    <string name="xrnwelcome_day_title">Set the clock</string>
+    <string name="xrnwelcome_day_late">My day runs until 3 AM</string>
+    <string name="xrnwelcome_day_late_body">A tick after midnight still counts for the day before. xrnrule, the web app and the laptop follow it.</string>
+    <string name="xrnwelcome_reminders">Reminders</string>
+    <string name="xrnwelcome_reminders_on">Allowed. Each habit\'s reminder is set on its edit screen.</string>
+    <string name="xrnwelcome_reminders_off">Notifications are off, so no reminder will ring.</string>
+    <string name="xrnwelcome_allow">Allow</string>
+    <string name="xrnwelcome_reopen_hint">Open this again from the menu: Welcome &amp; setup.</string>
+</resources>

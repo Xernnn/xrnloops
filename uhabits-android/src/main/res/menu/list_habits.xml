@@ -92,6 +92,13 @@
             android:title="@string/night_mode"
             app:showAsAction="never"/>
 
+        <!-- xrnloops: reopen the welcome screen (XRNLOOPS.md). -->
+        <item
+            android:id="@+id/actionXrnWelcome"
+            android:orderInCategory="90"
+            android:title="@string/xrnwelcome_menu"
+            app:showAsAction="never"/>
+
         <item
             android:id="@+id/actionSettings"
             android:orderInCategory="100"

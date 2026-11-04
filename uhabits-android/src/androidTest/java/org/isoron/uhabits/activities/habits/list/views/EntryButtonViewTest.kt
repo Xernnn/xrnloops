@@ -82,11 +82,13 @@ class EntryButtonViewTest : BaseViewTest() {
         assertTrue(toggled and !edited)
     }
 
+    // xrnloops: a long click only comes from accessibility services now (touch opens the flick
+    // menu), and it opens Loop's menu whatever a tap does.
     @Test
     fun testLongClick_withShortToggleDisabled() {
         prefs.isShortToggleEnabled = false
         view.performLongClick()
-        assertTrue(toggled and !edited)
+        assertTrue(!toggled and edited)
     }
 
     @Test

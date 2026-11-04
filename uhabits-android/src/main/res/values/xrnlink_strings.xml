@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- xrnloops only (XRNLOOPS.md): the line under a habit that unlocks an xrnrule block. English,
+     not sent to Loop's translators. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <!-- Short: the name column is narrow next to the checkmarks. The lock icon says "unlocks". -->
+    <string name="xrnlink_locked">%1$s · %2$s</string>
+    <string name="xrnlink_done_locked">%1$s · needs more</string>
+    <string name="xrnlink_ready">%1$s · ready</string>
+    <string name="xrnlink_open">%1$s · till %2$s</string>
+    <!-- An unlock that counts use, not time: what's left of it. -->
+    <string name="xrnlink_left">%1$s · %2$s left</string>
+    <string name="xrnlink_open_now">%1$s · open</string>
+    <string name="xrnlink_more">%1$s +%2$d</string>
+    <string name="xrnlink_minutes">%d min</string>
+    <string name="xrnlink_hours">%d h</string>
+    <string name="xrnlink_hours_minutes">%1$d h %2$d min</string>
+</resources>

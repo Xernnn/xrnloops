@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- xrnloops (XRNLOOPS.md): a day's note and value (xrnnote/NoteSheet.kt). -->
+<resources>
+    <string name="xrnnote_done">Done</string>
+    <string name="xrnnote_not_done">Not done</string>
+    <string name="xrnnote_skip">Skip</string>
+    <string name="xrnnote_clear">Clear</string>
+    <string name="xrnnote_hint">Note for this day</string>
+    <string name="xrnnote_save">Save</string>
+    <string name="xrnnote_today">Today · %s</string>
+    <string name="xrnnote_yesterday">Yesterday · %s</string>
+</resources>

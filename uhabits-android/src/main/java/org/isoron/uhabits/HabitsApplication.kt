@@ -26,13 +26,14 @@ import org.isoron.platform.time.setToday
 import org.isoron.uhabits.core.database.UnsupportedDatabaseVersionException
 import org.isoron.uhabits.core.reminders.ReminderScheduler
 import org.isoron.uhabits.core.ui.NotificationTray
-import org.isoron.uhabits.xrnrule.TodayRefresher
-import org.isoron.uhabits.xrnrule.XrnruleNotifier
-import org.isoron.uhabits.xrnsync.XrnSync
 import org.isoron.uhabits.inject.HabitsApplicationComponent
 import org.isoron.uhabits.inject.create
 import org.isoron.uhabits.utils.DatabaseUtils
 import org.isoron.uhabits.widgets.WidgetUpdater
+import org.isoron.uhabits.xrnrule.TodayRefresher
+import org.isoron.uhabits.xrnrule.XrnruleLinks
+import org.isoron.uhabits.xrnrule.XrnruleNotifier
+import org.isoron.uhabits.xrnsync.XrnSync
 import java.io.File
 
 /**
@@ -89,6 +90,7 @@ class HabitsApplication : Application() {
         notificationTray.startListening()
 
         xrnruleNotifier = XrnruleNotifier(context, component.commandRunner)
+        XrnruleLinks(context).start(this)
         xrnruleNotifier.startListening()
         registerActivityLifecycleCallbacks(TodayRefresher(component.midnightTimer))
         XrnSync(context, habitList, component.modelFactory, component.commandRunner, component.preferences).start(this)

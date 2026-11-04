@@ -31,8 +31,8 @@ import nl.dionsegijn.konfetti.core.Position
 import nl.dionsegijn.konfetti.core.emitter.Emitter
 import org.isoron.platform.gui.toInt
 import org.isoron.platform.io.JavaUserFile
+import org.isoron.platform.time.LocalDate
 import org.isoron.uhabits.R
-import org.isoron.uhabits.activities.common.dialogs.CheckmarkDialog
 import org.isoron.uhabits.activities.common.dialogs.ColorPickerDialogFactory
 import org.isoron.uhabits.activities.common.dialogs.ConfirmDeleteDialog
 import org.isoron.uhabits.activities.common.dialogs.NumberDialog
@@ -78,6 +78,8 @@ import org.isoron.uhabits.utils.restartWithFade
 import org.isoron.uhabits.utils.showMessage
 import org.isoron.uhabits.utils.showSendEmailScreen
 import org.isoron.uhabits.utils.showSendFileScreen
+import org.isoron.uhabits.xrnnote.NoteSheet
+import org.isoron.uhabits.xrnwelcome.WelcomeActivity
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -196,10 +198,8 @@ class ListHabitsScreen(
         activity.startActivityForResult(intent, REQUEST_OPEN_DOCUMENT)
     }
 
-    override fun showIntroScreen() {
-        val intent = intentFactory.startIntroActivity(activity)
-        activity.startActivity(intent)
-    }
+    // xrnloops: our welcome screen instead of Loop's IntroActivity (XRNLOOPS.md).
+    override fun showIntroScreen() = WelcomeActivity.open(activity, fromMenu = false)
 
     override fun showMessage(m: ListHabitsBehavior.Message) {
         activity.showMessage(
@@ -288,18 +288,15 @@ class ListHabitsScreen(
         selectedValue: Int,
         notes: String,
         color: PaletteColor,
+        habitName: String,
+        date: LocalDate,
         callback: CheckMarkDialogCallback
     ) {
+        // xrnloops: our note sheet in place of Loop's popup (XRNLOOPS.md)
         val theme = rootView.value.currentTheme()
-        val fm = (context as AppCompatActivity).supportFragmentManager
-        val dialog = CheckmarkDialog()
-        dialog.arguments = Bundle().apply {
-            putInt("color", theme.color(color).toInt())
-            putInt("value", selectedValue)
-            putString("notes", notes)
+        NoteSheet.show(activity, habitName, date, theme.color(color).toInt(), selectedValue, notes) { v, n ->
+            callback.onNotesSaved(v, n)
         }
-        dialog.onToggle = { v, n -> callback.onNotesSaved(v, n) }
-        dialog.dismissCurrentAndShow(fm, "checkmarkDialog")
     }
 
     private fun getExecuteString(command: Command): String? {

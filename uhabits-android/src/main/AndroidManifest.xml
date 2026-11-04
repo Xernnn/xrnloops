@@ -47,7 +47,7 @@
         android:label="@string/xrnloops_app_name"
         android:localeConfig="@xml/locales_config"
         android:supportsRtl="true"
-        android:theme="@style/AppBaseTheme">
+        android:theme="@style/XrnAppTheme">
 
         <activity
             android:name=".activities.habits.edit.EditHabitActivity"
@@ -301,6 +301,12 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- xrnloops: the welcome screen, in place of Loop's intro (XRNLOOPS.md). -->
+        <activity
+            android:name=".xrnwelcome.WelcomeActivity"
+            android:label="@string/xrnwelcome_menu"
+            android:theme="@style/XrnTheme" />
 
         <!-- xrnrule: open one habit's page by uuid, signature-protected (XRNLOOPS.md). -->
         <activity

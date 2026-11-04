@@ -29,12 +29,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.isoron.platform.gui.toInt
+import org.isoron.platform.time.LocalDate
 import org.isoron.uhabits.AndroidDirFinder
 import org.isoron.uhabits.HabitsApplication
 import org.isoron.uhabits.R
 import org.isoron.uhabits.activities.AndroidThemeSwitcher
 import org.isoron.uhabits.activities.HabitsDirFinder
-import org.isoron.uhabits.activities.common.dialogs.CheckmarkDialog
 import org.isoron.uhabits.activities.common.dialogs.ConfirmDeleteDialog
 import org.isoron.uhabits.activities.common.dialogs.HistoryEditorDialog
 import org.isoron.uhabits.activities.common.dialogs.NumberDialog
@@ -57,6 +57,7 @@ import org.isoron.uhabits.utils.dismissCurrentDialog
 import org.isoron.uhabits.utils.showMessage
 import org.isoron.uhabits.utils.showSendFileScreen
 import org.isoron.uhabits.widgets.WidgetUpdater
+import org.isoron.uhabits.xrnnote.NoteSheet
 
 class ShowHabitActivity : AppCompatActivity(), CommandRunner.Listener {
 
@@ -190,17 +191,15 @@ class ShowHabitActivity : AppCompatActivity(), CommandRunner.Listener {
             selectedValue: Int,
             notes: String,
             color: PaletteColor,
+            habitName: String,
+            date: LocalDate,
             callback: CheckMarkDialogCallback
         ) {
+            // xrnloops: our note sheet in place of Loop's popup (XRNLOOPS.md)
             val theme = view.currentTheme()
-            val dialog = CheckmarkDialog()
-            dialog.arguments = Bundle().apply {
-                putInt("color", theme.color(color).toInt())
-                putInt("value", selectedValue)
-                putString("notes", notes)
+            NoteSheet.show(this@ShowHabitActivity, habitName, date, theme.color(color).toInt(), selectedValue, notes) { v, n ->
+                callback.onNotesSaved(v, n)
             }
-            dialog.onToggle = { v, n -> callback.onNotesSaved(v, n) }
-            dialog.dismissCurrentAndShow(supportFragmentManager, "checkmarkDialog")
         }
 
         private fun getPopupAnchor(): View? {

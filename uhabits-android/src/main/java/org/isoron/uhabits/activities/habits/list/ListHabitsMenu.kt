@@ -34,6 +34,7 @@ import org.isoron.uhabits.core.ui.screens.habits.list.ListHabitsMenuBehavior
 import org.isoron.uhabits.inject.ActivityContext
 import org.isoron.uhabits.inject.ActivityScope
 import org.isoron.uhabits.utils.StyledResources
+import org.isoron.uhabits.xrnwelcome.WelcomeActivity
 
 @Inject
 @ActivityScope
@@ -140,6 +141,11 @@ class ListHabitsMenu(
 
             R.id.actionSettings -> {
                 behavior.onViewSettings()
+                return true
+            }
+
+            R.id.actionXrnWelcome -> {
+                WelcomeActivity.open(activity, fromMenu = true)
                 return true
             }
 

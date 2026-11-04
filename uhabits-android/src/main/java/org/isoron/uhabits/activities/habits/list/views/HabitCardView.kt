@@ -47,6 +47,7 @@ import org.isoron.uhabits.inject.ActivityContext
 import org.isoron.uhabits.utils.currentTheme
 import org.isoron.uhabits.utils.dp
 import org.isoron.uhabits.utils.sres
+import org.isoron.uhabits.xrnrule.XrnruleLinkLine
 
 @Inject
 class HabitCardViewFactory(
@@ -127,6 +128,7 @@ class HabitCardView(
     private var numberPanel: NumberPanelView
     private var innerFrame: LinearLayout
     private var label: TextView
+    private var linkLine: XrnruleLinkLine
     private var scoreRing: RingView
 
     private var currentToggleTaskId = 0
@@ -146,10 +148,19 @@ class HabitCardView(
         label = TextView(context).apply {
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
-            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
             if (SDK_INT >= Build.VERSION_CODES.Q) {
                 breakStrategy = BREAK_STRATEGY_BALANCED
             }
+        }
+
+        // xrnloops: under the name, what the habit unlocks in xrnrule (XRNLOOPS.md).
+        linkLine = XrnruleLinkLine(context, label)
+        val labelColumn = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+            addView(label)
+            addView(linkLine, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         }
 
         checkmarkPanel = checkmarkPanelFactory.create().apply {
@@ -190,7 +201,7 @@ class HabitCardView(
             elevation = dp(1f)
 
             addView(scoreRing)
-            addView(label)
+            addView(labelColumn)
             addView(checkmarkPanel)
             addView(numberPanel)
 
@@ -276,6 +287,7 @@ class HabitCardView(
             text = h.name
             setTextColor(c)
         }
+        linkLine.bind(h, c)
         scoreRing.apply {
             setColor(c)
         }
@@ -310,8 +322,8 @@ class HabitCardView(
 
     private fun updateBackground(isSelected: Boolean) {
         val background = when (isSelected) {
-            true -> R.drawable.selected_box
-            false -> R.drawable.ripple
+            true -> R.drawable.xrn_row_selected // xrnloops: rounded rows (XRNLOOPS.md)
+            false -> R.drawable.xrn_row
         }
         innerFrame.setBackgroundResource(background)
     }

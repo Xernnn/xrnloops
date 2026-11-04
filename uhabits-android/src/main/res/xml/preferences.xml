@@ -24,11 +24,15 @@
             android:key="interfaceCategory"
             android:title="@string/interface_preferences">
 
-        <SwitchPreferenceCompat
-                android:defaultValue="false"
-                android:key="pref_short_toggle"
-                android:summary="@string/pref_toggle_description_2"
-                android:title="@string/pref_toggle_title"
+        <!-- xrnloops (XRNLOOPS.md): what a tap does, in place of Loop's "Toggle with short press"
+             switch (pref_short_toggle), which xrntap/XrnTap.kt keeps in step. -->
+        <ListPreference
+                android:dialogTitle="@string/xrntap_title"
+                android:entries="@array/xrntap_entries"
+                android:entryValues="@array/xrntap_values"
+                android:key="pref_xrn_tap"
+                android:summary="@string/xrntap_summary"
+                android:title="@string/xrntap_title"
                 app:iconSpaceReserved="false" />
 
         <SwitchPreferenceCompat

@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  xrnloops welcome screen: the launcher icon drawing itself. The green tile pops in (to 0.96,
+  so the overshoot stays inside the drawable), the hand-drawn x is written stroke by stroke,
+  then the loop arrow closes. Same geometry as xrnloops_icon_background / _foreground and
+  web/icon.svg (100 x 100 icon space). The x's strokes start and end outside the tile, so their
+  trims start part-way in, where the stroke enters the tile; otherwise the first part of each
+  stroke would be an invisible pause.
+-->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector
+            android:width="132dp"
+            android:height="132dp"
+            android:viewportWidth="100"
+            android:viewportHeight="100">
+            <group
+                android:name="tile"
+                android:pivotX="50"
+                android:pivotY="50"
+                android:scaleX="0.82"
+                android:scaleY="0.82">
+                <clip-path android:pathData="M24,0 H76 A24,24 0 0 1 100,24 V76 A24,24 0 0 1 76,100 H24 A24,24 0 0 1 0,76 V24 A24,24 0 0 1 24,0 Z" />
+                <path
+                    android:name="fill"
+                    android:fillAlpha="0"
+                    android:fillColor="@color/xrn_tile"
+                    android:pathData="M0,0 H100 V100 H0 Z" />
+                <group
+                    android:pivotX="110"
+                    android:pivotY="118"
+                    android:scaleX="0.6"
+                    android:scaleY="0.6"
+                    android:translateX="-60"
+                    android:translateY="-68">
+                    <path
+                        android:name="curl"
+                        android:pathData="M-40,174 L55,72 C68,58 85,47 98,50 C110,53 112,72 113,95 C114,125 115,150 118,165 C121,182 135,190 150,186 C158,184 163,178 166,170"
+                        android:strokeColor="@color/xrn_ink"
+                        android:strokeLineCap="round"
+                        android:strokeLineJoin="round"
+                        android:strokeWidth="28.33"
+                        android:trimPathEnd="0.25" />
+                    <path
+                        android:name="slash"
+                        android:pathData="M-60,301.3 L260,-64.9"
+                        android:strokeColor="@color/xrn_ink"
+                        android:strokeLineCap="round"
+                        android:strokeWidth="28.33"
+                        android:trimPathEnd="0.24" />
+                </group>
+                <group
+                    android:scaleX="1.05"
+                    android:scaleY="1.05"
+                    android:translateX="-2.5"
+                    android:translateY="-2.5">
+                    <path
+                        android:name="loop"
+                        android:pathData="M64.55,39.79 A19,19 0 1 1 39.93,35.89"
+                        android:strokeColor="#FFFFFF"
+                        android:strokeWidth="10"
+                        android:trimPathEnd="0" />
+                    <path
+                        android:name="head"
+                        android:fillAlpha="0"
+                        android:fillColor="#FFFFFF"
+                        android:pathData="M49.26,30.06 L42.69,45.96 L32.09,29 Z" />
+                </group>
+            </group>
+        </vector>
+    </aapt:attr>
+
+    <target android:name="tile">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator
+                    android:duration="480"
+                    android:interpolator="@android:interpolator/overshoot"
+                    android:propertyName="scaleX"
+                    android:valueFrom="0.82"
+                    android:valueTo="0.96"
+                    android:valueType="floatType" />
+                <objectAnimator
+                    android:duration="480"
+                    android:interpolator="@android:interpolator/overshoot"
+                    android:propertyName="scaleY"
+                    android:valueFrom="0.82"
+                    android:valueTo="0.96"
+                    android:valueType="floatType" />
+            </set>
+        </aapt:attr>
+    </target>
+    <target android:name="fill">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:duration="260"
+                android:propertyName="fillAlpha"
+                android:valueFrom="0"
+                android:valueTo="1"
+                android:valueType="floatType" />
+        </aapt:attr>
+    </target>
+    <target android:name="curl">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:duration="520"
+                android:interpolator="@android:interpolator/accelerate_decelerate"
+                android:propertyName="trimPathEnd"
+                android:startOffset="260"
+                android:valueFrom="0.25"
+                android:valueTo="1"
+                android:valueType="floatType" />
+        </aapt:attr>
+    </target>
+    <target android:name="slash">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:duration="620"
+                android:interpolator="@android:interpolator/fast_out_slow_in"
+                android:propertyName="trimPathEnd"
+                android:startOffset="760"
+                android:valueFrom="0.24"
+                android:valueTo="1"
+                android:valueType="floatType" />
+        </aapt:attr>
+    </target>
+    <target android:name="loop">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:duration="540"
+                android:interpolator="@android:interpolator/fast_out_slow_in"
+                android:propertyName="trimPathEnd"
+                android:startOffset="1080"
+                android:valueFrom="0"
+                android:valueTo="1"
+                android:valueType="floatType" />
+        </aapt:attr>
+    </target>
+    <target android:name="head">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:duration="160"
+                android:propertyName="fillAlpha"
+                android:startOffset="1560"
+                android:valueFrom="0"
+                android:valueTo="1"
+                android:valueType="floatType" />
+        </aapt:attr>
+    </target>
+</animated-vector>

@@ -26,6 +26,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.text.TextPaint
 import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
 import android.view.View
 import android.view.View.MeasureSpec.EXACTLY
 import me.tatarka.inject.annotations.Inject
@@ -43,6 +44,7 @@ import org.isoron.uhabits.utils.getFontAwesome
 import org.isoron.uhabits.utils.sp
 import org.isoron.uhabits.utils.sres
 import org.isoron.uhabits.utils.toMeasureSpec
+import org.isoron.uhabits.xrntap.CheckmarkFlick
 
 @Inject
 class CheckmarkButtonViewFactory(
@@ -83,10 +85,16 @@ class CheckmarkButtonView(
 
     private var drawer = Drawer()
 
+    // xrnloops: a tap does what Settings → "Tap on a day" says, and a short hold opens the flick
+    // menu (XRNLOOPS.md). Touch goes through it; the listeners stay for accessibility services.
+    private val flick = CheckmarkFlick.gesture(this)
+
     init {
         setOnClickListener(this)
         setOnLongClickListener(this)
     }
+
+    override fun onTouchEvent(event: MotionEvent) = flick.onTouchEvent(event)
 
     fun performToggle() {
         value = Entry.nextToggleValue(
@@ -99,20 +107,10 @@ class CheckmarkButtonView(
         invalidate()
     }
 
-    override fun onClick(v: View) {
-        if (preferences.isShortToggleEnabled) {
-            performToggle()
-        } else {
-            onEdit()
-        }
-    }
+    override fun onClick(v: View) = CheckmarkFlick.tap(this) // xrnloops
 
     override fun onLongClick(v: View): Boolean {
-        if (preferences.isShortToggleEnabled) {
-            onEdit()
-        } else {
-            performToggle()
-        }
+        onEdit() // xrnloops: only accessibility services long-press now; touch opens the flick menu
         return true
     }
 

@@ -23,9 +23,9 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.Rect
-import android.graphics.Typeface
 import android.text.TextPaint
 import org.isoron.uhabits.utils.InterfaceUtils.getFontAwesome
+import org.isoron.uhabits.xrnlook.XrnFonts
 
 class AndroidCanvas : Canvas {
 
@@ -122,8 +122,8 @@ class AndroidCanvas : Canvas {
 
     override fun setFont(font: Font) {
         textPaint.typeface = when (font) {
-            Font.REGULAR -> Typeface.DEFAULT
-            Font.BOLD -> Typeface.DEFAULT_BOLD
+            Font.REGULAR -> XrnFonts.regular(context) // xrnloops: Nunito (XRNLOOPS.md)
+            Font.BOLD -> XrnFonts.bold(context)
             Font.FONT_AWESOME -> getFontAwesome(context)
         }
         updateMHeight()

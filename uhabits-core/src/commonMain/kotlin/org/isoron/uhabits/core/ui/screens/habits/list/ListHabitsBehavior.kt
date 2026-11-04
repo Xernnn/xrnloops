@@ -73,7 +73,9 @@ open class ListHabitsBehavior(
             screen.showCheckmarkPopup(
                 entry.value,
                 entry.notes,
-                habit.color
+                habit.color,
+                habit.name, // xrnloops: the note screen names the habit and the day (XRNLOOPS.md)
+                date
             ) { newValue: Int, newNotes: String ->
                 if (newValue != entry.value && newValue == YES_MANUAL) screen.showConfetti(habit.color, x, y)
                 commandRunner.run(CreateRepetitionCommand(habitList, habit, date, newValue, newNotes))
@@ -171,6 +173,8 @@ open class ListHabitsBehavior(
             selectedValue: Int,
             notes: String,
             color: PaletteColor,
+            habitName: String, // xrnloops
+            date: LocalDate, // xrnloops
             callback: CheckMarkDialogCallback
         )
         fun showSendBugReportToDeveloperScreen(log: String)

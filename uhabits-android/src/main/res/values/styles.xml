@@ -209,7 +209,8 @@
     <style name="Card" parent="CardCommon">
         <item name="android:layout_marginBottom">1dp</item>
         <item name="android:elevation">1dp</item>
-        <item name="android:background">?attr/cardBgColor</item>
+        <!-- xrnloops: the theme's rounded card (xrn_card_*), not a flat colour (XRNLOOPS.md). -->
+        <item name="android:background">?attr/cardBackground</item>
     </style>
 
     <style name="CardHeader">

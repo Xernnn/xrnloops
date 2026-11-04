@@ -95,7 +95,9 @@ class HistoryCardPresenter(
         screen.showCheckmarkPopup(
             entry.value,
             entry.notes,
-            habit.color
+            habit.color,
+            habit.name, // xrnloops: the note screen names the habit and the day (XRNLOOPS.md)
+            date
         ) { newValue, newNotes ->
             commandRunner.run(
                 CreateRepetitionCommand(
@@ -211,6 +213,8 @@ class HistoryCardPresenter(
             selectedValue: Int,
             notes: String,
             color: PaletteColor,
+            habitName: String, // xrnloops
+            date: LocalDate, // xrnloops
             callback: CheckMarkDialogCallback
         )
     }

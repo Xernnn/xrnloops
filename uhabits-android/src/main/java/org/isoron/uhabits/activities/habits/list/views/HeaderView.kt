@@ -24,7 +24,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
-import android.graphics.Typeface
 import android.text.TextPaint
 import android.view.View.MeasureSpec.EXACTLY
 import org.isoron.platform.time.JavaLocalDateFormatter
@@ -38,6 +37,7 @@ import org.isoron.uhabits.utils.dp
 import org.isoron.uhabits.utils.isRTL
 import org.isoron.uhabits.utils.sres
 import org.isoron.uhabits.utils.toMeasureSpec
+import org.isoron.uhabits.xrnlook.XrnFonts
 import java.util.Locale
 
 class HeaderView(
@@ -109,7 +109,7 @@ class HeaderView(
             isAntiAlias = true
             textSize = dim(R.dimen.tinyTextSize)
             textAlign = Paint.Align.CENTER
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = XrnFonts.bold(context) // xrnloops: Nunito (XRNLOOPS.md)
             color = sres.getColor(R.attr.contrast60)
         }
 
