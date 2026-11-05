@@ -97,4 +97,15 @@ class XrnruleLinksTest {
         val after = map(link("read", "reddit", STATE_LOCKED, done = true), link("read", "social", STATE_READY, done = true))
         assertEquals(listOf("social" to Kind.EARNED, "reddit" to Kind.COUNTED), earned(before, after))
     }
+
+    @Test
+    fun theBlockThatStillNeedsTheHabitComesFirst() {
+        val links = listOf(
+            link("read", "wants more", STATE_LOCKED, done = true),
+            link("read", "open", STATE_OPEN, done = true),
+            link("read", "ready", STATE_READY, done = true),
+            link("read", "needs it", STATE_LOCKED)
+        )
+        assertEquals(listOf("needs it", "ready", "open", "wants more"), XrnruleLinks.ordered(links).map { it.blockId })
+    }
 }

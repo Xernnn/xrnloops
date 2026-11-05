@@ -122,7 +122,7 @@ class AndroidCanvas : Canvas {
 
     override fun setFont(font: Font) {
         textPaint.typeface = when (font) {
-            Font.REGULAR -> XrnFonts.regular(context) // xrnloops: Nunito (XRNLOOPS.md)
+            Font.REGULAR -> XrnFonts.regular(context) // xrnloops: MiSans (XRNLOOPS.md)
             Font.BOLD -> XrnFonts.bold(context)
             Font.FONT_AWESOME -> getFontAwesome(context)
         }

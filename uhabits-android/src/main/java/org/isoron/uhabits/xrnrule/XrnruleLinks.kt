@@ -272,6 +272,20 @@ class XrnruleLinks(private val context: Context) {
             }
         }.sortedBy { it.kind == XrnruleEarned.Kind.COUNTED }.distinctBy { it.link.blockId }
 
+        /**
+         * Several blocks can want one habit. First the ones the habit still has to do something
+         * for, then the ones waiting to be opened, then the open ones, then the ones where this
+         * habit is done but the block wants more.
+         */
+        fun ordered(links: List<XrnruleLink>): List<XrnruleLink> = links.sortedBy {
+            when {
+                it.state == XrnruleLinksContract.STATE_LOCKED && !it.habitDone -> 0
+                it.state == XrnruleLinksContract.STATE_READY -> 1
+                it.state == XrnruleLinksContract.STATE_OPEN -> 2
+                else -> 3
+            }
+        }
+
         /** Starts xrnrule on [blockId] (see [XrnruleLinksContract.OPEN_SCHEME]). */
         fun openBlock(context: Context, blockId: String) {
             val uri = Uri.Builder()

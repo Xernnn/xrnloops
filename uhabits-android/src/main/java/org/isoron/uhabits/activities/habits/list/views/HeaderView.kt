@@ -109,7 +109,7 @@ class HeaderView(
             isAntiAlias = true
             textSize = dim(R.dimen.tinyTextSize)
             textAlign = Paint.Align.CENTER
-            typeface = XrnFonts.bold(context) // xrnloops: Nunito (XRNLOOPS.md)
+            typeface = XrnFonts.bold(context) // xrnloops: MiSans (XRNLOOPS.md)
             color = sres.getColor(R.attr.contrast60)
         }
 

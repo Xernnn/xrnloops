@@ -58,8 +58,8 @@ class XrnDarkTheme : DarkTheme() {
     override val mediumContrastTextColor = Color(0xAAAAAC)
 }
 
-/** Nunito for text Loop paints on a canvas (charts, the list's day header). */
+/** MiSans for text Loop paints on a canvas (charts, the list's day header). */
 object XrnFonts {
-    fun regular(context: Context): Typeface = context.resources.getFont(R.font.xrn_nunito_regular)
-    fun bold(context: Context): Typeface = context.resources.getFont(R.font.xrn_nunito_bold)
+    fun regular(context: Context): Typeface = context.resources.getFont(R.font.xrn_misans_regular)
+    fun bold(context: Context): Typeface = context.resources.getFont(R.font.xrn_misans_semibold)
 }

@@ -47,7 +47,7 @@ import org.isoron.uhabits.inject.ActivityContext
 import org.isoron.uhabits.utils.currentTheme
 import org.isoron.uhabits.utils.dp
 import org.isoron.uhabits.utils.sres
-import org.isoron.uhabits.xrnrule.XrnruleLinkLine
+import org.isoron.uhabits.xrnrule.XrnruleLinkBadge
 
 @Inject
 class HabitCardViewFactory(
@@ -128,7 +128,7 @@ class HabitCardView(
     private var numberPanel: NumberPanelView
     private var innerFrame: LinearLayout
     private var label: TextView
-    private var linkLine: XrnruleLinkLine
+    private var linkBadge: XrnruleLinkBadge
     private var scoreRing: RingView
 
     private var currentToggleTaskId = 0
@@ -148,20 +148,14 @@ class HabitCardView(
         label = TextView(context).apply {
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
+            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
             if (SDK_INT >= Build.VERSION_CODES.Q) {
                 breakStrategy = BREAK_STRATEGY_BALANCED
             }
         }
 
-        // xrnloops: under the name, what the habit unlocks in xrnrule (XRNLOOPS.md).
-        linkLine = XrnruleLinkLine(context, label)
-        val labelColumn = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
-            addView(label)
-            addView(linkLine, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT)) // only the text taps
-        }
+        // xrnloops: after the name, a lock when the habit unlocks something in xrnrule (XRNLOOPS.md).
+        linkBadge = XrnruleLinkBadge(context)
 
         checkmarkPanel = checkmarkPanelFactory.create().apply {
             onToggle = { date, value, notes ->
@@ -207,7 +201,8 @@ class HabitCardView(
             elevation = dp(1f)
 
             addView(scoreRing)
-            addView(labelColumn)
+            addView(label)
+            addView(linkBadge)
             addView(checkmarkPanel)
             addView(numberPanel)
 
@@ -293,7 +288,7 @@ class HabitCardView(
             text = h.name
             setTextColor(c)
         }
-        linkLine.bind(h, c)
+        linkBadge.bind(h, c)
         scoreRing.apply {
             setColor(c)
         }

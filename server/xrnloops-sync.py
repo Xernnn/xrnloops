@@ -787,6 +787,7 @@ def main():
     args.users = os.path.expanduser(args.users)
     args.web = os.path.abspath(os.path.expanduser(args.web))
     mimetypes.add_type("text/javascript", ".js")
+    mimetypes.add_type("font/woff2", ".woff2")
     SECURITY_HEADERS["Content-Security-Policy"] = content_policy(args.web)
     session_key = load_session_key()
     srv = ThreadingHTTPServer((args.host, args.port), Handler)

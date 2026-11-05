@@ -66,7 +66,7 @@
         <item name="windowBackgroundColor">@color/xrn_light_bg</item>
         <item name="android:colorBackground">@color/xrn_light_bg</item>
         <item name="android:windowBackground">@color/xrn_light_bg</item>
-        <item name="android:fontFamily">@font/xrn_nunito</item>
+        <item name="android:fontFamily">@font/xrn_misans</item>
         <item name="toolbarStyle">@style/XrnToolbar</item>
     </style>
 
@@ -95,30 +95,32 @@
         <item name="windowBackgroundColor">@color/xrn_bg</item>
         <item name="android:colorBackground">@color/xrn_bg</item>
         <item name="android:windowBackground">@color/xrn_bg</item>
-        <item name="android:fontFamily">@font/xrn_nunito</item>
+        <item name="android:fontFamily">@font/xrn_misans</item>
         <item name="toolbarStyle">@style/XrnToolbar</item>
     </style>
 
-    <!-- AMOLED: Loop's black, with the green accent and Nunito. -->
+    <!-- AMOLED: Loop's black, with the green accent and MiSans. -->
     <style name="XrnAppThemeDark.PureBlack" parent="AppBaseThemeDark.PureBlack">
         <item name="aboutScreenColor">@color/xrn_green</item>
         <item name="colorAccent">@color/xrn_green</item>
         <item name="colorSecondary">@color/xrn_green</item>
         <item name="cardBackground">@drawable/xrn_card_black</item>
         <item name="xrnRowEdge">@color/xrn_surface</item>
-        <item name="android:fontFamily">@font/xrn_nunito</item>
+        <item name="android:fontFamily">@font/xrn_misans</item>
         <item name="toolbarStyle">@style/XrnToolbar</item>
     </style>
 
     <!-- Home screen widgets: the zinc card instead of Loop's grey. -->
     <style name="XrnWidgetTheme" parent="WidgetTheme">
         <item name="cardBgColor">@color/xrn_surface</item>
-        <item name="android:fontFamily">@font/xrn_nunito</item>
+        <item name="android:fontFamily">@font/xrn_misans</item>
     </style>
 
-    <!-- A day's note and value (xrnnote/NoteSheet.kt), over the app's light, dark or black theme. -->
+    <!-- Our bottom sheets (xrnnote/NoteSheet.kt, xrnrule/XrnruleLinkSheet.kt), over the app's light,
+         dark or black theme. The handle needs a style of its own: only Material 3 themes set one. -->
     <style name="XrnNoteSheet" parent="ThemeOverlay.MaterialComponents.BottomSheetDialog">
         <item name="bottomSheetStyle">@style/XrnNoteSheet.Sheet</item>
+        <item name="bottomSheetDragHandleStyle">@style/XrnNoteSheet.Handle</item>
         <item name="colorPrimary">?attr/colorAccent</item>
         <item name="textInputStyle">@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox</item>
         <item name="android:windowSoftInputMode">adjustResize</item>
@@ -127,6 +129,12 @@
     <style name="XrnNoteSheet.Sheet" parent="Widget.MaterialComponents.BottomSheet.Modal">
         <item name="backgroundTint">?attr/cardBgColor</item>
         <item name="shapeAppearanceOverlay">@style/XrnNoteSheet.Shape</item>
+        <!-- By default an expanded sheet loses its round corners, even one that isn't full height. -->
+        <item name="shouldRemoveExpandedCorners">false</item>
+    </style>
+
+    <style name="XrnNoteSheet.Handle" parent="Widget.Material3.BottomSheet.DragHandle">
+        <item name="tint">?attr/contrast40</item>
     </style>
 
     <style name="XrnNoteSheet.Shape" parent="">
@@ -143,12 +151,12 @@
     </style>
 
     <style name="XrnToolbar.Title" parent="TextAppearance.Widget.AppCompat.Toolbar.Title">
-        <item name="android:fontFamily">@font/xrn_nunito</item>
+        <item name="android:fontFamily">@font/xrn_misans</item>
         <item name="android:textStyle">bold</item>
         <item name="android:textSize">21sp</item>
     </style>
 
     <style name="XrnToolbar.Subtitle" parent="TextAppearance.Widget.AppCompat.Toolbar.Subtitle">
-        <item name="android:fontFamily">@font/xrn_nunito</item>
+        <item name="android:fontFamily">@font/xrn_misans</item>
     </style>
 </resources>

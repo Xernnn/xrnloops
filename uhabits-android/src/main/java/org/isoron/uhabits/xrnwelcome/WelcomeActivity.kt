@@ -411,7 +411,7 @@ class WelcomeActivity : AppCompatActivity() {
             val pad = (20 * resources.displayMetrics.density).toInt()
             setPadding(pad, pad / 2, pad, 0)
         }
-        val font = ResourcesCompat.getFont(this, R.font.xrn_nunito_regular)
+        val font = ResourcesCompat.getFont(this, R.font.xrn_misans_regular)
         fun field(@StringRes hint: Int, value: String, type: Int): TextInputEditText {
             val layout = TextInputLayout(this)
             // Built from the layout's context, which carries its theme overlay; from the

@@ -112,7 +112,12 @@ fun importBackupFromDownloadFolder() {
     } else {
         device.click(50, 90) // Click menu button
         Thread.sleep(1000)
-        device.findObject(UiSelector().textContains("Download")).click()
+        // Downloads in the menu itself: the picker reopens the folder it showed last, and in
+        // Downloads that folder's own title, under the open menu, matches first (a tap there
+        // lands on "Recent", whose list can still show backups that are gone).
+        val roots = device.findObject(UiSelector().resourceIdMatches(".*:id/roots_list"))
+        val downloads = roots.getChild(UiSelector().textContains("Download"))
+        (if (downloads.exists()) downloads else device.findObject(UiSelector().textContains("Download"))).click()
         device.findObject(UiSelector().textContains("Loop")).click()
     }
 }

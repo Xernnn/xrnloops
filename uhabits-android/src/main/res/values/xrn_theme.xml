@@ -18,7 +18,7 @@
   ~ with this program. If not, see <http://www.gnu.org/licenses/>.
   -->
 
-<!-- xrnloops only (XRNLOOPS.md): the xrn family look (xrnrule's dark palette, Nunito), used by
+<!-- xrnloops only (XRNLOOPS.md): the xrn family look (xrnrule's dark palette, MiSans), used by
      the welcome screen. -->
 <resources>
     <color name="xrn_bg">#1F1F23</color>
@@ -57,7 +57,7 @@
         <item name="materialAlertDialogTheme">@style/XrnDialog</item>
         <!-- Only android:fontFamily: AppCompat's own fontFamily in a theme beats every style's
              android:fontFamily, so titles and buttons came out regular weight. -->
-        <item name="android:fontFamily">@font/xrn_nunito_regular</item>
+        <item name="android:fontFamily">@font/xrn_misans_regular</item>
     </style>
 
     <style name="XrnDialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
@@ -79,20 +79,20 @@
     </style>
 
     <style name="XrnDialog.Title" parent="MaterialAlertDialog.MaterialComponents.Title.Text">
-        <item name="android:fontFamily">@font/xrn_nunito_extrabold</item>
+        <item name="android:fontFamily">@font/xrn_misans_bold</item>
         <item name="android:textSize">22sp</item>
         <item name="android:textColor">@color/xrn_text</item>
     </style>
 
     <style name="XrnDialog.Button" parent="Widget.MaterialComponents.Button.TextButton.Dialog">
-        <item name="android:fontFamily">@font/xrn_nunito_bold</item>
+        <item name="android:fontFamily">@font/xrn_misans_semibold</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:textSize">16sp</item>
         <item name="android:letterSpacing">0</item>
     </style>
 
     <style name="XrnText">
-        <item name="android:fontFamily">@font/xrn_nunito_regular</item>
+        <item name="android:fontFamily">@font/xrn_misans_regular</item>
         <item name="android:textColor">@color/xrn_text</item>
         <item name="android:textSize">16sp</item>
         <item name="android:lineSpacingExtra">3sp</item>
@@ -109,18 +109,18 @@
     </style>
 
     <style name="XrnText.Label">
-        <item name="android:fontFamily">@font/xrn_nunito_bold</item>
+        <item name="android:fontFamily">@font/xrn_misans_semibold</item>
         <item name="android:textSize">16sp</item>
     </style>
 
     <style name="XrnText.Title">
-        <item name="android:fontFamily">@font/xrn_nunito_extrabold</item>
+        <item name="android:fontFamily">@font/xrn_misans_bold</item>
         <item name="android:textSize">30sp</item>
         <item name="android:lineSpacingExtra">0sp</item>
     </style>
 
     <style name="XrnText.Eyebrow">
-        <item name="android:fontFamily">@font/xrn_nunito_bold</item>
+        <item name="android:fontFamily">@font/xrn_misans_semibold</item>
         <item name="android:textColor">@color/xrn_green</item>
         <item name="android:textSize">13sp</item>
         <item name="android:letterSpacing">0.12</item>
@@ -134,7 +134,7 @@
     </style>
 
     <style name="XrnButton" parent="Widget.MaterialComponents.Button.UnelevatedButton">
-        <item name="android:fontFamily">@font/xrn_nunito_bold</item>
+        <item name="android:fontFamily">@font/xrn_misans_semibold</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:textSize">16sp</item>
         <item name="android:letterSpacing">0</item>
@@ -157,7 +157,7 @@
     </style>
 
     <style name="XrnButton.Text" parent="Widget.MaterialComponents.Button.TextButton">
-        <item name="android:fontFamily">@font/xrn_nunito_bold</item>
+        <item name="android:fontFamily">@font/xrn_misans_semibold</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:textSize">16sp</item>
         <item name="android:letterSpacing">0</item>

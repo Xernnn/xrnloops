@@ -49,14 +49,14 @@ object XrnruleBanner {
         return when (news.kind) {
             XrnruleEarned.Kind.EARNED -> activity.getString(
                 R.string.xrnlink_banner_earned,
-                XrnruleLinkLine.minutes(activity, link.unlockMinutes),
+                XrnruleLinkSheet.minutes(activity, link.unlockMinutes),
                 what
             )
             XrnruleEarned.Kind.OPEN -> when {
                 link.selfPaced -> activity.getString(
                     R.string.xrnlink_banner_open_left,
                     what,
-                    XrnruleLinkLine.minutes(activity, ((link.useLeftMs + 59_999) / 60_000).toInt())
+                    XrnruleLinkSheet.minutes(activity, ((link.useLeftMs + 59_999) / 60_000).toInt())
                 )
                 link.openUntil > 0 -> activity.getString(
                     R.string.xrnlink_banner_open_till,
