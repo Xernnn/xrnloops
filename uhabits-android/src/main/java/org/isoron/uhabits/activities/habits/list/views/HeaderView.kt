@@ -59,7 +59,6 @@ class HeaderView(
     init {
         setScrollerBucketSize(dim(R.dimen.checkmarkWidth).toInt())
         setBackgroundColor(sres.getColor(R.attr.headerBackgroundColor))
-        elevation = dp(2.0f)
     }
 
     override fun atMidnight() {
@@ -123,7 +122,7 @@ class HeaderView(
 
             repeat(buttonCount) { index ->
                 rect.set(0f, 0f, width, height)
-                rect.offset(canvas.width.toFloat() - dp(3.0f), 0f)
+                rect.offset(canvas.width.toFloat() - dp(HabitCardView.ROW_MARGIN_DP), 0f)
 
                 if (isReversed) {
                     rect.offset(-(index + 1) * width, 0f)
@@ -141,6 +140,8 @@ class HeaderView(
                 }
 
                 val date = today.minus(index + dataOffset)
+                // xrnloops: today stands out from the days behind it (XRNLOOPS.md).
+                paint.color = sres.getColor(if (index + dataOffset == 0) R.attr.contrast100 else R.attr.contrast60)
                 val dayOfWeek = dateFormatter.shortWeekdayName(date).uppercase()
                 val dayOfMonth = date.day.toString()
                 val y1 = rect.centerY() - 0.25 * em

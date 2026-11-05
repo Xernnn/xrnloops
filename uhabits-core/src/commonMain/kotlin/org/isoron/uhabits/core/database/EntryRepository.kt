@@ -3,6 +3,8 @@ package org.isoron.uhabits.core.database
 import org.isoron.platform.Synchronized
 import org.isoron.platform.io.Database
 import org.isoron.platform.io.StepResult
+import org.isoron.platform.io.begin
+import org.isoron.platform.io.commit
 import org.isoron.platform.io.queryLong
 import org.isoron.platform.io.run
 
@@ -16,8 +18,8 @@ data class EntryData(
 
 /**
  * One instance serves every habit, and its statements hold state between bind and step, so each
- * method takes the repository's lock: xrnloops reads and writes entries from the sync thread and
- * the xrnrule provider's binder threads as well as Loop's own threads.
+ * method takes the repository's lock: xrnloops reads and writes entries from the sync thread as
+ * well as Loop's own threads.
  */
 class EntryRepository(private val db: Database) {
     private val findAllByHabitStmt by lazy {
@@ -68,6 +70,35 @@ class EntryRepository(private val db: Database) {
         insertStmt.bindText(4, data.notes)
         insertStmt.step()
         return db.queryLong("SELECT last_insert_rowid()")
+    }
+
+    /**
+     * xrnloops: replaces the record for each habit and day, all in one transaction, so a sync
+     * bringing in a long history doesn't pay for two commits per day. Nothing inside the
+     * transaction takes another lock, so it can't deadlock with a thread that holds one while it
+     * waits for the database.
+     */
+    @Synchronized
+    fun replaceAll(records: List<EntryData>) {
+        db.begin()
+        try {
+            for (record in records) {
+                deleteByHabitAndTimestampStmt.reset()
+                deleteByHabitAndTimestampStmt.bindLong(1, record.habitId!!)
+                deleteByHabitAndTimestampStmt.bindLong(2, record.timestamp)
+                deleteByHabitAndTimestampStmt.step()
+                insertStmt.reset()
+                insertStmt.bindLong(1, record.habitId!!)
+                insertStmt.bindLong(2, record.timestamp)
+                insertStmt.bindInt(3, record.value)
+                insertStmt.bindText(4, record.notes)
+                insertStmt.step()
+            }
+            db.commit()
+        } catch (e: Exception) {
+            db.run("ROLLBACK")
+            throw e
+        }
     }
 
     @Synchronized

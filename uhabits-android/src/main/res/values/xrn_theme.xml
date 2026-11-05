@@ -28,7 +28,6 @@
     <color name="xrn_outline">#37373C</color>
     <color name="xrn_text">#F4F4F5</color>
     <color name="xrn_muted">#AAAAAC</color>
-    <color name="xrn_faint">#5C5C63</color>
     <color name="xrn_green">#22C55E</color>
     <color name="xrn_green_container">#1F3A2A</color>
     <color name="xrn_on_green_container">#BBF7D0</color>
@@ -143,7 +142,7 @@
         <item name="android:paddingEnd">24dp</item>
         <item name="cornerRadius">26dp</item>
         <item name="backgroundTint">@color/xrn_green</item>
-        <item name="android:textColor">@color/xrn_ink</item>
+        <item name="android:textColor">@android:color/white</item>
     </style>
 
     <style name="XrnButton.Tonal">

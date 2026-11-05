@@ -20,10 +20,8 @@
 package org.isoron.uhabits.xrnrule
 
 import android.app.Activity
-import android.text.format.DateFormat
 import org.isoron.uhabits.R
 import org.isoron.uhabits.xrnlook.XrnSnackbar
-import java.util.Date
 
 /**
  * The banner on the screen in front after a tick did something in xrnrule: "Earned 30 min of
@@ -61,7 +59,7 @@ object XrnruleBanner {
                 link.openUntil > 0 -> activity.getString(
                     R.string.xrnlink_banner_open_till,
                     what,
-                    DateFormat.getTimeFormat(activity).format(Date(link.openUntil))
+                    XrnruleLinkSheet.clock(link.openUntil)
                 )
                 else -> activity.getString(R.string.xrnlink_banner_open, what)
             }

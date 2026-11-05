@@ -198,7 +198,6 @@ class HabitCardView(
             gravity = Gravity.CENTER_VERTICAL
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
-            elevation = dp(1f)
 
             addView(scoreRing)
             addView(label)
@@ -214,8 +213,8 @@ class HabitCardView(
 
         clipToPadding = false
         layoutParams = LayoutParams(MATCH_PARENT, WRAP_CONTENT)
-        val margin = dp(3f).toInt()
-        setPadding(margin, 0, margin, margin)
+        // xrnloops: flat rows, clear of the screen's edges (XRNLOOPS.md).
+        setPadding(dp(ROW_MARGIN_DP).toInt(), 0, dp(ROW_MARGIN_DP).toInt(), dp(ROW_GAP_DP).toInt())
         addView(innerFrame)
     }
 
@@ -330,6 +329,10 @@ class HabitCardView(
     }
 
     companion object {
+        /** Also where [HeaderView] starts counting its columns from, so the two line up. */
+        const val ROW_MARGIN_DP = 8f
+        private const val ROW_GAP_DP = 6f
+
         fun (() -> Unit).delay(delayInMillis: Long) {
             Handler(Looper.getMainLooper()).postDelayed(this, delayInMillis)
         }

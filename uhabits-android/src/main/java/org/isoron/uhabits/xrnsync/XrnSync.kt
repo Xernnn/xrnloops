@@ -29,12 +29,14 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import org.isoron.platform.time.LocalDate
+import org.isoron.platform.time.getToday
 import org.isoron.uhabits.core.commands.Command
 import org.isoron.uhabits.core.commands.CommandRunner
 import org.isoron.uhabits.core.commands.CreateHabitCommand
 import org.isoron.uhabits.core.commands.DeleteHabitsCommand
 import org.isoron.uhabits.core.commands.EditHabitCommand
 import org.isoron.uhabits.core.models.Entry
+import org.isoron.uhabits.core.models.EntryList
 import org.isoron.uhabits.core.models.Frequency
 import org.isoron.uhabits.core.models.Habit
 import org.isoron.uhabits.core.models.HabitList
@@ -45,6 +47,7 @@ import org.isoron.uhabits.core.models.PaletteColor
 import org.isoron.uhabits.core.models.Reminder
 import org.isoron.uhabits.core.models.WeekdayList
 import org.isoron.uhabits.core.preferences.Preferences
+import org.isoron.uhabits.core.ui.NotificationTray
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -66,15 +69,15 @@ import java.util.concurrent.TimeUnit
  *
  * A change made here goes out within seconds, and a background job ([XrnSyncJob.schedulePush])
  * sends it even if Android ends this process first. Changes from elsewhere arrive at once while
- * one of this app's screens is open or xrnrule's block screen waits for them ([waitForChange]),
- * and otherwise with the next sync.
+ * one of this app's screens is open ([waitForChange]), and otherwise with the next sync.
  */
 class XrnSync(
     context: Context,
     private val habitList: HabitList,
     private val modelFactory: ModelFactory,
     private val commandRunner: CommandRunner,
-    private val preferences: Preferences
+    private val preferences: Preferences,
+    private val notificationTray: NotificationTray
 ) : CommandRunner.Listener {
 
     val settings = XrnSyncSettings(context)
@@ -146,16 +149,16 @@ class XrnSync(
 
     /**
      * Waits up to [waitS] seconds for the server to have anything this phone hasn't pulled yet,
-     * then syncs it in; true if something came. Blocks the calling thread (a binder thread for
-     * xrnrule, or the watcher), never the sync thread, so a tick here still goes out meanwhile.
+     * then syncs it in; true if something came. Blocks the watcher, never the sync thread, so a
+     * tick here still goes out meanwhile.
      */
-    fun waitForChange(waitS: Int): Boolean {
+    private fun waitForChange(waitS: Int): Boolean {
         if (!settings.isConfigured) return false
         val key = credentialsKey()
         val holdMs = pollHoldUntil - SystemClock.elapsedRealtime()
         if (holdMs > 0 && key == pollFailedWith) {
-            // A recent poll failed. Callers poll again straight away (our watcher, and anything
-            // using the provider's `watch`), so sit out the wait asked for instead of asking.
+            // A recent poll failed. The watcher polls again straight away, so sit out the wait
+            // asked for instead of asking.
             try {
                 Thread.sleep(minOf(holdMs, waitS * 1000L))
             } catch (e: InterruptedException) {
@@ -169,8 +172,9 @@ class XrnSync(
             pollFailures = 0
             pollHoldUntil = 0
             val news = page.getJSONArray("habits").length() > 0 || page.getJSONArray("entries").length() > 0
-            if (news) syncBlocking(WATCH_SYNC_MS) else feedSeq = maxOf(feedSeq, page.getLong("seq"))
-            news
+            if (!news) feedSeq = maxOf(feedSeq, page.getLong("seq"))
+            // A sync that failed brought nothing in, and the next poll would answer at once.
+            news && syncBlocking(WATCH_SYNC_MS)
         } catch (e: Exception) {
             Log.w(TAG, "waiting for changes failed", e)
             pollFailures++
@@ -201,7 +205,7 @@ class XrnSync(
     private fun watchWhileOpen() {
         if (!settings.isConfigured || watcher?.isAlive == true) return
         watcher = Thread({
-            while (screensOpen > 0) {
+            while (keepWatching()) {
                 val start = SystemClock.elapsedRealtime()
                 // Failures hold back inside waitForChange; this catches a server (or a proxy in
                 // front of it) that answers at once instead of holding the poll open.
@@ -213,6 +217,13 @@ class XrnSync(
             isDaemon = true
             start()
         }
+    }
+
+    /** Locked with [watchWhileOpen], so a resume either sees the watcher gone or keeps it going. */
+    @Synchronized
+    private fun keepWatching(): Boolean {
+        if (screensOpen == 0) watcher = null
+        return screensOpen > 0
     }
 
     /** Syncs after [delayMs], replacing a sync already waiting (so a burst of ticks is one round). */
@@ -230,6 +241,7 @@ class XrnSync(
         return try {
             future.get(timeoutMs, TimeUnit.MILLISECONDS)
         } catch (e: Exception) {
+            future.cancel(false) // still queued behind a slow round: don't let these pile up
             false
         }
     }
@@ -254,38 +266,79 @@ class XrnSync(
 
     // ---- the round ---------------------------------------------------------------------
 
-    private class Round(val before: LocalState, val snap: Snapshot) {
+    private class Round(val before: LocalState, var snap: Snapshot) {
         var serverDayStartHour: Int? = null
         var applied = 0
         var refetchAll = false
         val touched = mutableSetOf<Habit>()
         var listChanged = false
+
+        /** Entries read before their habit, which any edit to it moves later in the feed. */
+        val early = mutableListOf<JSONObject>()
+
+        /** Reminders that no longer have anything to ask: answered or deleted elsewhere. */
+        val settled = mutableSetOf<Habit>()
     }
 
     private fun sync(): String {
         val api = XrnSyncApi(settings.url, settings.user, settings.password)
+        val before = readLocal()
+        val round = Round(before, agreed(before))
+        try {
+            var sent = push(api, round)
+            if (!pull(api, round)) {
+                // The server went back or was wiped: it may have lost anything we've sent.
+                round.snap = Snapshot.fresh(round.snap.server)
+                sent += push(api, round)
+                pull(api, round)
+            }
+            if (round.refetchAll) {
+                round.snap.seq = 0
+                pull(api, round)
+            }
+            if (!round.snap.initialized) {
+                round.snap.initialized = true
+                round.snap.save(snapshotFile)
+            }
+            feedSeq = round.snap.seq
+            // Loop's "Extend the day past midnight": the web app and the laptop need it to agree on "today".
+            val dayStart = preferences.midnightDelayHours
+            if (round.serverDayStartHour != null && round.serverDayStartHour != dayStart) {
+                api.push(JSONObject().put("dayStartHour", dayStart).put("habits", JSONArray()).put("entries", JSONArray()))
+            }
+            return "Sent $sent, received ${round.applied}"
+        } finally {
+            // Even if the round failed: the next one won't see these as new, so it's now or never.
+            round.touched.forEach { it.recompute() }
+            if (round.touched.isNotEmpty() || round.listChanged) {
+                habitList.resort()
+                main.post {
+                    round.settled.forEach(notificationTray::cancel)
+                    commandRunner.notifyListeners(SyncedFromServer)
+                }
+            }
+        }
+    }
+
+    /**
+     * The snapshot to diff against, or a blank one if it can't be trusted, which makes this a
+     * first sync ("fill gaps"): nothing is deleted and neither side's data is overwritten.
+     * It says what one account on one server agreed to, so it means nothing for another; and a
+     * list that's empty while the snapshot isn't means the database was lost or replaced
+     * (HabitsApplication starts a new one when it can't open the old), not that every habit was
+     * deleted here. Sending that as deletions would empty the web app and xrnrule too.
+     */
+    private fun agreed(before: LocalState): Snapshot {
+        val server = "${settings.url}\n${settings.user}"
         val snap = Snapshot.load(snapshotFile)
-        val round = Round(readLocal(), snap)
-        val sent = push(api, round)
-        pull(api, round)
-        if (round.refetchAll) {
-            snap.seq = 0
-            pull(api, round)
+        val otherServer = snap.server != null && snap.server != server
+        val databaseLost = before.habits.isEmpty() && snap.habits.isNotEmpty()
+        if (otherServer || databaseLost) {
+            Log.w(TAG, "starting over: otherServer=$otherServer databaseLost=$databaseLost")
+            return Snapshot.fresh(server)
         }
-        snap.initialized = true
-        snap.save(snapshotFile)
-        feedSeq = snap.seq
-        // Loop's "Extend the day past midnight": the web app and the laptop need it to agree on "today".
-        val dayStart = preferences.midnightDelayHours
-        if (round.serverDayStartHour != null && round.serverDayStartHour != dayStart) {
-            api.push(JSONObject().put("dayStartHour", dayStart).put("habits", JSONArray()).put("entries", JSONArray()))
-        }
-        round.touched.forEach { it.recompute() }
-        if (round.touched.isNotEmpty() || round.listChanged) {
-            habitList.resort()
-            main.post { commandRunner.notifyListeners(SyncedFromServer) }
-        }
-        return "Sent $sent, received ${round.applied}"
+        snap.server = server
+        return snap
     }
 
     private fun push(api: XrnSyncApi, round: Round): Int {
@@ -296,7 +349,11 @@ class XrnSync(
         val habits = mutableListOf<HabitRecord>()
         for ((uuid, data) in before.habits) {
             val old = snap.habits[uuid]
-            if (old?.data != data) habits += HabitRecord(uuid, data, stamp(old?.mtime), deleted = false)
+            if (old?.data == data) continue
+            // Only the order moved (Loop renumbers whenever a habit is added or removed), so this
+            // is no newer than what was agreed: an edit from elsewhere since then must beat it.
+            val reordered = old != null && old.data.copy(position = data.position) == data
+            habits += HabitRecord(uuid, data, if (reordered) old!!.mtime + 1 else stamp(old?.mtime), deleted = false)
         }
         for ((uuid, old) in snap.habits) {
             if (uuid !in before.habits) habits += HabitRecord(uuid, old.data, stamp(old.mtime), deleted = true)
@@ -344,15 +401,29 @@ class XrnSync(
         return habits.size + entries.size
     }
 
-    private fun pull(api: XrnSyncApi, round: Round) {
+    /** Reads the feed to its end; false, with nothing read, if the server has started over. */
+    private fun pull(api: XrnSyncApi, round: Round): Boolean {
         val snap = round.snap
+        var safeSeq = snap.seq
         do {
-            val page = api.pull(snap.seq)
+            val page = api.pull(snap.seq, epoch = snap.epoch)
+            val epoch = if (page.has("epoch")) page.getLong("epoch") else null
+            if (epoch != null && snap.epoch != null && epoch != snap.epoch) return false
+            snap.epoch = epoch ?: snap.epoch
             applyRemote(page.getJSONArray("habits"), page.getJSONArray("entries"), round)
             snap.seq = page.getLong("seq")
             if (page.has("dayStartHour")) round.serverDayStartHour = page.getInt("dayStartHour")
-            snap.save(snapshotFile)
+            // The saved cursor stays behind anything still waiting for its habit, so a failure
+            // on a later page reads it again instead of losing it.
+            if (round.early.isEmpty()) safeSeq = snap.seq
+            if (page.optBoolean("more")) snap.save(snapshotFile, safeSeq)
         } while (page.optBoolean("more"))
+        val early = round.early.toList()
+        round.early.clear()
+        applyRemote(JSONArray(), JSONArray(early), round)
+        round.early.clear() // still no habit: it's gone, and its entries with it
+        snap.save(snapshotFile)
+        return true
     }
 
     private fun applyRemote(habits: JSONArray, entries: JSONArray, round: Round) {
@@ -372,9 +443,11 @@ class XrnSync(
             if (h.optBoolean("deleted")) {
                 if (current != null) {
                     DeleteHabitsCommand(habitList, listOf(current)).run()
+                    round.settled += current
                     round.listChanged = true
                     round.applied++
                 }
+                before.habits.remove(uuid)
                 snap.habits.remove(uuid)
                 snap.entries.keys.removeAll { it.startsWith("$uuid|") }
                 continue
@@ -397,30 +470,41 @@ class XrnSync(
                 round.listChanged = true
                 round.applied++
             }
+            // What we just applied isn't a change "made here" if a newer version follows it.
+            habitList.getByUUID(uuid)?.let { before.habits[uuid] = HabitData.of(it) }
             snap.habits[uuid] = Stamped(data, mtime)
         }
+        // Written per habit once they're all read: one commit each, however long the history.
+        val incoming = mutableMapOf<EntryList, MutableList<Entry>>()
         for (e in entries.objects()) {
             val uuid = e.getString("habit")
             val date = e.getString("date")
             val key = "$uuid|$date"
-            val habit = habitList.getByUUID(uuid) ?: continue
+            val habit = habitList.getByUUID(uuid)
+            if (habit == null) {
+                round.early += e
+                continue
+            }
             val day = parseDate(date) ?: continue
             val remote = EntryData(e.getInt("value"), e.optString("notes"))
             val stored = habit.originalEntries.get(day)
             val current = EntryData(stored.value, stored.notes)
             if (current != (before.entries[key] ?: EntryData.EMPTY)) continue // changed here meanwhile
             if (current != remote) {
-                habit.originalEntries.add(Entry(day, remote.value, remote.notes))
+                incoming.getOrPut(habit.originalEntries) { mutableListOf() } += Entry(day, remote.value, remote.notes)
                 round.touched += habit
+                if (day == getToday()) round.settled += habit
                 round.applied++
+                before.entries[key] = remote
             }
             snap.entries[key] = Stamped(remote, e.getLong("mtime"))
         }
+        for ((list, batch) in incoming) list.addAll(batch)
     }
 
     // ---- local state -------------------------------------------------------------------
 
-    private class LocalState(val habits: Map<String, HabitData>, val entries: Map<String, EntryData>)
+    private class LocalState(val habits: MutableMap<String, HabitData>, val entries: MutableMap<String, EntryData>)
 
     private fun readLocal(): LocalState {
         val habits = mutableMapOf<String, HabitData>()
@@ -452,7 +536,7 @@ class XrnSync(
          * passed), so a habit ticked in the web app since the last sync doesn't ring here; Loop
          * skips the reminder of a habit that's done. Without sync set up, runs it at once.
          */
-        fun beforeReminder(receiver: BroadcastReceiver, show: () -> Unit) {
+        fun beforeReminder(receiver: BroadcastReceiver, habit: Habit, show: () -> Unit) {
             val sync = instance
             if (sync == null || !sync.settings.isConfigured) return show()
             val pending = receiver.goAsync()
@@ -460,7 +544,10 @@ class XrnSync(
                 sync.syncBlocking(REMINDER_SYNC_MS)
                 sync.main.post {
                     try {
-                        show()
+                        // Deleted by that sync: the object we were handed doesn't know.
+                        if (sync.habitList.getByUUID(habit.uuid) != null) show()
+                    } catch (e: RuntimeException) {
+                        Log.e(TAG, "couldn't show a reminder", e) // as ReminderReceiver does
                     } finally {
                         pending.finish()
                     }
@@ -612,25 +699,39 @@ private class Snapshot(
     var seq: Long,
     var initialized: Boolean,
     val habits: MutableMap<String, Stamped<HabitData>>,
-    val entries: MutableMap<String, Stamped<EntryData>>
+    val entries: MutableMap<String, Stamped<EntryData>>,
+    /** The url and user this was agreed with; null in a snapshot from before it was kept. */
+    var server: String? = null,
+    /** The server's history this cursor belongs to; a new one means it went back. */
+    var epoch: Long? = null
 ) {
-    fun save(file: File) {
+    /** The file as last read or written: most rounds change nothing, and then don't touch it. */
+    private var onDisk: String? = null
+
+    fun save(file: File, cursor: Long = seq) {
         val h = JSONObject()
         for ((uuid, s) in habits) h.put(uuid, JSONObject().put("d", s.data.toJson()).put("m", s.mtime))
         val e = JSONObject()
         for ((key, s) in entries) e.put(key, JSONArray().put(s.data.value).put(s.data.notes).put(s.mtime))
-        val json = JSONObject().put("seq", seq).put("initialized", initialized).put("habits", h).put("entries", e)
+        val json = JSONObject().put("seq", cursor).put("initialized", initialized).put("habits", h).put("entries", e)
+            .put("server", server ?: JSONObject.NULL).put("epoch", epoch ?: JSONObject.NULL)
+        val text = json.toString()
+        if (text == onDisk) return
         val tmp = File(file.path + ".tmp")
-        tmp.writeText(json.toString())
+        tmp.writeText(text)
         if (!tmp.renameTo(file)) throw IOException("can't replace $file")
+        onDisk = text
     }
 
     companion object {
+        fun fresh(server: String?) = Snapshot(0, false, mutableMapOf(), mutableMapOf(), server)
+
         fun load(file: File): Snapshot {
-            val empty = Snapshot(0, false, mutableMapOf(), mutableMapOf())
+            val empty = fresh(null)
             if (!file.exists()) return empty
             return try {
-                val json = JSONObject(file.readText())
+                val text = file.readText()
+                val json = JSONObject(text)
                 val habits = mutableMapOf<String, Stamped<HabitData>>()
                 val h = json.getJSONObject("habits")
                 for (uuid in h.keys()) {
@@ -643,7 +744,14 @@ private class Snapshot(
                     val a = e.getJSONArray(key)
                     entries[key] = Stamped(EntryData(a.getInt(0), a.getString(1)), a.getLong(2))
                 }
-                Snapshot(json.getLong("seq"), json.getBoolean("initialized"), habits, entries)
+                Snapshot(
+                    json.getLong("seq"),
+                    json.getBoolean("initialized"),
+                    habits,
+                    entries,
+                    if (json.isNull("server")) null else json.optString("server"),
+                    if (json.isNull("epoch")) null else json.optLong("epoch")
+                ).also { it.onDisk = text }
             } catch (e: Exception) {
                 // An unreadable snapshot only costs a first-sync again ("fill gaps"), never data.
                 Log.w("XrnSync", "snapshot unreadable, starting over", e)

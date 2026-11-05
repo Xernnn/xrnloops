@@ -37,7 +37,6 @@ import org.isoron.uhabits.activities.AndroidThemeSwitcher
 import org.isoron.uhabits.activities.HabitsDirFinder
 import org.isoron.uhabits.activities.common.dialogs.ConfirmDeleteDialog
 import org.isoron.uhabits.activities.common.dialogs.HistoryEditorDialog
-import org.isoron.uhabits.activities.common.dialogs.NumberDialog
 import org.isoron.uhabits.core.commands.Command
 import org.isoron.uhabits.core.commands.CommandRunner
 import org.isoron.uhabits.core.models.Habit
@@ -176,15 +175,15 @@ class ShowHabitActivity : AppCompatActivity(), CommandRunner.Listener {
         override fun showNumberPopup(
             value: Double,
             notes: String,
+            habit: Habit,
+            date: LocalDate,
             callback: NumberPickerCallback
         ) {
-            val dialog = NumberDialog()
-            dialog.arguments = Bundle().apply {
-                putDouble("value", value)
-                putString("notes", notes)
+            // xrnloops: the same sheet as a yes/no day, in place of Loop's number box (XRNLOOPS.md)
+            val color = view.currentTheme().color(habit.color).toInt()
+            NoteSheet.showNumber(this@ShowHabitActivity, habit, date, color, value, notes) { v, n ->
+                callback.onNumberPicked(v, n)
             }
-            dialog.onToggle = { v, n -> callback.onNumberPicked(v, n) }
-            dialog.dismissCurrentAndShow(supportFragmentManager, "numberDialog")
         }
 
         override fun showCheckmarkPopup(

@@ -93,7 +93,7 @@ class HabitsApplication : Application() {
         XrnruleLinks(context).start(this)
         xrnruleNotifier.startListening()
         registerActivityLifecycleCallbacks(TodayRefresher(component.midnightTimer))
-        XrnSync(context, habitList, component.modelFactory, component.commandRunner, component.preferences).start(this)
+        XrnSync(context, habitList, component.modelFactory, component.commandRunner, component.preferences, notificationTray).start(this)
         ready = true
 
         val taskRunner = component.taskRunner

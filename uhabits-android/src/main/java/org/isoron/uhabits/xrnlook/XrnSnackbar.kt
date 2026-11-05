@@ -20,6 +20,8 @@
 package org.isoron.uhabits.xrnlook
 
 import android.app.Activity
+import android.content.Context
+import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
@@ -42,13 +44,8 @@ object XrnSnackbar {
         } catch (e: IllegalArgumentException) {
             return null
         }
-        val dark = ColorUtils.calculateLuminance(StyledResources(activity).getColor(R.attr.cardBgColor)) < 0.5
+        style(bar)
         val green = ContextCompat.getColor(activity, R.color.xrn_green)
-        bar.setBackgroundTint(if (dark) 0xFF3F3F46.toInt() else 0xFF27272A.toInt())
-        bar.setTextColor(0xFFF4F4F5.toInt())
-        bar.setActionTextColor(green)
-        // Sentence case, like the rest of the xrn look.
-        bar.view.findViewById<Button>(com.google.android.material.R.id.snackbar_action)?.isAllCaps = false
         if (icon != null) {
             bar.view.findViewById<TextView>(com.google.android.material.R.id.snackbar_text)?.apply {
                 val drawable = AppCompatResources.getDrawable(activity, icon)?.mutate()
@@ -61,4 +58,22 @@ object XrnSnackbar {
         }
         return bar
     }
+
+    /** Every message at the bottom of a screen goes through here, Loop's own included. */
+    fun style(bar: Snackbar) {
+        val dp = bar.context.resources.displayMetrics.density
+        bar.view.background = GradientDrawable().apply { cornerRadius = 16 * dp }
+        bar.setBackgroundTint(surface(bar.context))
+        bar.setTextColor(TEXT)
+        bar.setActionTextColor(ContextCompat.getColor(bar.context, R.color.xrn_green))
+        // Sentence case, like the rest of the xrn look.
+        bar.view.findViewById<Button>(com.google.android.material.R.id.snackbar_action)?.isAllCaps = false
+    }
+
+    fun surface(context: Context): Int {
+        val dark = ColorUtils.calculateLuminance(StyledResources(context).getColor(R.attr.cardBgColor)) < 0.5
+        return if (dark) 0xFF3F3F46.toInt() else 0xFF27272A.toInt()
+    }
+
+    const val TEXT = 0xFFF4F4F5.toInt()
 }

@@ -308,21 +308,7 @@
             android:label="@string/xrnwelcome_menu"
             android:theme="@style/XrnTheme" />
 
-        <!-- xrnrule: open one habit's page by uuid, signature-protected (XRNLOOPS.md). -->
-        <activity
-            android:name=".xrnrule.OpenHabitActivity"
-            android:excludeFromRecents="true"
-            android:exported="true"
-            android:noHistory="true"
-            android:permission="com.xern.xrnrule.permission.HABITS"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar">
-            <intent-filter>
-                <action android:name="com.xern.xrnrule.action.OPEN_HABIT" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
-
-        <!-- xrnrule: read-only habit status, signature-protected (XRNLOOPS.md). -->
+        <!-- xrnrule: asks for a sync, signature-protected (XRNLOOPS.md). -->
         <provider
             android:name=".xrnrule.XrnruleProvider"
             android:authorities="${applicationId}.provider"

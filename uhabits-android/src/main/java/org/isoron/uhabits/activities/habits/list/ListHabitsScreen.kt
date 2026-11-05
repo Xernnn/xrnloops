@@ -22,7 +22,6 @@ package org.isoron.uhabits.activities.habits.list
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.os.Bundle
 import android.provider.Settings
 import androidx.appcompat.app.AppCompatActivity
 import me.tatarka.inject.annotations.Inject
@@ -35,7 +34,6 @@ import org.isoron.platform.time.LocalDate
 import org.isoron.uhabits.R
 import org.isoron.uhabits.activities.common.dialogs.ColorPickerDialogFactory
 import org.isoron.uhabits.activities.common.dialogs.ConfirmDeleteDialog
-import org.isoron.uhabits.activities.common.dialogs.NumberDialog
 import org.isoron.uhabits.activities.habits.edit.HabitTypeDialog
 import org.isoron.uhabits.activities.habits.list.views.HabitCardListAdapter
 import org.isoron.uhabits.core.commands.ArchiveHabitsCommand
@@ -272,16 +270,15 @@ class ListHabitsScreen(
     override fun showNumberPopup(
         value: Double,
         notes: String,
+        habit: Habit,
+        date: LocalDate,
         callback: NumberPickerCallback
     ) {
-        val fm = (context as AppCompatActivity).supportFragmentManager
-        val dialog = NumberDialog()
-        dialog.arguments = Bundle().apply {
-            putDouble("value", value)
-            putString("notes", notes)
+        // xrnloops: the same sheet as a yes/no day, in place of Loop's number box (XRNLOOPS.md)
+        val color = rootView.value.currentTheme().color(habit.color).toInt()
+        NoteSheet.showNumber(activity, habit, date, color, value, notes) { v, n ->
+            callback.onNumberPicked(v, n)
         }
-        dialog.onToggle = { v, n -> callback.onNumberPicked(v, n) }
-        dialog.dismissCurrentAndShow(fm, "numberDialog")
     }
 
     override fun showCheckmarkPopup(

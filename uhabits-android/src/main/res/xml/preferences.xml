@@ -206,12 +206,6 @@
         </Preference>
 
         <Preference
-                android:key="rateApp"
-                android:title="@string/pref_rate_this_app"
-                app:iconSpaceReserved="false">
-        </Preference>
-
-        <Preference
                 android:title="@string/about"
                 app:iconSpaceReserved="false">
             <intent

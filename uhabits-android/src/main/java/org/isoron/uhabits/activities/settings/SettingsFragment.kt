@@ -53,6 +53,7 @@ import org.isoron.uhabits.utils.StyledResources
 import org.isoron.uhabits.utils.applyBottomInset
 import org.isoron.uhabits.utils.startActivitySafely
 import org.isoron.uhabits.widgets.WidgetUpdater
+import org.isoron.uhabits.xrnlook.XrnSettingsCards
 import org.isoron.uhabits.xrnsync.XrnSyncPreferences
 import org.isoron.uhabits.xrntap.XrnTap
 import java.util.Locale
@@ -112,8 +113,9 @@ class SettingsFragment : PreferenceFragmentCompat(), OnSharedPreferenceChangeLis
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val sr = StyledResources(context!!)
-        view.setBackgroundColor(sr.getColor(R.attr.contrast0))
+        view.setBackgroundColor(sr.getColor(R.attr.windowBackgroundColor)) // xrnloops: cards on the page
         super.onViewCreated(view, savedInstanceState)
+        listView.addItemDecoration(XrnSettingsCards(requireContext())) // xrnloops (XRNLOOPS.md)
     }
 
     override fun onCreateRecyclerView(

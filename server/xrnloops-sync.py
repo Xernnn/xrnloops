@@ -9,8 +9,8 @@
 # WARRANTY; see the GNU General Public License for more details: <http://www.gnu.org/licenses/>.
 """xrnloops sync server: habits and their daily entries, behind HTTP Basic auth.
 
-The phone's xrnloops and the web app (served from `web/`) both read and write here; the
-laptop's xrnrule asks `/api/status` which habits are done. Made to run on a small home server
+The phone's xrnloops and the web app (served from `web/`) both read and write here, and xrnrule
+on the phone and the laptop reads the same feed. Made to run on a small home server
 next to Radicale, published under a path (e.g. /xrnloops) by a reverse proxy such as Tailscale
 Funnel. Standard library only, plus `bcrypt` to read an htpasswd file (Radicale's works as-is).
 
@@ -35,10 +35,6 @@ leaves out, so an older client (xrnloops) can't wipe fields it doesn't know (`ic
                                midnight" setting, the hour its new day starts (0 or 3).
     GET  /api/changes?since=N[&epoch=E] -> {"seq", "more", "habits": [...], "entries": [...], "dayStartHour", "epoch"}
                                &wait=S long-polls up to S seconds for something newer.
-    GET  /api/status?date=YYYY-MM-DD
-                               -> per habit: done / goal_met / daily / countable, with the
-                               meaning of XrnruleProvider in the Android app; and
-                               dayStartHour, so the laptop asks for Loop's day, not the date.
     POST /api/session          with Basic auth: sets the web app's login cookie (below)
     DELETE /api/session        signs the browser out
     GET  /health               200 "ok", no login (for monitoring)
@@ -69,11 +65,11 @@ store the amount x1000.
 """
 import argparse
 import base64
-import calendar
 import gzip
 import hashlib
 import hmac
 import json
+import math
 import mimetypes
 import os
 import re
@@ -83,7 +79,7 @@ import sys
 import threading
 import time
 import zlib
-from datetime import date, timedelta
+from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs
 
@@ -98,9 +94,8 @@ PREFIX = "/xrnloops"
 SESSION_COOKIE = "xrn_session"
 SESSION_S = 30 * 86400
 
-UNKNOWN, NO, YES_AUTO, YES_MANUAL, SKIP = -1, 0, 1, 2, 3
-YES_NO, NUMERICAL = 0, 1
-AT_LEAST, AT_MOST = 0, 1
+YES_NO = 0
+AT_LEAST = 0
 
 args = None
 auth_cache = {}  # sha256(user:password) -> (user, expires, users-file mtime)
@@ -141,12 +136,13 @@ def users_mtime():
 
 
 def client_address(handler):
-    """The caller's address. Behind the local proxy (Funnel) that's the first X-Forwarded-For hop;
-    the header is only trusted from a loopback peer, since anyone else could make it up."""
+    """The caller's address. Behind the local proxy (Funnel) that's the last X-Forwarded-For hop,
+    the one the proxy added: anything before it came from the caller, who could make up a new
+    address for every password guess. Only trusted from a loopback peer, for the same reason."""
     peer = handler.client_address[0]
     forwarded = handler.headers.get("X-Forwarded-For")
     if forwarded and peer in ("127.0.0.1", "::1"):
-        return forwarded.split(",")[0].strip()
+        return forwarded.split(",")[-1].strip()
     return peer
 
 
@@ -257,9 +253,12 @@ def check_session(cookie_header):
     except ValueError:  # also a bad base64 or UTF-8
         return None
     tag = password_tag(user)
-    if tag is None or not hmac.compare_digest(session_mac(f"{who}.{expires}", tag), mac):
+    if tag is None:
         return None
-    return user
+    try:
+        return user if hmac.compare_digest(session_mac(f"{who}.{expires}", tag), mac) else None
+    except TypeError:  # a mac that isn't ASCII
+        return None
 
 
 def session_cookie(value, max_age):
@@ -306,8 +305,10 @@ def clean_habit_data(data):
             value = int(value)
         elif isinstance(default, float):
             value = float(value)
+            if not math.isfinite(value):  # it would go back out as JSON no browser can read
+                raise ValueError(f"{key} must be a number")
         else:
-            value = str(value)
+            value = "" if value is None else str(value)
         out[key] = value
     if out["freqNum"] <= 0 or out["freqDen"] <= 0:
         raise ValueError("frequency must be positive")
@@ -507,22 +508,6 @@ class Store:
             return {"seq": upto, "more": upto < latest, "habits": habits, "entries": entries,
                     "dayStartHour": self.day_start_hour(), "epoch": current}
 
-    def status(self, day):
-        with self.lock:
-            rows = self.db.execute("SELECT uuid, data FROM habits WHERE deleted=0").fetchall()
-            out = []
-            for uuid, data in rows:
-                habit = json.loads(data)
-                entries = {
-                    parse_day(d): v
-                    for d, v in self.db.execute("SELECT date, value FROM entries WHERE habit=?", (uuid,))
-                }
-                out.append({"uuid": uuid, "name": habit["name"], "position": habit["position"],
-                            "archived": habit["archived"], "numerical": habit["type"] == NUMERICAL,
-                            **habit_status(habit, entries, day)})
-            out.sort(key=lambda h: (h["position"], h["name"]))
-            return {"date": day.isoformat(), "seq": self.seq(), "dayStartHour": self.day_start_hour(), "habits": out}
-
 
 def store_for(user):
     with stores_lock:
@@ -531,101 +516,14 @@ def store_for(user):
         return stores[user]
 
 
-# ---- Loop's rules, ported from uhabits-core (EntryList, XrnruleProvider) ---------------
-
-def month_length(d):
-    return calendar.monthrange(d.year, d.month)[1]
-
-
-def normalized_frequency(num, den):
-    return (1, 1) if num == den else (num, den)
-
-
-def build_intervals(num, den, entries):
-    """EntryList.buildIntervals. `entries` is newest first, as (date, value)."""
-    filtered = [d for d, v in entries if v == YES_MANUAL]
-    intervals = []
-    for i in range(num - 1, len(filtered)):
-        begin = filtered[i]
-        center = filtered[i - num + 1]
-        size = den
-        if den in (30, 31):
-            size = month_length(begin + timedelta(days=1)) if begin.day == month_length(begin) else month_length(begin)
-        if (center - begin).days < size:
-            intervals.append([begin, center, begin + timedelta(days=size - 1)])
-    return intervals
-
-
-def snap_intervals_together(intervals):
-    """EntryList.snapIntervalsTogether, in place."""
-    for i in range(1, len(intervals)):
-        begin, center, end = intervals[i]
-        nxt_begin = intervals[i - 1][0]
-        gap_next_to_current = (end - nxt_begin).days
-        gap_center_to_end = (end - center).days
-        if gap_next_to_current >= 0:
-            shift = min(gap_center_to_end, gap_next_to_current + 1)
-            intervals[i] = [begin - timedelta(days=shift), center, end - timedelta(days=shift)]
-
-
-def build_entries_from_intervals(original, intervals):
-    """EntryList.buildEntriesFromInterval, as {date: value} with UNKNOWN days left in."""
-    if not original:
-        return {}
-    days = [d for d, _ in original]
-    lo = min(days + [iv[0] for iv in intervals])
-    hi = max(days + [iv[2] for iv in intervals])
-    result = {}
-    current = lo
-    while current <= hi:
-        result[current] = UNKNOWN
-        current += timedelta(days=1)
-    for begin, _, end in intervals:
-        current = begin
-        while current <= end:
-            result[current] = YES_AUTO
-            current += timedelta(days=1)
-    for d, v in original:
-        result[d] = v if result[d] == UNKNOWN or v in (SKIP, YES_MANUAL) else YES_AUTO
-    return result
-
-
-def computed_entries(habit, entries):
-    """Habit.computedEntries for a yes/no habit: what the user entered plus Loop's auto-checks."""
-    if habit["type"] == NUMERICAL:
-        return dict(entries)
-    num, den = normalized_frequency(habit["freqNum"], habit["freqDen"])
-    original = sorted(entries.items(), reverse=True)
-    intervals = build_intervals(num, den, original)
-    snap_intervals_together(intervals)
-    return {d: v for d, v in build_entries_from_intervals(original, intervals).items() if v != UNKNOWN}
-
-
-def habit_status(habit, entries, day):
-    numerical = habit["type"] == NUMERICAL
-    countable = not numerical or habit["targetType"] == AT_LEAST
-    value = entries.get(day, UNKNOWN)
-    if value == UNKNOWN:
-        done = False
-    elif numerical:
-        done = countable and value / 1000.0 >= habit["targetValue"]
-    else:
-        done = value == YES_MANUAL
-    if numerical:
-        goal_met = done
-    else:
-        goal_met = computed_entries(habit, entries).get(day, UNKNOWN) in (YES_MANUAL, YES_AUTO)
-    num, den = normalized_frequency(habit["freqNum"], habit["freqDen"])
-    return {"countable": countable, "done": done, "goal_met": goal_met, "daily": numerical or num == den}
-
-
 # ---- HTTP ----------------------------------------------------------------------------------
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "xrnloops-sync/1"
 
     def log_message(self, fmt, *a):
-        who = self.headers.get("X-Forwarded-For", self.client_address[0]) if self.headers else "-"
+        headers = getattr(self, "headers", None)  # none yet on a request line that didn't parse
+        who = headers.get("X-Forwarded-For", self.client_address[0]) if headers else "-"
         sys.stderr.write(f"{who} {fmt % a}\n")
 
     def route(self):
@@ -637,16 +535,18 @@ class Handler(BaseHTTPRequestHandler):
     def send(self, code, body=b"", ctype="text/plain; charset=utf-8", headers=None):
         if isinstance(body, str):
             body = body.encode()
-        if len(body) > 1024 and "gzip" in (self.headers.get("Accept-Encoding") or ""):
+        headers = {"Cache-Control": "no-store", **(headers or {})}
+        worth_packing = len(body) > 1024 and not ctype.startswith("font/")  # woff2 is packed already
+        if worth_packing and "gzip" in (self.headers.get("Accept-Encoding") or ""):
             body = gzip.compress(body, 6)
-            headers = {**(headers or {}), "Content-Encoding": "gzip"}
+            headers["Content-Encoding"] = "gzip"
         self.send_response(code)
-        self.send_header("Cache-Control", "no-store")
         for k, v in SECURITY_HEADERS.items():
             self.send_header(k, v)
-        self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(body)))
-        for k, v in (headers or {}).items():
+        if code != 304:
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+        for k, v in headers.items():
             self.send_header(k, v)
         self.end_headers()
         if self.command != "HEAD":
@@ -715,14 +615,15 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/changes":
                 since = int(query.get("since", 0))
                 wait = float(query.get("wait", 0))
+                if not math.isfinite(wait):
+                    raise ValueError("wait must be a number")
                 epoch = int(query["epoch"]) if "epoch" in query else None
                 return self.send_json(store.changes(since, wait, epoch))
-            if path == "/api/status":
-                day = parse_day(query["date"]) if "date" in query else date.today()
-                return self.send_json(store.status(day))
-        except (KeyError, ValueError) as e:
+        except (KeyError, ValueError, OverflowError) as e:
             return self.send(400, f"bad request: {e}")
         self.send(404, "not found")
+
+    do_HEAD = do_GET
 
     def do_POST(self):
         path, _ = self.route()
@@ -743,7 +644,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             body = self.read_json()
             result = store_for(user).apply(body)
-        except (KeyError, ValueError, TypeError) as e:
+        except (KeyError, ValueError, TypeError, OverflowError) as e:
             return self.send(400, f"bad request: {e}")
         except (OSError, sqlite3.Error) as e:
             sys.stderr.write(f"write failed: {e!r}\n")
@@ -765,12 +666,21 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(404, "not found")
         with open(file, "rb") as f:
             data = f.read()
+        if name == "index.html":  # read here each time, so its scripts' hashes are too
+            SECURITY_HEADERS["Content-Security-Policy"] = content_policy(args.web)
         ctype = mimetypes.guess_type(file)[0] or "application/octet-stream"
         if file.endswith(".webmanifest"):
             ctype = "application/manifest+json"
         if ctype.startswith("text/") or ctype in ("application/javascript", "application/json", "image/svg+xml"):
             ctype += "; charset=utf-8"
-        self.send(200, data, ctype)
+        # A font never changes under one name. Anything else may with a deploy, so the browser
+        # asks each time, which costs a 304 instead of the file.
+        tag = '"' + hashlib.sha256(data).hexdigest()[:32] + '"'
+        cache = "public, max-age=2592000" if name.startswith("fonts/") else "no-cache"
+        headers = {"ETag": tag, "Cache-Control": cache, "Vary": "Accept-Encoding"}
+        if tag in (self.headers.get("If-None-Match") or ""):
+            return self.send(304, headers=headers)
+        self.send(200, data, ctype, headers)
 
 
 def main():

@@ -24,6 +24,7 @@ const BASE = new URL(".", location.href);
 const KEY_SIGNED_IN = "xrn.signedIn"; // a hint only: whether to try the cookie or show the form
 const KEY_OLD_AUTH = "xrnloops.auth"; // the password, as this page kept it before the cookie
 const KEY_PENDING = "xrnloops.pending";
+const KEY_QUEUE_OWNER = "xrnloops.pendingOwner";
 const KEY_DAY_START = "xrnloops.dayStartHour";
 const KEY_PREFS = "xrnloops.prefs";
 
@@ -47,6 +48,7 @@ const state = {
 };
 
 const summaries = new Map(); // uuid -> L.summarize(...), dropped when that habit changes
+let summariesDay = null;
 L.setDayStartHour(load(KEY_DAY_START, 0)); // the server confirms it with the first page
 
 // ---- small helpers ----------------------------------------------------------------------
@@ -107,7 +109,15 @@ const weekdayShort = new Intl.DateTimeFormat(undefined, { weekday: "short", time
 const dateLong = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const dateDay = new Intl.DateTimeFormat(undefined, { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
 const monthShort = new Intl.DateTimeFormat(undefined, { month: "short", timeZone: "UTC" });
-const timeShort = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+const timeShort = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+const dayShort = new Intl.DateTimeFormat(undefined, { weekday: "short" });
+
+/** "19:41", or "Fri 00:30" for a time past today: how xrnrule writes one (XrnruleLinkSheet.clock). */
+function clock(ms) {
+  const at = new Date(ms);
+  const time = timeShort.format(at);
+  return at.toDateString() === new Date().toDateString() ? time : `${dayShort.format(at)} ${time}`;
+}
 
 /** An emoji-only name gets the phone's bigger glyphs. */
 const isEmojiName = (name) => !!name && !/[\p{L}\p{N}]/u.test(name);
@@ -156,7 +166,7 @@ function applyTheme() {
 
 darkQuery.addEventListener("change", () => {
   applyTheme();
-  render();
+  render(true); // the page's colours are CSS; a redraw of the editor would lose what's typed in it
 });
 
 // The phone's habit colours: Loop's on the light theme (its dark grey made xrn zinc), and Loop's
@@ -182,7 +192,7 @@ function onColor(hex) {
   const n = parseInt(hex.slice(1), 16);
   const lin = (c) => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
   const lum = 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
-  return lum > 0.45 ? "#18181B" : "#FFFFFF";
+  return lum > 0.19 ? "#18181B" : "#FFFFFF";
 }
 
 /** The colour custom properties a habit's parts read: --c, and --on-c for text on it. */
@@ -266,30 +276,32 @@ async function loadAll(gen) {
   state.habits = habits;
   state.entries = entries;
   summaries.clear();
-  let since = 0, more = true;
+  let since = 0, more = true, epoch;
   while (more) {
     const page = await api(`api/changes?since=${since}`);
     if (gen !== state.generation) return;
     ingest(page);
     since = page.seq;
     more = page.more;
+    epoch = page.epoch;
   }
   state.seq = since;
+  state.epoch = epoch; // only now: stopped halfway, the next poll has to start over again
   state.loaded = true;
 }
 
-/** A sleep that Retry (sync trouble) can cut short. */
-let wake = null;
+/** Sleeps that Retry (sync trouble) can cut short: sync's and the links watcher's. */
+const sleepers = new Set();
 
 function nap(ms) {
   return new Promise((resolve) => {
     const timer = setTimeout(done, ms);
     function done() {
       clearTimeout(timer);
-      if (wake === done) wake = null;
+      sleepers.delete(done);
       resolve();
     }
-    wake = done;
+    sleepers.add(done);
   });
 }
 
@@ -311,8 +323,14 @@ async function live(gen) {
   let failures = 0;
   while (gen === state.generation) {
     try {
-      const page = await api(`api/changes?since=${state.seq}&wait=25`);
+      const epoch = state.epoch == null ? "" : `&epoch=${state.epoch}`;
+      const page = await api(`api/changes?since=${state.seq}&wait=25${epoch}`);
       if (gen !== state.generation) return;
+      if (page.epoch !== state.epoch) { // restored from a backup: what's here is another history
+        await loadAll(gen);
+        render(true);
+        continue;
+      }
       const changed = ingest(page);
       state.seq = page.seq;
       failures = 0;
@@ -404,6 +422,24 @@ async function flush() {
 
 window.addEventListener("online", flush);
 
+// Another tab's queue, so that this one's next save doesn't wipe it. Both tabs may send it, which
+// is harmless: the server settles a record it gets twice.
+window.addEventListener("storage", (e) => {
+  if (e.key === KEY_PENDING) state.pending = load(KEY_PENDING, { habits: [], entries: [] });
+});
+
+/** What's still queued is one account's: it must not go into the next one's data. */
+function claimQueue(user) {
+  const owner = load(KEY_QUEUE_OWNER, user);
+  const queued = state.pending.habits.length + state.pending.entries.length;
+  if (owner !== user && queued) {
+    state.pending = { habits: [], entries: [] };
+    save(KEY_PENDING, state.pending);
+    toast(`${queued} unsent ${queued === 1 ? "change" : "changes"} from ${owner} dropped`);
+  }
+  save(KEY_QUEUE_OWNER, user);
+}
+
 // ---- auth ----------------------------------------------------------------------------------
 
 /** Trades a password ("Basic …") for the login cookie. */
@@ -423,6 +459,7 @@ async function session(basic) {
 async function signIn(user, password) {
   try {
     await session("Basic " + btoa(unescape(encodeURIComponent(`${user}:${password}`))));
+    claimQueue(user);
     await start();
     state.loginError = "";
   } catch (e) {
@@ -514,6 +551,7 @@ async function watchLinks(gen) {
       links.etag = res.headers.get("ETag");
       setLinks(linkRows(await res.json()));
       failures = 0;
+      if (!links.etag) await nap(30000); // nothing to wait on: this would answer at once, for ever
     } catch {
       if (gen !== state.generation) return;
       // xrnrule's server may be down, or not set up: the lines stay as they were, quietly.
@@ -540,20 +578,25 @@ function orderedLinks(list) {
 /** How a block stands, in words (the phone's XrnruleLinkSheet.status). */
 function linkStatus(link) {
   if (link.state === "open") {
-    if (link.selfPaced) return `Open · ${minutes(Math.ceil(link.useLeftMs / 60000))} left`;
-    if (link.openUntil > 0) return `Open till ${timeShort.format(new Date(link.openUntil))}`;
+    if (link.selfPaced) return `Open · ${minutes(Math.ceil(link.useLeftMs / 60000))} of use left`;
+    if (link.openUntil > 0) return `Open until ${clock(link.openUntil)}`;
     return "Open";
   }
-  if (link.state === "ready") return `Earned · ${minutes(link.unlockMinutes)} to open`;
+  if (link.state === "ready") return `Ready to open · ${minutes(link.unlockMinutes)}`;
   return link.habitDone ? "Locked · this part is done, it needs more" : `Locked · unlocks ${minutes(link.unlockMinutes)}`;
 }
 
-/** The phone's XrnruleLinkBadge.paint: its shape and colour say how the block stands, with no words. */
+/**
+ * The phone's XrnruleLinkBadge.paint: xrnrule's colours for how a block stands, never the habit's.
+ * Red while it waits on this habit, grey once the habit has done its part, an amber bolt when
+ * there's an unlock to open, green while it's open.
+ */
 function lockClass(link) {
-  return "unlock" + (link.state === "ready" ? " ready" : link.state === "locked" && link.habitDone ? " waiting" : "");
+  const kind = link.state === "ready" ? " ready" : link.state === "open" ? " open" : link.habitDone ? " waiting" : "";
+  return "unlock" + kind;
 }
 
-const lockIcon = (link) => icon(link.state === "open" || link.state === "ready" ? "lockopen" : "lock");
+const lockIcon = (link) => icon(link.state === "ready" ? "bolt" : link.state === "open" ? "lockopen" : "lock");
 
 /** A habit's lock, when a block uses it: a click shows the words, and only those go on to xrnrule. */
 function linkBadge(habit) {
@@ -622,7 +665,7 @@ function earnedBanner(news) {
   let text = kind === "earned" ? `Earned ${minutes(link.unlockMinutes)} of ${what}`
     : kind === "counted" ? `Counted towards ${what} · it needs more`
       : link.selfPaced ? `${what} is open · ${minutes(Math.ceil(link.useLeftMs / 60000))} left`
-        : link.openUntil > 0 ? `${what} is open till ${timeShort.format(new Date(link.openUntil))}`
+        : link.openUntil > 0 ? `${what} is open until ${clock(link.openUntil)}`
           : `${what} is open`;
   if (news.length > 1) text = `${text} (+${news.length - 1} more)`;
   toast(text, { icon: kind === "counted" ? "lock" : "lockopen", action: ["Open", openBlocks], ms: 5000 });
@@ -637,14 +680,22 @@ function visibleHabits() {
 }
 
 function summary(habit) {
+  const today = L.todayNum();
+  if (today !== summariesDay) { // each is worked out up to a day, and reads past it as nothing
+    summaries.clear();
+    summariesDay = today;
+  }
   let sm = summaries.get(habit.uuid);
   if (!sm) summaries.set(habit.uuid, (sm = L.summarize(habit, entriesOf(habit.uuid))));
   return sm;
 }
 
+/** A number habit's target for one day, as the phone's list has it (70 a week is 10 a day). */
+const dayTarget = (habit) => habit.data.targetValue / habit.data.freqDen;
+
 /** Whether an amount meets a number habit's target. */
 function meets(habit, amount) {
-  return habit.data.targetType === L.AT_MOST ? amount <= habit.data.targetValue : amount >= habit.data.targetValue;
+  return habit.data.targetType === L.AT_MOST ? amount <= dayTarget(habit) : amount >= dayTarget(habit);
 }
 
 // ---- rendering -----------------------------------------------------------------------------
@@ -711,22 +762,32 @@ window.addEventListener("hashchange", () => {
 
 // The list holds as many days as the window does; a habit page sizes its calendar.
 let layoutKey = "";
+
+function layoutNow() {
+  const lay = listLayout();
+  return `${lay.days}/${lay.cell}/${lay.nums}/${heatWeeks()}`;
+}
 let resizeQueued = false;
 window.addEventListener("resize", () => {
   if (resizeQueued) return;
   resizeQueued = true;
   requestAnimationFrame(() => {
     resizeQueued = false;
-    const lay = listLayout();
-    const key = `${lay.days}/${lay.cell}/${lay.nums}/${heatWeeks()}`;
-    if (key !== layoutKey) render();
+    if (layoutNow() !== layoutKey) render(true); // not the editor: that would lose what's typed in it
   });
 });
+
+/** Our glyph beside the wordmark, where xrnrule has its lock: the loop from the icon, in the accent. */
+function loopMark() {
+  return s("svg", { class: "mark", viewBox: "27 29 49 50", "aria-hidden": "true" },
+    s("path", { d: "M64.55,39.79 A19,19 0 1 1 39.93,35.89", fill: "none", stroke: "currentColor", "stroke-width": 10 }),
+    s("path", { d: "M49.26,30.06 L42.69,45.96 L32.09,29 Z", fill: "currentColor" }));
+}
 
 function topBar(page, ...right) {
   return h("header", { class: "bar" },
     h("div", { class: "wrap" },
-      h("h1", {}, h("a", { href: "#/", title: "All habits" }, h("img", { src: "icon.svg", alt: "" }), h("span", { class: "wordmark" }, "xrnloops"))),
+      h("h1", {}, h("a", { href: "#/", title: "All habits" }, loopMark(), h("span", { class: "wordmark" }, "xrnloops"))),
       page && h("span", { class: "page" }, page),
       h("span", { class: "spacer" }),
       h("span", { id: "sync", style: { display: "contents" } }),
@@ -765,7 +826,7 @@ function syncTrouble(anchor) {
       class: "btn primary", type: "button",
       onclick: () => {
         closePopover();
-        wake?.();
+        for (const wake of [...sleepers]) wake();
         flush();
       },
     }, "Retry")),
@@ -822,7 +883,7 @@ const weekOf = (day) => day - ((L.dayDate(day).getUTCDay() + 6) % 7);
 function listView() {
   const today = L.todayNum();
   const lay = listLayout();
-  layoutKey = `${lay.days}/${lay.cell}/${lay.nums}/${heatWeeks()}`;
+  layoutKey = layoutNow();
   const order = Array.from({ length: lay.days }, (_, i) => (prefs.todayRight ? today - (lay.days - 1 - i) : today - i));
   const gaps = order.map((d, i) => lay.days > 7 && i > 0 && weekOf(d) !== weekOf(order[i - 1]));
   const habits = visibleHabits();
@@ -1010,7 +1071,7 @@ function numberChoices(habit, date) {
   });
   return {
     center: { glyph: "question", tint: faint, label: "Clear", run: () => setDay(habit, date, L.UNKNOWN) },
-    up: amount(habit.data.targetValue),
+    up: amount(dayTarget(habit)),
     right: { icon: "dialpad", tint: faint, label: "Another amount", run: () => numberSheet(habit, date) },
     down: amount(0),
     left: { glyph: "minus", tint: c, label: "Skip", run: () => setDay(habit, date, L.SKIP) },
@@ -1038,10 +1099,16 @@ function dayGesture(el, habit, date) {
   };
   el.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || flick) return;
-    closePopover();
     const mouse = e.pointerType === "mouse";
     press = { el, id: e.pointerId, x: e.clientX, y: e.clientY, at: e.timeStamp, moved: false, mouse };
-    press.timer = setTimeout(() => press?.el === el && openFlick(el, choices(), false), HOLD_MS);
+    press.timer = setTimeout(() => {
+      if (press?.el !== el) return;
+      if (el.isConnected) return openFlick(el, choices(), false);
+      // Drawn over under the finger (a change of page, say): its pointerup will never come here.
+      press = null;
+      drawIfDeferred();
+    }, HOLD_MS);
+    closePopover(); // after `press`: closing it draws anything held back, unless a day is held
     el.classList.add("pressed");
     try {
       el.setPointerCapture(e.pointerId);
@@ -1237,7 +1304,9 @@ function daySheet(habit, date, { focusNote = false } = {}) {
   const originalNote = entry?.notes ?? "";
   const note = h("textarea", { value: originalNote, placeholder: "Note for this day", rows: 3 });
   const keepNote = () => {
-    if (note.value.trim() !== originalNote) writeEntry(habit.uuid, date, original, note.value.trim());
+    // The day as it is now: it may have been ticked elsewhere while this sheet was open.
+    const value = entriesOf(habit.uuid).get(date)?.value ?? original;
+    if (note.value.trim() !== originalNote) writeEntry(habit.uuid, date, value, note.value.trim());
   };
   const finish = (value) => {
     current.onClose = null;
@@ -1284,12 +1353,14 @@ function numberSheet(habit, date) {
     closeSheet();
     writeEntry(habit.uuid, date, stored, note.value.trim());
   };
-  const target = habit.data.targetValue;
+  const target = dayTarget(habit);
   const form = h("form", {
     style: { display: "grid", gap: "16px" },
     onsubmit: (e) => {
       e.preventDefault();
-      finish(amount.value === "" ? L.UNKNOWN : Math.round(Number(amount.value) * 1000));
+      // An empty box means no amount, not "undo the skip".
+      const empty = value === L.SKIP ? L.SKIP : L.UNKNOWN;
+      finish(amount.value === "" ? empty : Math.round(Number(amount.value) * 1000));
     },
   },
     h("div", { class: "amount-row" }, amount, habit.data.unit && h("span", {}, habit.data.unit)),
@@ -1368,7 +1439,7 @@ function habitView(habit) {
     ? L.formatNumber([...entries.values()].reduce((sum, e) => sum + (e.value > 0 && e.value !== L.SKIP ? e.value / 1000 : 0), 0))
     : [...entries.values()].filter((e) => e.value === L.YES_MANUAL).length;
   const name = habit.data.name || "Untitled";
-  layoutKey = (() => { const lay = listLayout(); return `${lay.days}/${lay.cell}/${lay.nums}/${heatWeeks()}`; })();
+  layoutKey = layoutNow();
 
   return h("div", {},
     topBar(null, h("a", { class: "link", href: "#/" }, "← Habits")),
@@ -1546,7 +1617,7 @@ function frequencyCard(habit, sm, today) {
     const m = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - (months - 1 - i), 1));
     return { y: m.getUTCFullYear(), m: m.getUTCMonth(), counts: Array(7).fill(0) };
   });
-  const firstDay = Date.UTC(cols[0].y, cols[0].m, 1) / 86400000 - 10957; // L.dayNum's numbering
+  const firstDay = Date.UTC(cols[0].y, cols[0].m, 1) / 86400000; // L.dayNum's numbering
   const numerical = habit.data.type === L.NUMERICAL;
   for (const [date, e] of entriesOf(habit.uuid)) {
     const day = L.dayNum(date);
@@ -1618,8 +1689,10 @@ function editView(habit, newType = L.YES_NO) {
 
   let freqFields;
   if (numerical) {
+    const pers = [[1, "per day"], [7, "per week"], [30, "per month"]];
+    if (!pers.some(([v]) => v === data.freqDen)) pers.push([data.freqDen, `per ${data.freqDen} days`]); // the phone can set any
     const per = h("select", { name: "per" },
-      [[1, "per day"], [7, "per week"], [30, "per month"]].map(([v, t]) => h("option", { value: v, selected: data.freqDen === v || (v === 30 && data.freqDen > 7) }, t)));
+      pers.map(([v, t]) => h("option", { value: v, selected: data.freqDen === v }, t)));
     freqFields = h("div", { class: "inline" },
       h("select", { name: "targetType" },
         h("option", { value: L.AT_LEAST, selected: data.targetType === L.AT_LEAST }, "At least"),
@@ -1660,8 +1733,8 @@ function editView(habit, newType = L.YES_NO) {
         out.targetType = Number(f.get("targetType"));
         out.targetValue = Number(f.get("targetValue"));
         out.unit = String(f.get("unit")).trim();
-        out.freqNum = 1;
         out.freqDen = Number(f.get("per"));
+        out.freqNum = out.freqDen === data.freqDen ? data.freqNum : 1;
       } else {
         const k = String(f.get("kind"));
         const fn = Math.max(1, Number(f.get("num")) || 1), fd = Math.max(1, Number(f.get("den")) || 1);
@@ -1691,7 +1764,7 @@ function editView(habit, newType = L.YES_NO) {
   return h("div", {},
     topBar(habit ? "Edit habit" : "New habit", h("a", { class: "link", href: habit ? `#/habit/${habit.uuid}` : "#/" }, "← Back")),
     h("main", { class: "wrap narrow" },
-      h("section", { class: "card" }, form),
+      form,
       habit?.data.reminder && h("p", { class: "muted small" }, "Reminders are set in xrnloops on the phone.")));
 }
 
@@ -1705,7 +1778,7 @@ function editView(habit, newType = L.YES_NO) {
 const review = { since: null, events: [], blocks: {}, status: "idle", gen: 0 };
 
 async function loadReview(since) {
-  if (review.since === since && review.status !== "error") return;
+  if (review.since === since) return; // whatever came of it: this runs on every draw
   const gen = ++review.gen;
   Object.assign(review, { since, status: "loading", events: [], blocks: {} });
   try {
@@ -1849,7 +1922,14 @@ function reviewView(offset) {
 function blocksReview(days, today) {
   const card = (...children) => h("section", { class: "card review-blocks" }, h("h2", {}, "Blocks"), ...children);
   if (review.status === "loading" || review.status === "idle") return card(h("p", { class: "muted small" }, "Loading block history…"));
-  if (review.status === "error") return card(h("p", { class: "muted small" }, "Block history isn't available: xrnrule's sync server didn't answer."));
+  if (review.status === "error") {
+    const again = () => {
+      review.since = null;
+      render();
+    };
+    return card(h("p", { class: "muted small" }, "Block history isn't available: xrnrule's sync server didn't answer."),
+      h("button", { class: "btn", onclick: again }, "Try again"));
+  }
   const first = days[0], lastDay = days[6];
   const inWeek = review.events.filter((e) => {
     const d = dayOfMs(e.at);

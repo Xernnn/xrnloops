@@ -146,6 +146,13 @@
         <item name="contrast100">@color/grey_800</item>
         <item name="palette">@array/lightPalette</item>
         <item name="dialogFormLabelColor">@color/white</item>
+        <!-- xrnloops: as a card (XRNLOOPS.md) -->
+        <item name="android:alertDialogTheme">@style/XrnBaseAlert</item>
+        <item name="android:windowBackground">@drawable/xrn_dialog</item>
+        <item name="android:fontFamily">@font/xrn_misans</item>
+        <item name="cardBgColor">@color/xrn_light_surface</item>
+        <item name="colorAccent">@color/xrn_light_green</item>
+        <item name="xrnRowEdge">@color/xrn_light_outline</item>
     </style>
 
     <style name="BaseDialogDark" parent="Theme.AppCompat.Dialog">
@@ -157,6 +164,13 @@
         <item name="contrast100">@color/grey_100</item>
         <item name="palette">@array/darkPalette</item>
         <item name="dialogFormLabelColor">@color/grey_800</item>
+        <!-- xrnloops: as a card (XRNLOOPS.md) -->
+        <item name="android:alertDialogTheme">@style/XrnBaseAlert</item>
+        <item name="android:windowBackground">@drawable/xrn_dialog</item>
+        <item name="android:fontFamily">@font/xrn_misans</item>
+        <item name="cardBgColor">@color/xrn_surface</item>
+        <item name="colorAccent">@color/xrn_green</item>
+        <item name="xrnRowEdge">@color/xrn_outline</item>
     </style>
 
     <style name="PreferenceThemeOverlay.v14.Material.PureBlack">
@@ -208,7 +222,6 @@
 
     <style name="Card" parent="CardCommon">
         <item name="android:layout_marginBottom">1dp</item>
-        <item name="android:elevation">1dp</item>
         <!-- xrnloops: the theme's rounded card (xrn_card_*), not a flat colour (XRNLOOPS.md). -->
         <item name="android:background">?attr/cardBackground</item>
     </style>
@@ -218,6 +231,7 @@
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_marginBottom">12dp</item>
         <item name="android:textSize">@dimen/regularTextSize</item>
+        <item name="android:textStyle">bold</item> <!-- xrnloops: only titles are heavier -->
     </style>
 
     <style name="About" />
@@ -249,7 +263,8 @@
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:background">?colorPrimary</item>
-        <item name="android:theme">@style/ThemeOverlay.AppCompat.Dark.ActionBar</item>
+        <item name="android:paddingEnd">4dp</item>
+        <item name="android:theme">?attr/xrnBarTheme</item>
     </style>
 
     <style name="Preference.Category.Material">
@@ -314,9 +329,9 @@
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_marginStart">8dp</item>
-        <item name="android:layout_marginTop">-15dp</item>
-        <item name="android:layout_marginBottom">-4dp</item>
-        <item name="android:background">?attr/contrast0</item>
+        <item name="android:layout_marginTop">10dp</item>
+        <item name="android:layout_marginBottom">-10dp</item>
+        <item name="android:textColor">?attr/contrast60</item>
         <item name="android:paddingStart">8dp</item>
         <item name="android:paddingEnd">8dp</item>
         <item name="android:textSize">@dimen/smallerTextSize</item>
@@ -345,7 +360,7 @@
     </style>
 
     <style name="FormInnerBox">
-        <item name="android:background">@drawable/bg_input_group</item>
+        <item name="android:background">@drawable/xrn_form_box</item>
         <item name="android:clipChildren">false</item>
         <item name="android:clipToPadding">false</item>
         <item name="android:orientation">vertical</item>

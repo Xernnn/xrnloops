@@ -7,6 +7,7 @@
     <string name="xrnnote_clear">Clear</string>
     <string name="xrnnote_hint">Note for this day</string>
     <string name="xrnnote_save">Save</string>
+    <string name="xrnnote_no_amount" translatable="false">0</string>
     <string name="xrnnote_today">Today · %s</string>
     <string name="xrnnote_yesterday">Yesterday · %s</string>
 </resources>

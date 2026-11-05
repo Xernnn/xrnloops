@@ -7,10 +7,10 @@
     <string name="xrnlink_open_in_xrnrule">Open in xrnrule</string>
     <string name="xrnlink_locked">Locked · unlocks %1$s</string>
     <string name="xrnlink_done_locked">Locked · this part is done, it needs more</string>
-    <string name="xrnlink_ready">Earned · %1$s to open</string>
-    <string name="xrnlink_open">Open till %1$s</string>
+    <string name="xrnlink_ready">Ready to open · %1$s</string>
+    <string name="xrnlink_open">Open until %1$s</string>
     <!-- An unlock that counts use, not time: what's left of it. -->
-    <string name="xrnlink_left">Open · %1$s left</string>
+    <string name="xrnlink_left">Open · %1$s of use left</string>
     <string name="xrnlink_open_now">Open</string>
     <string name="xrnlink_minutes">%d min</string>
     <string name="xrnlink_hours">%d h</string>
@@ -18,8 +18,8 @@
 
     <!-- The banner after a tick that did something in xrnrule. -->
     <string name="xrnlink_banner_earned">Earned %1$s of %2$s</string>
-    <string name="xrnlink_banner_open_till">%1$s is open till %2$s</string>
-    <string name="xrnlink_banner_open_left">%1$s is open · %2$s left</string>
+    <string name="xrnlink_banner_open_till">%1$s is open until %2$s</string>
+    <string name="xrnlink_banner_open_left">%1$s is open · %2$s of use left</string>
     <string name="xrnlink_banner_open">%1$s is open</string>
     <string name="xrnlink_banner_counted">Counted towards %1$s · it needs more</string>
     <string name="xrnlink_banner_more">%1$s (+%2$d more)</string>

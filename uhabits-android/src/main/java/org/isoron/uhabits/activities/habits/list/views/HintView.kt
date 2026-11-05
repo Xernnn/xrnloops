@@ -21,15 +21,21 @@ package org.isoron.uhabits.activities.habits.list.views
 
 import android.animation.AnimatorListenerAdapter
 import android.content.Context
-import android.graphics.Color.WHITE
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.view.ViewGroup.MarginLayoutParams
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updateLayoutParams
 import org.isoron.uhabits.R
 import org.isoron.uhabits.core.ui.screens.habits.list.HintList
 import org.isoron.uhabits.utils.dp
+import org.isoron.uhabits.xrnlook.XrnSnackbar
 
 class HintView(
     context: Context,
@@ -43,18 +49,29 @@ class HintView(
         visibility = GONE
         orientation = VERTICAL
         val p1 = dp(16.0f).toInt()
-        val p2 = dp(4.0f).toInt()
-        setPadding(p1, p1, p2, p1)
-        setBackgroundColor(resources.getColor(R.color.indigo_500))
+        setPadding(p1, p1, p1, p1)
+        // xrnloops: our banner, not Loop's indigo strip, and clear of the gesture bar (XRNLOOPS.md)
+        background = GradientDrawable().apply {
+            setColor(XrnSnackbar.surface(context))
+            cornerRadius = dp(16.0f)
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
+            val bottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
+            val margin = dp(8.0f).toInt()
+            view.updateLayoutParams<MarginLayoutParams> {
+                setMargins(margin, 0, margin, bottom + margin)
+            }
+            insets
+        }
 
         val hintTitle = TextView(context).apply {
-            setTextColor(WHITE)
+            setTextColor(ContextCompat.getColor(context, R.color.xrn_green))
             setTypeface(null, Typeface.BOLD)
             text = resources.getString(R.string.hint_title)
         }
 
         hintContent = TextView(context).apply {
-            setTextColor(WHITE)
+            setTextColor(XrnSnackbar.TEXT)
             setPadding(0, dp(5.0f).toInt(), 0, 0)
         }
 

@@ -82,7 +82,7 @@ class XrnruleLinkBadge(context: Context) : AppCompatImageView(context) {
             return
         }
         visibility = View.VISIBLE
-        paint(this, link, tint)
+        paint(this, link)
         contentDescription = "${link.blockName.ifBlank { link.targets }}: ${XrnruleLinkSheet.status(context, link)}"
         setOnClickListener {
             (context as? FragmentActivity)?.let { XrnruleLinkSheet.show(it, habit, tint) }
@@ -94,30 +94,52 @@ class XrnruleLinkBadge(context: Context) : AppCompatImageView(context) {
         private const val SIDE_DP = 40f
         private const val CIRCLE_DP = 24f
         private const val GLYPH_DP = 13f
-        private const val FILL_ALPHA = 0x24
         private const val RIPPLE_ALPHA = 0x40
+        private const val ON_READY = 0xFF18181B.toInt()
 
         /**
-         * The lock for [link], in a [SIDE_DP] square: closed in the habit's colour while the block
-         * waits on this habit, faint once the habit has done its part and the block wants more,
-         * open once it's open, and solid when an unlock is earned and only has to be opened.
+         * The lock for [link], in a [SIDE_DP] square, in xrnrule's colours for how a block stands,
+         * so it reads the same in both apps and never looks like part of the habit: red while the
+         * block waits on this habit, grey once the habit has done its part and the block wants
+         * more, green while it's open, and a solid amber bolt when an unlock is earned and only
+         * has to be opened, the one thing here worth a look from across the list.
          */
-        fun paint(view: ImageView, link: XrnruleLink, tint: Int) {
-            val ready = link.state == XrnruleLinksContract.STATE_READY
-            val open = ready || link.state == XrnruleLinksContract.STATE_OPEN
-            val waiting = link.state == XrnruleLinksContract.STATE_LOCKED && link.habitDone
-            val ink = if (waiting) view.sres.getColor(R.attr.contrast60) else tint
-            val onTint = if (ColorUtils.calculateLuminance(tint) > 0.45) 0xFF18181B.toInt() else 0xFFFFFFFF.toInt()
-
-            view.setImageResource(if (open) R.drawable.xrn_ic_lock_open else R.drawable.xrn_ic_lock)
-            view.imageTintList = ColorStateList.valueOf(if (ready) onTint else ink)
+        fun paint(view: ImageView, link: XrnruleLink) {
+            val res = view.sres
+            val icon: Int
+            val ink: Int
+            val fill: Int
+            when {
+                link.state == XrnruleLinksContract.STATE_READY -> {
+                    icon = R.drawable.xrn_ic_bolt
+                    ink = ON_READY
+                    fill = res.getColor(R.attr.xrnReady)
+                }
+                link.state == XrnruleLinksContract.STATE_OPEN -> {
+                    icon = R.drawable.xrn_ic_lock_open
+                    ink = res.getColor(R.attr.xrnOpen)
+                    fill = res.getColor(R.attr.xrnOpenSoft)
+                }
+                link.habitDone -> {
+                    icon = R.drawable.xrn_ic_lock
+                    ink = res.getColor(R.attr.contrast60)
+                    fill = res.getColor(R.attr.contrast20)
+                }
+                else -> {
+                    icon = R.drawable.xrn_ic_lock
+                    ink = res.getColor(R.attr.xrnLocked)
+                    fill = res.getColor(R.attr.xrnLockedSoft)
+                }
+            }
+            view.setImageResource(icon)
+            view.imageTintList = ColorStateList.valueOf(ink)
             view.scaleType = ImageView.ScaleType.FIT_CENTER
             val pad = view.dp((SIDE_DP - GLYPH_DP) / 2).toInt()
             view.setPadding(pad, pad, pad, pad)
 
             val circle = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(if (ready) tint else ColorUtils.setAlphaComponent(ink, FILL_ALPHA))
+                setColor(fill)
             }
             view.background = RippleDrawable(
                 ColorStateList.valueOf(ColorUtils.setAlphaComponent(ink, RIPPLE_ALPHA)),

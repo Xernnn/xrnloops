@@ -99,12 +99,14 @@ class HistoryCardPresenter(
             habit.name, // xrnloops: the note screen names the habit and the day (XRNLOOPS.md)
             date
         ) { newValue, newNotes ->
+            // xrnloops: a note on its own keeps the day as it is now; sync may have changed it
+            val value = if (newValue == entry.value) habit.computedEntries.get(date).value else newValue
             commandRunner.run(
                 CreateRepetitionCommand(
                     habitList,
                     habit,
                     date,
-                    newValue,
+                    value,
                     newNotes
                 )
             )
@@ -134,9 +136,15 @@ class HistoryCardPresenter(
         val oldValue = entry.value
         screen.showNumberPopup(
             value = oldValue / 1000.0,
-            notes = entry.notes
+            notes = entry.notes,
+            habit = habit,
+            date = date
         ) { newValue: Double, newNotes: String ->
-            val thousands = (newValue * 1000).roundToInt()
+            // xrnloops: a note on its own keeps the day as it is now; sync may have changed it
+            val thousands = when (newValue) {
+                oldValue / 1000.0 -> habit.computedEntries.get(date).value
+                else -> (newValue * 1000).roundToInt()
+            }
             commandRunner.run(
                 CreateRepetitionCommand(
                     habitList,
@@ -207,6 +215,8 @@ class HistoryCardPresenter(
         fun showNumberPopup(
             value: Double,
             notes: String,
+            habit: Habit, // xrnloops
+            date: LocalDate, // xrnloops
             callback: NumberPickerCallback
         )
         fun showCheckmarkPopup(

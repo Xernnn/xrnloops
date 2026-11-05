@@ -355,10 +355,7 @@ class EditHabitActivity : AppCompatActivity() {
     private fun updateColors() {
         androidColor = themeSwitcher.currentTheme.color(color).toInt()
         binding.colorButton.backgroundTintList = ColorStateList.valueOf(androidColor)
-        if (!themeSwitcher.isNightMode) {
-            window.statusBarColor = androidColor
-            binding.toolbar.setBackgroundColor(androidColor)
-        }
+        // xrnloops: no coloured bars (XRNLOOPS.md); the colour shows on its button.
     }
 
     private fun getFormattedValidationError(@StringRes resId: Int): Spanned {

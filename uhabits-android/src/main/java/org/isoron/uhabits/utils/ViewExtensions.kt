@@ -42,7 +42,6 @@ import android.widget.RelativeLayout
 import android.widget.RelativeLayout.ALIGN_PARENT_BOTTOM
 import android.widget.RelativeLayout.ALIGN_PARENT_TOP
 import android.widget.RelativeLayout.BELOW
-import android.widget.TextView
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
@@ -56,6 +55,7 @@ import org.isoron.uhabits.R
 import org.isoron.uhabits.activities.AndroidThemeSwitcher
 import org.isoron.uhabits.core.models.PaletteColor
 import org.isoron.uhabits.core.ui.views.Theme
+import org.isoron.uhabits.xrnlook.XrnSnackbar
 import java.io.File
 
 fun RelativeLayout.addBelow(
@@ -105,9 +105,7 @@ fun ViewGroup.buildToolbar(): Toolbar {
 fun View.showMessage(msg: String) {
     try {
         val snackbar = Snackbar.make(this, msg, Snackbar.LENGTH_SHORT)
-        val tvId = R.id.snackbar_text
-        val tv = snackbar.view.findViewById<TextView>(tvId)
-        tv?.setTextColor(Color.WHITE)
+        XrnSnackbar.style(snackbar) // xrnloops (XRNLOOPS.md)
         snackbar.show()
     } catch (e: IllegalArgumentException) {
         return
@@ -180,7 +178,7 @@ fun View.setupToolbar(
     theme: Theme,
     displayHomeAsUpEnabled: Boolean = true
 ) {
-    toolbar.elevation = InterfaceUtils.dpToPixels(context, 2f)
+    toolbar.elevation = 0f // xrnloops: the bar is part of the page (XRNLOOPS.md)
     val res = StyledResources(context)
     toolbar.title = title
     val toolbarColor = if (!res.getBoolean(R.attr.useHabitColorAsPrimary)) {
@@ -285,7 +283,7 @@ fun View.applyToolbarInsets() {
         val systemBarsInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
         val displayCutoutInsets = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
         val top = maxOf(systemBarsInsets.top, displayCutoutInsets.top)
-        view.setPadding(0, top, 0, 0)
+        view.setPadding(view.paddingLeft, top, view.paddingRight, 0) // xrnloops: keep the bar's end inset
         insets
     }
 }

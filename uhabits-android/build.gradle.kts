@@ -91,7 +91,8 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
-            proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.txt")
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.txt")
             if (signingConfigs.findByName("release") != null) {
                 signingConfig = signingConfigs.getByName("release")
             } else {
@@ -103,6 +104,12 @@ android {
             enableUnitTestCoverage = true
             signingConfigs.findByName("xrn")?.let { signingConfig = it }
         }
+    }
+
+    // NotoSans and this copy of FontAwesome are for uhabits-core's JVM canvas (tests), in the
+    // folder this app takes its migrations from. On Android the canvas draws with MiSans.
+    androidResources {
+        ignoreAssetsPattern = "!.git:!*~:!NotoSans-Regular.ttf:!NotoSans-Bold.ttf:!FontAwesome.ttf"
     }
 
     compileOptions {
@@ -131,11 +138,6 @@ dependencies {
     implementation(libs.appIntro)
     implementation(libs.jsr305)
     implementation(libs.kotlin.inject.runtime)
-    implementation(libs.guava)
-    implementation(libs.ktor.client.android)
-    implementation(libs.ktor.client.core)
-    implementation(libs.ktor.client.jackson)
-    implementation(libs.ktor.client.json)
     implementation(libs.kotlin.stdlib.jdk8)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.core)
@@ -144,7 +146,6 @@ dependencies {
     implementation(libs.legacy.support.v4)
     implementation(libs.material)
     implementation(libs.documentfile)
-    implementation(libs.opencsv)
     implementation(libs.konfetti.xml)
     implementation(project(":uhabits-core"))
     ksp(libs.kotlin.inject.compiler)
@@ -154,8 +155,6 @@ dependencies {
     androidTestImplementation(libs.espresso.contrib)
     androidTestImplementation(libs.espresso.core)
     androidTestImplementation(libs.junit)
-    androidTestImplementation(libs.ktor.client.mock)
-    androidTestImplementation(libs.ktor.jackson)
     androidTestImplementation(libs.rules)
     androidTestImplementation(libs.uiautomator)
 

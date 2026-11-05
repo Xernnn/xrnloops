@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- xrnloops (XRNLOOPS.md): our glyph beside the wordmark on the list, where xrnrule has its lock:
+     the loop from the app icon on its own, in the accent colour. The width past the glyph is
+     the gap to the wordmark. Same geometry as xrnloops_icon_foreground and web/icon.svg. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="33dp"
+    android:height="24dp"
+    android:viewportWidth="68"
+    android:viewportHeight="50">
+    <group android:translateX="-27" android:translateY="-29">
+        <path
+            android:pathData="M64.55,39.79 A19,19 0 1 1 39.93,35.89"
+            android:strokeColor="?attr/colorAccent"
+            android:strokeWidth="10" />
+        <path android:pathData="M49.26,30.06 L42.69,45.96 L32.09,29 Z" android:fillColor="?attr/colorAccent" />
+    </group>
+</vector>

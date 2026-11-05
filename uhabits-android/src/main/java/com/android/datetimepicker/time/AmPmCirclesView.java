@@ -74,7 +74,7 @@ public class AmPmCirclesView extends View {
         }
 
         StyledResources styledResources = new StyledResources(context);
-        mUnselectedColor = styledResources.getColor(R.attr.contrast0);
+        mUnselectedColor = styledResources.getColor(R.attr.contrast20);
 
         Resources res = context.getResources();
         mSelectedAlpha = SELECTED_ALPHA;

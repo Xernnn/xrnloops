@@ -57,12 +57,18 @@ open class ListHabitsBehavior(
         val entry = habit.computedEntries.get(date)
         if (habit.type == HabitType.NUMERICAL) {
             val oldValue = entry.value.toDouble() / 1000
-            screen.showNumberPopup(oldValue, entry.notes) { newValue: Double, newNotes: String ->
-                val value = (newValue * 1000).roundToInt()
+            screen.showNumberPopup(oldValue, entry.notes, habit, date) { newValue: Double, newNotes: String ->
+                // xrnloops: a note on its own keeps the day as it is now; sync may have changed it
+                val value = when (newValue) {
+                    oldValue -> habit.computedEntries.get(date).value
+                    else -> (newValue * 1000).roundToInt()
+                }
                 if (newValue != oldValue) {
+                    // xrnloops: the day's share of the target, as the list shows it
+                    val target = habit.targetValue / habit.frequency.denominator
                     if (
-                        (habit.targetType == AT_LEAST && newValue >= habit.targetValue) ||
-                        (habit.targetType == AT_MOST && newValue <= habit.targetValue)
+                        (habit.targetType == AT_LEAST && newValue >= target) ||
+                        (habit.targetType == AT_MOST && newValue <= target)
                     ) {
                         screen.showConfetti(habit.color, x, y)
                     }
@@ -78,7 +84,9 @@ open class ListHabitsBehavior(
                 date
             ) { newValue: Int, newNotes: String ->
                 if (newValue != entry.value && newValue == YES_MANUAL) screen.showConfetti(habit.color, x, y)
-                commandRunner.run(CreateRepetitionCommand(habitList, habit, date, newValue, newNotes))
+                // xrnloops: a note on its own keeps the day as it is now; sync may have changed it
+                val value = if (newValue == entry.value) habit.computedEntries.get(date).value else newValue
+                commandRunner.run(CreateRepetitionCommand(habitList, habit, date, value, newNotes))
             }
         }
     }
@@ -167,6 +175,8 @@ open class ListHabitsBehavior(
         fun showNumberPopup(
             value: Double,
             notes: String,
+            habit: Habit, // xrnloops
+            date: LocalDate, // xrnloops
             callback: NumberPickerCallback
         )
         fun showCheckmarkPopup(

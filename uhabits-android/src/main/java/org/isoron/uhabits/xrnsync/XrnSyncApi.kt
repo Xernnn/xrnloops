@@ -34,9 +34,14 @@ class XrnSyncApi(private val baseUrl: String, user: String, password: String) {
     /** Any other answer outside 2xx; [code] 429 means too many wrong passwords from this address. */
     class ServerException(val code: Int, message: String) : IOException(message)
 
-    /** Changes after [since]; with [waitS], the server holds the answer until there are some (long-poll). */
-    fun pull(since: Long, waitS: Int = 0): JSONObject =
-        request("GET", "/api/changes?since=$since" + if (waitS > 0) "&wait=$waitS" else "", null, waitS * 1000)
+    /**
+     * Changes after [since]; with [waitS], the server holds the answer until there are some
+     * (long-poll). With [epoch], the history [since] counts in: if that's gone the answer says so.
+     */
+    fun pull(since: Long, waitS: Int = 0, epoch: Long? = null): JSONObject {
+        val wait = if (waitS > 0) "&wait=$waitS" else ""
+        return request("GET", "/api/changes?since=$since$wait" + (epoch?.let { "&epoch=$it" } ?: ""), null, waitS * 1000)
+    }
 
     fun push(body: JSONObject): JSONObject = request("POST", "/api/changes", body)
 

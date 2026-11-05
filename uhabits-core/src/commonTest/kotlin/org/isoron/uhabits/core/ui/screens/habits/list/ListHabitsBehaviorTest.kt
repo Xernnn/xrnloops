@@ -26,13 +26,18 @@ import dev.mokkery.matcher.any
 import dev.mokkery.mock
 import dev.mokkery.spy
 import dev.mokkery.verify
+import dev.mokkery.verify.VerifyMode.Companion.exactly
 import kotlinx.coroutines.test.runTest
 import org.isoron.platform.io.UserFile
+import org.isoron.platform.time.LocalDate
 import org.isoron.platform.time.getToday
 import org.isoron.uhabits.core.BaseUnitTest
 import org.isoron.uhabits.core.models.Entry
+import org.isoron.uhabits.core.models.Frequency
 import org.isoron.uhabits.core.models.Habit
+import org.isoron.uhabits.core.models.NumericalHabitType
 import org.isoron.uhabits.core.preferences.Preferences
+import org.isoron.uhabits.core.ui.callbacks.CheckMarkDialogCallback
 import org.isoron.uhabits.core.ui.callbacks.NumberPickerCallback
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -76,18 +81,97 @@ class ListHabitsBehaviorTest : BaseUnitTest() {
     @Test
     fun testOnEdit() {
         val today = getToday()
-        every {
-            screen.showNumberPopup(any(), any(), any())
-        } calls { args ->
-            capturedPicker = args.arg<NumberPickerCallback>(2)
-            Unit
-        }
-        behavior.onEdit(habit2, today, 0f, 0f)
+        openNumberSheet(habit2, today)
         verify {
-            screen.showNumberPopup(0.1, "", any())
+            screen.showNumberPopup(0.1, "", habit2, today, any())
         }
         capturedPicker!!.onNumberPicked(100.0, "")
         assertEquals(100000, habit2.computedEntries.get(today).value)
+    }
+
+    private fun openNumberSheet(habit: Habit, date: LocalDate): NumberPickerCallback {
+        every {
+            screen.showNumberPopup(any(), any(), any(), any(), any())
+        } calls { args ->
+            capturedPicker = args.arg<NumberPickerCallback>(4)
+            Unit
+        }
+        behavior.onEdit(habit, date, 0f, 0f)
+        return capturedPicker!!
+    }
+
+    @Test
+    fun testOnEdit_aNumberNoteAloneKeepsWhatSyncChanged() {
+        val today = getToday()
+        val shown = habit2.computedEntries.get(today).value / 1000.0
+        val sheet = openNumberSheet(habit2, today)
+        habit2.originalEntries.add(Entry(today, 5000))
+        habit2.recompute()
+        sheet.onNumberPicked(shown, "written meanwhile")
+        val entry = habit2.computedEntries.get(today)
+        assertEquals(5000, entry.value)
+        assertEquals("written meanwhile", entry.notes)
+    }
+
+    @Test
+    fun testOnEdit_aNumberPickedStillWins() {
+        val today = getToday()
+        val sheet = openNumberSheet(habit2, today)
+        habit2.originalEntries.add(Entry(today, 5000))
+        habit2.recompute()
+        sheet.onNumberPicked(7.0, "")
+        assertEquals(7000, habit2.computedEntries.get(today).value)
+    }
+
+    @Test
+    fun testOnEdit_aNumberReachingTheDaysShareCelebrates() {
+        val today = getToday()
+        habit2.frequency = Frequency.WEEKLY
+        habit2.targetValue = 70.0
+        habit2.targetType = NumericalHabitType.AT_LEAST
+        openNumberSheet(habit2, today).onNumberPicked(9.0, "")
+        verify(exactly(0)) { screen.showConfetti(any(), any(), any()) }
+        openNumberSheet(habit2, today).onNumberPicked(10.0, "")
+        verify(exactly(1)) { screen.showConfetti(any(), any(), any()) }
+    }
+
+    // xrnloops: sync can change a day while its note sheet is open (XRNLOOPS.md)
+    private fun openNoteSheet(date: LocalDate): CheckMarkDialogCallback {
+        var callback: CheckMarkDialogCallback? = null
+        every {
+            screen.showCheckmarkPopup(any(), any(), any(), any(), any(), any())
+        } calls { args ->
+            callback = args.arg<CheckMarkDialogCallback>(5)
+            Unit
+        }
+        behavior.onEdit(habit1, date, 0f, 0f)
+        return callback!!
+    }
+
+    private fun syncChanges(date: LocalDate, value: Int) {
+        habit1.originalEntries.add(Entry(date, value))
+        habit1.recompute()
+    }
+
+    @Test
+    fun testOnEdit_aNoteAloneKeepsWhatSyncChanged() {
+        val today = getToday()
+        val shown = habit1.computedEntries.get(today).value
+        val sheet = openNoteSheet(today)
+        syncChanges(today, Entry.SKIP)
+        sheet.onNotesSaved(shown, "written meanwhile")
+        val entry = habit1.computedEntries.get(today)
+        assertEquals(Entry.SKIP, entry.value)
+        assertEquals("written meanwhile", entry.notes)
+    }
+
+    @Test
+    fun testOnEdit_aPickedValueStillWins() {
+        val today = getToday()
+        val sheet = openNoteSheet(today)
+        syncChanges(today, Entry.SKIP)
+        sheet.onNotesSaved(Entry.NO, "")
+        assertEquals(Entry.NO, habit1.computedEntries.get(today).value)
     }
 
     @Test

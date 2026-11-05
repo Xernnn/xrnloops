@@ -68,7 +68,7 @@ class ReminderReceiver : BroadcastReceiver() {
                     )
                     // xrnloops: sync first, so a habit ticked in the web app doesn't ring here
                     val shown = habit
-                    XrnSync.beforeReminder(this) {
+                    XrnSync.beforeReminder(this, shown) {
                         reminderController.onShowReminder(
                             shown,
                             LocalDate.fromUnixTime(timestamp),

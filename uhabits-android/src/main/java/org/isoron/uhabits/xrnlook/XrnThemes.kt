@@ -21,6 +21,8 @@ package org.isoron.uhabits.xrnlook
 
 import android.content.Context
 import android.graphics.Typeface
+import androidx.appcompat.widget.Toolbar
+import androidx.core.content.ContextCompat
 import org.isoron.platform.gui.Color
 import org.isoron.uhabits.R
 import org.isoron.uhabits.core.ui.views.DarkTheme
@@ -41,10 +43,6 @@ class XrnLightTheme : LightTheme() {
     override val highContrastTextColor = Color(0x1B1B1E)
     override val lowContrastTextColor = Color(0xE3E3E8)
     override val mediumContrastTextColor = Color(0x6B6B73)
-
-    /** Loop's dark grey, which is also the list's toolbar in the light theme: xrn zinc instead. */
-    override fun color(paletteIndex: Int): Color =
-        if (paletteIndex == 17) Color(0x27272A) else super.color(paletteIndex)
 }
 
 class XrnDarkTheme : DarkTheme() {
@@ -62,4 +60,11 @@ class XrnDarkTheme : DarkTheme() {
 object XrnFonts {
     fun regular(context: Context): Typeface = context.resources.getFont(R.font.xrn_misans_regular)
     fun bold(context: Context): Typeface = context.resources.getFont(R.font.xrn_misans_semibold)
+}
+
+/** The list's bar as xrnrule has it: the mark and the app's name, not a screen title. */
+fun Toolbar.showWordmark() {
+    logo = ContextCompat.getDrawable(context, R.drawable.xrn_bar_mark)
+    title = context.getString(R.string.xrn_wordmark)
+    setTitleTextAppearance(context, R.style.XrnToolbar_Wordmark)
 }

@@ -24,6 +24,8 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.res.Resources;
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.KeyCharacterMap;
@@ -363,7 +365,7 @@ public class TimePickerDialog extends AppCompatDialogFragment implements OnValue
         int contrast20 = styledResources.getColor(R.attr.contrast20);
         int contrast60 = styledResources.getColor(R.attr.contrast60);
         int contrast80 = styledResources.getColor(R.attr.contrast80);
-        view.findViewById(R.id.time_display_background).setBackgroundColor(Color.BLUE);
+        view.findViewById(R.id.time_display_background).setBackgroundColor(contrast0);
         view.findViewById(R.id.time_display).setBackgroundColor(contrast0);
         ((TextView) view.findViewById(R.id.separator)).setTextColor(contrast80);
         ((TextView) view.findViewById(R.id.ampm_label)).setTextColor(contrast80);
@@ -372,10 +374,20 @@ public class TimePickerDialog extends AppCompatDialogFragment implements OnValue
         mDoneButton.setBackgroundColor(contrast0);
         mClearButton.setTextColor(contrast80);
         mClearButton.setBackgroundColor(contrast0);
-        mTimePicker.setBackgroundColor(contrast20);
+        mTimePicker.setBackgroundColor(contrast0); // xrnloops: one card, the dial sits on it
         mUnselectedColor = contrast80;
         mMinuteView.setTextColor(mUnselectedColor);
         mHourView.setTextColor(mSelectedColor);
+
+        // xrnloops: a rounded card, like every other dialog (XRNLOOPS.md)
+        mDoneButton.setAllCaps(false);
+        mClearButton.setAllCaps(false);
+        GradientDrawable card = new GradientDrawable();
+        card.setColor(contrast0);
+        card.setCornerRadius(24 * res.getDisplayMetrics().density);
+        view.setBackground(card);
+        view.setClipToOutline(true);
+        getDialog().getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
 
         return view;
     }

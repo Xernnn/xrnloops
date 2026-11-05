@@ -23,13 +23,17 @@ import android.content.DialogInterface
 import android.content.res.ColorStateList
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.provider.Settings
+import android.text.TextUtils
 import android.text.format.DateFormat
+import android.text.method.DigitsKeyListener
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.graphics.ColorUtils
@@ -46,20 +50,28 @@ import org.isoron.uhabits.core.models.Entry.Companion.NO
 import org.isoron.uhabits.core.models.Entry.Companion.SKIP
 import org.isoron.uhabits.core.models.Entry.Companion.UNKNOWN
 import org.isoron.uhabits.core.models.Entry.Companion.YES_MANUAL
+import org.isoron.uhabits.core.models.Habit
 import org.isoron.uhabits.databinding.XrnnoteSheetBinding
 import org.isoron.uhabits.utils.InterfaceUtils
 import org.isoron.uhabits.utils.StyledResources
 import org.isoron.uhabits.utils.dismissCurrentAndShow
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
+import java.text.NumberFormat
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.math.roundToInt
 
 /**
- * A yes/no habit's day: its value and its note, in a sheet from the bottom. Replaces Loop's
- * checkmark popup everywhere it showed (the list, the habit page's calendar, a reminder's edit).
+ * A habit's day: its value and its note, in a sheet from the bottom. Replaces Loop's checkmark
+ * popup and number box everywhere they showed (the list, the habit page's calendar, a reminder's
+ * edit). A number day gets the amount and quick keys in place of the four value buttons; both
+ * work in entry values, where an amount is stored ×1000, and the web app's sheet has the same keys.
  *
- * As in Loop's popup, picking a value saves it with the note as it stands, and closing the sheet
+ * As in Loop's popups, picking a value saves it with the note as it stands, and closing the sheet
  * any other way keeps a changed note (with the day's value as it was), so typing is never lost.
  */
 class NoteSheet : BottomSheetDialogFragment() {
@@ -94,13 +106,20 @@ class NoteSheet : BottomSheetDialogFragment() {
 
         val res = StyledResources(requireContext())
         val faint = res.getColor(R.attr.contrast60)
-        addValue(YES_MANUAL, R.string.fa_check, R.string.xrnnote_done, color, color)
-        addValue(NO, R.string.fa_times, R.string.xrnnote_not_done, faint, color)
-        addValue(SKIP, R.string.fa_skipped, R.string.xrnnote_skip, color, color)
-        addValue(UNKNOWN, R.string.fa_question, R.string.xrnnote_clear, faint, color)
+        if (isNumber) {
+            bindNumber(color)
+        } else {
+            addValue(YES_MANUAL, R.string.fa_check, R.string.xrnnote_done, color, color)
+            addValue(NO, R.string.fa_times, R.string.xrnnote_not_done, faint, color)
+            addValue(SKIP, R.string.fa_skipped, R.string.xrnnote_skip, color, color)
+            addValue(UNKNOWN, R.string.fa_question, R.string.xrnnote_clear, faint, color)
+        }
 
         view.save.setOnClickListener {
-            if (note() != originalNote) save(originalValue)
+            when {
+                isNumber -> save(amount())
+                note() != originalNote -> save(originalValue)
+            }
             dismiss()
         }
         // Edge to edge: keep the button above the navigation bar. The keyboard is the window's
@@ -115,13 +134,21 @@ class NoteSheet : BottomSheetDialogFragment() {
 
     private val bottomPadding by lazy { (16 * resources.displayMetrics.density).toInt() }
 
+    private val isNumber get() = requireArguments().getBoolean(ARG_NUMBER)
+
     override fun onStart() {
         super.onStart()
         val dialog = dialog as? BottomSheetDialog ?: return
         dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
         dialog.behavior.skipCollapsed = true
-        if (requireArguments().getBoolean(ARG_FOCUS) && view.note.requestFocus()) {
-            view.note.setSelection(view.note.length())
+        val focused = when {
+            requireArguments().getBoolean(ARG_FOCUS) -> view.note.requestFocus().also {
+                view.note.setSelection(view.note.length())
+            }
+            isNumber -> view.amount.requestFocus().also { view.amount.selectAll() }
+            else -> false
+        }
+        if (focused) {
             dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
         }
     }
@@ -138,28 +165,130 @@ class NoteSheet : BottomSheetDialogFragment() {
         onSave?.invoke(value, note())
     }
 
+    /** The amount, its unit and the quick keys: the day's target, 0, skip and clear. */
+    private fun bindNumber(color: Int) {
+        val args = requireArguments()
+        val unit = args.getString(ARG_UNIT).orEmpty()
+        val target = args.getDouble(ARG_TARGET)
+        view.amountRow.visibility = View.VISIBLE
+        view.amountLayout.setBoxStrokeColorStateList(ColorStateList.valueOf(color))
+        view.unit.text = unit
+        view.note.minLines = 2
+        // A skip or an empty day has no amount: blank, as on the web, so Save doesn't enter a 0.
+        if (originalValue >= 0 && originalValue != SKIP) {
+            view.amount.setText(AMOUNT.format(originalValue / 1000.0))
+        }
+        fixDecimalSeparator()
+        view.amount.setOnEditorActionListener { _, _, _ -> view.save.performClick() }
+
+        val res = StyledResources(requireContext())
+        val strong = res.getColor(R.attr.contrast100)
+        val faint = res.getColor(R.attr.contrast60)
+        val targetLabel = "${AMOUNT.format(target)} $unit".trim()
+        if (target > 0) addKey((target * 1000).roundToInt(), targetLabel, color, color, 1f)
+        addKey(0, "0", strong, color, 0f)
+        addKey(SKIP, getString(R.string.xrnnote_skip), color, color, 0f)
+        addKey(UNKNOWN, getString(R.string.xrnnote_clear), faint, color, 0f)
+    }
+
+    /** What's in the box, in entry values. Nothing in it means no amount, not "undo the skip". */
+    private fun amount(): Int {
+        val text = view.amount.text?.toString().orEmpty()
+        if (text.isEmpty()) return if (originalValue == SKIP) SKIP else UNKNOWN
+        return try {
+            (NumberFormat.getInstance().parse(text)!!.toDouble() * 1000).roundToInt()
+        } catch (e: ParseException) {
+            originalValue
+        }
+    }
+
+    /** As Loop's number box does: the keyboard's separator has to be the one we parse. */
+    private fun fixDecimalSeparator() {
+        // https://stackoverflow.com/a/34256139
+        val separator = DecimalFormatSymbols.getInstance().decimalSeparator
+        view.amount.keyListener = DigitsKeyListener.getInstance("0123456789$separator")
+        // https://github.com/flutter/flutter/issues/61175
+        val keyboard = Settings.Secure.getString(
+            requireContext().contentResolver,
+            Settings.Secure.DEFAULT_INPUT_METHOD
+        ).orEmpty()
+        if (keyboard.contains("swiftkey") || keyboard.contains("samsung")) {
+            view.amount.inputType = EditorInfo.TYPE_CLASS_TEXT
+        }
+    }
+
+    private fun addKey(value: Int, label: String, tint: Int, accent: Int, weight: Float) {
+        val context = requireContext()
+        val dp = resources.displayMetrics.density
+        val selected = value == originalValue && value != UNKNOWN
+        val key = TextView(context).apply {
+            text = label
+            gravity = Gravity.CENTER
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            minimumWidth = (56 * dp).toInt()
+            setPadding((12 * dp).toInt(), 0, (12 * dp).toInt(), 0)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(if (selected) onAccent(accent) else tint)
+            background = tile(selected, accent)
+            pressable(this)
+            setOnClickListener {
+                save(value)
+                dismiss()
+            }
+        }
+        view.values.addView(
+            key,
+            LinearLayout.LayoutParams(
+                if (weight > 0) 0 else ViewGroup.LayoutParams.WRAP_CONTENT,
+                (44 * dp).toInt(),
+                weight
+            ).apply {
+                val margin = (4 * dp).toInt()
+                setMargins(margin, 0, margin, 0)
+            }
+        )
+    }
+
+    private fun tile(selected: Boolean, accent: Int): GradientDrawable {
+        val res = StyledResources(requireContext())
+        val dp = resources.displayMetrics.density
+        return GradientDrawable().apply {
+            cornerRadius = 16 * dp
+            setColor(if (selected) accent else res.getColor(R.attr.cardBgColor))
+            if (!selected) setStroke((1 * dp).toInt(), res.getColor(R.attr.xrnRowEdge))
+        }
+    }
+
+    private fun onAccent(accent: Int) =
+        if (ColorUtils.calculateLuminance(accent) > 0.19) 0xFF18181B.toInt() else 0xFFFFFFFF.toInt()
+
+    private fun pressable(target: View) {
+        val context = requireContext()
+        target.isClickable = true
+        target.isFocusable = true
+        target.foreground = context.getDrawable(
+            TypedValue().also {
+                context.theme.resolveAttribute(android.R.attr.selectableItemBackground, it, true)
+            }.resourceId
+        )
+    }
+
     /** One of the four value buttons: a glyph in Loop's icon font over a word. */
     private fun addValue(value: Int, glyph: Int, label: Int, tint: Int, accent: Int) {
         val context = requireContext()
         val res = StyledResources(context)
-        val selected = value == originalValue
-        val onAccent = if (ColorUtils.calculateLuminance(accent) > 0.45) 0xFF18181B.toInt() else 0xFFFFFFFF.toInt()
-        val surface = ColorUtils.blendARGB(res.getColor(R.attr.cardBgColor), res.getColor(R.attr.contrast100), 0.07f)
+        // A day with nothing on it has nothing to pick out: "Clear" isn't what it's set to.
+        val selected = value == originalValue && value != UNKNOWN
+        val onAccent = onAccent(accent)
         val dp = resources.displayMetrics.density
         val button = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             minimumHeight = (68 * dp).toInt()
-            isClickable = true
-            isFocusable = true
             contentDescription = getString(label)
-            background = GradientDrawable().apply {
-                cornerRadius = 16 * dp
-                setColor(if (selected) accent else surface)
-            }
-            foreground = context.getDrawable(
-                TypedValue().also { context.theme.resolveAttribute(android.R.attr.selectableItemBackground, it, true) }.resourceId
-            )
+            background = tile(selected, accent)
+            pressable(this)
             setOnClickListener {
                 save(value)
                 dismiss()
@@ -213,6 +342,12 @@ class NoteSheet : BottomSheetDialogFragment() {
         private const val ARG_VALUE = "value"
         private const val ARG_NOTE = "note"
         private const val ARG_FOCUS = "focus"
+        private const val ARG_NUMBER = "number"
+        private const val ARG_UNIT = "unit"
+        private const val ARG_TARGET = "target"
+
+        // Three places, as an amount is kept to the thousandth: fewer would change it on Save.
+        private val AMOUNT get() = DecimalFormat("#.###")
 
         /** Set by the flick menu's note key: the next sheet opens with the keyboard up. */
         @Volatile
@@ -230,6 +365,17 @@ class NoteSheet : BottomSheetDialogFragment() {
             value: Int,
             note: String,
             onSave: (Int, String) -> Unit
+        ) = open(activity, habitName, date, color, value, note, Bundle.EMPTY, onSave)
+
+        private fun open(
+            activity: FragmentActivity,
+            habitName: String,
+            date: LocalDate,
+            color: Int,
+            value: Int,
+            note: String,
+            extras: Bundle,
+            onSave: (Int, String) -> Unit
         ) {
             val sheet = NoteSheet()
             sheet.onSave = onSave
@@ -240,9 +386,31 @@ class NoteSheet : BottomSheetDialogFragment() {
                 putInt(ARG_VALUE, value)
                 putString(ARG_NOTE, note)
                 putBoolean(ARG_FOCUS, focusNext)
+                putAll(extras)
             }
             focusNext = false
             sheet.dismissCurrentAndShow(activity.supportFragmentManager, "xrnNoteSheet")
+        }
+
+        /** A number day. [value] and what [onSave] gets are amounts, as Loop's popup had them. */
+        fun showNumber(
+            activity: FragmentActivity,
+            habit: Habit,
+            date: LocalDate,
+            color: Int,
+            value: Double,
+            note: String,
+            onSave: (Double, String) -> Unit
+        ) {
+            val stored = (value * 1000).roundToInt()
+            val extras = Bundle().apply {
+                putBoolean(ARG_NUMBER, true)
+                putString(ARG_UNIT, habit.unit)
+                putDouble(ARG_TARGET, habit.targetValue / habit.frequency.denominator)
+            }
+            open(activity, habit.name, date, color, stored, note, extras) { v, n ->
+                onSave(if (v == stored) value else v / 1000.0, n)
+            }
         }
     }
 }

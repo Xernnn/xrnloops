@@ -23,38 +23,36 @@ import android.content.ContentProvider
 import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.database.Cursor
-import android.database.MatrixCursor
 import android.net.Uri
 import android.os.Bundle
-import org.isoron.platform.time.LocalDate
-import org.isoron.platform.time.getToday
 import org.isoron.uhabits.HabitsApplication
-import org.isoron.uhabits.core.models.Entry
-import org.isoron.uhabits.core.models.Habit
-import org.isoron.uhabits.core.models.NumericalHabitType
-import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_ARCHIVED
-import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_COUNTABLE
-import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_DAILY
-import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_DONE
-import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_GOAL_MET
-import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_NAME
-import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_NUMERICAL
-import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_POSITION
-import org.isoron.uhabits.xrnrule.XrnruleContract.COLUMN_UUID
-import org.isoron.uhabits.xrnrule.XrnruleContract.KEY_DAY_START_HOUR
 import org.isoron.uhabits.xrnsync.XrnSync
 
 /**
- * Read-only list of every habit with whether it is done on one date, for xrnrule. Exported,
- * but guarded by the signature-level [XrnruleContract.PERMISSION] in the manifest.
- *
- * Reads go through the app's own [org.isoron.uhabits.core.models.HabitList], whose iterator
- * hands out a copy and whose entry lookups are synchronized, so serving them on a binder
- * thread is safe.
+ * Lets xrnrule ask for a sync ([XrnruleContract.METHOD_SYNC]). It serves no data: xrnrule reads
+ * habits from the home server. It's a provider because Android starts this app to answer one,
+ * which a broadcast to a stopped app wouldn't do. Exported, but guarded by the signature-level
+ * [XrnruleContract.PERMISSION].
  */
 class XrnruleProvider : ContentProvider() {
 
     override fun onCreate(): Boolean = true
+
+    /** Android doesn't apply the provider's read permission to `call`, so it's checked here. */
+    override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
+        if (method != XrnruleContract.METHOD_SYNC) return null
+        val context = context ?: return null
+        if (context.checkCallingPermission(XrnruleContract.PERMISSION) != PackageManager.PERMISSION_GRANTED) {
+            throw SecurityException("needs ${XrnruleContract.PERMISSION}")
+        }
+        // Providers are published before Application.onCreate finishes.
+        val sync = if (HabitsApplication.isComponentReady()) XrnSync.instance else null
+        val configured = sync?.settings?.isConfigured == true
+        return Bundle().apply {
+            putBoolean(XrnruleContract.KEY_CONFIGURED, configured)
+            putBoolean(XrnruleContract.KEY_SYNCED, configured && sync!!.syncBlocking(SYNC_TIMEOUT_MS))
+        }
+    }
 
     override fun query(
         uri: Uri,
@@ -62,95 +60,9 @@ class XrnruleProvider : ContentProvider() {
         selection: String?,
         selectionArgs: Array<out String>?,
         sortOrder: String?
-    ): Cursor? {
-        if (uri.pathSegments != listOf(XrnruleContract.PATH_HABITS)) return null
-        // Providers are published before Application.onCreate finishes; xrnrule retries.
-        if (!HabitsApplication.isComponentReady()) return null
+    ): Cursor? = null
 
-        val component = HabitsApplication.component
-        val date = uri.getQueryParameter(XrnruleContract.PARAM_DATE)?.let(::parseDate) ?: getToday()
-        val cursor = MatrixCursor(COLUMNS)
-        cursor.extras = Bundle().apply { putInt(KEY_DAY_START_HOUR, component.preferences.midnightDelayHours) }
-        for (habit in component.habitList) {
-            cursor.addRow(
-                arrayOf<Any?>(
-                    habit.uuid,
-                    habit.name,
-                    habit.position,
-                    if (habit.isArchived) 1 else 0,
-                    if (habit.isNumerical) 1 else 0,
-                    if (isCountable(habit)) 1 else 0,
-                    if (isDone(habit, date)) 1 else 0,
-                    if (isGoalMet(habit, date)) 1 else 0,
-                    if (isDaily(habit)) 1 else 0
-                )
-            )
-        }
-        return cursor
-    }
-
-    /**
-     * Done means the user really did it that day: a manual check for a yes/no habit (not
-     * Loop's auto-filled check or a skip), or reaching the target of an "at least" habit.
-     */
-    private fun isDone(habit: Habit, date: LocalDate): Boolean {
-        val value = habit.originalEntries.get(date).value
-        if (value == Entry.UNKNOWN) return false
-        return if (habit.isNumerical) {
-            isCountable(habit) && value / 1000.0 >= habit.targetValue
-        } else {
-            value == Entry.YES_MANUAL
-        }
-    }
-
-    /**
-     * Done, or covered by the habit's goal: for a "3 times a week" habit Loop fills the other
-     * days of a week whose goal is met with an automatic check, and those count here. For an
-     * every-day habit this is the same as [isDone].
-     */
-    private fun isGoalMet(habit: Habit, date: LocalDate): Boolean {
-        if (habit.isNumerical) return isDone(habit, date)
-        val value = habit.computedEntries.get(date).value
-        return value == Entry.YES_MANUAL || value == Entry.YES_AUTO
-    }
-
-    /** Loop only fills in goal days for yes/no habits that aren't every day. */
-    private fun isDaily(habit: Habit): Boolean =
-        habit.isNumerical || habit.frequency.numerator == habit.frequency.denominator
-
-    /** Loop itself never treats an "at most" habit as completed, so it can't unlock anything. */
-    private fun isCountable(habit: Habit): Boolean =
-        !habit.isNumerical || habit.targetType == NumericalHabitType.AT_LEAST
-
-    private fun parseDate(text: String): LocalDate? {
-        val parts = text.split("-").map { it.toIntOrNull() ?: return null }
-        if (parts.size != 3) return null
-        return LocalDate(parts[0], parts[1], parts[2])
-    }
-
-    /**
-     * [XrnruleContract.METHOD_SYNC] and [XrnruleContract.METHOD_WATCH]. Android doesn't apply
-     * the provider's read permission to `call`, so it's checked here.
-     */
-    override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
-        if (method != XrnruleContract.METHOD_SYNC && method != XrnruleContract.METHOD_WATCH) return null
-        val context = context ?: return null
-        if (context.checkCallingPermission(XrnruleContract.PERMISSION) != PackageManager.PERMISSION_GRANTED) {
-            throw SecurityException("needs ${XrnruleContract.PERMISSION}")
-        }
-        val sync = if (HabitsApplication.isComponentReady()) XrnSync.instance else null
-        val configured = sync?.settings?.isConfigured == true
-        return Bundle().apply {
-            putBoolean(XrnruleContract.KEY_CONFIGURED, configured)
-            if (method == XrnruleContract.METHOD_SYNC) {
-                putBoolean(XrnruleContract.KEY_SYNCED, configured && sync!!.syncBlocking(SYNC_TIMEOUT_MS))
-            } else {
-                putBoolean(XrnruleContract.KEY_CHANGED, configured && sync!!.waitForChange(WATCH_S))
-            }
-        }
-    }
-
-    override fun getType(uri: Uri): String = "vnd.android.cursor.dir/vnd.org.isoron.uhabits.habit"
+    override fun getType(uri: Uri): String? = null
 
     override fun insert(uri: Uri, values: ContentValues?): Uri? =
         throw UnsupportedOperationException("read-only")
@@ -165,20 +77,7 @@ class XrnruleProvider : ContentProvider() {
         selectionArgs: Array<out String>?
     ): Int = throw UnsupportedOperationException("read-only")
 
-    companion object {
-        private const val SYNC_TIMEOUT_MS = 5_000L
-        private const val WATCH_S = 25
-
-        private val COLUMNS = arrayOf(
-            COLUMN_UUID,
-            COLUMN_NAME,
-            COLUMN_POSITION,
-            COLUMN_ARCHIVED,
-            COLUMN_NUMERICAL,
-            COLUMN_COUNTABLE,
-            COLUMN_DONE,
-            COLUMN_GOAL_MET,
-            COLUMN_DAILY
-        )
+    private companion object {
+        const val SYNC_TIMEOUT_MS = 5_000L
     }
 }

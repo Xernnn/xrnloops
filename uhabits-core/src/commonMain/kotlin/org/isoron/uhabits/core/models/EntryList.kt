@@ -70,6 +70,11 @@ open class EntryList {
         entriesByDate[entry.date] = entry
     }
 
+    /** xrnloops: [add] for many at once, which [SQLiteEntryList] writes in one transaction. */
+    open fun addAll(entries: List<Entry>) {
+        entries.forEach { add(it) }
+    }
+
     /**
      * Returns all entries whose values are known, sorted by date. The first element
      * corresponds to the newest entry, and the last element corresponds to the oldest.

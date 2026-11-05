@@ -51,6 +51,7 @@ import org.isoron.uhabits.utils.dim
 import org.isoron.uhabits.utils.dp
 import org.isoron.uhabits.utils.setupToolbar
 import org.isoron.uhabits.utils.sres
+import org.isoron.uhabits.xrnlook.showWordmark
 import kotlin.math.max
 import kotlin.math.min
 
@@ -102,6 +103,7 @@ class ListHabitsRootView(
             displayHomeAsUpEnabled = false,
             theme = currentTheme()
         )
+        tbar.showWordmark() // xrnloops (XRNLOOPS.md)
         addView(rootView, MATCH_PARENT, MATCH_PARENT)
         listAdapter.setListView(listView)
     }

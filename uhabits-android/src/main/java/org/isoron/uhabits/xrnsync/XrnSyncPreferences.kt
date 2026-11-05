@@ -54,7 +54,8 @@ object XrnSyncPreferences {
             pref.summary = pref.text
             pref.setOnPreferenceChangeListener { p, value ->
                 p.summary = value as? String
-                changed(fragment, sync)
+                // Afterwards: this runs before the new value is saved, and `changed` reads it.
+                fragment.view?.post { if (fragment.isAdded) changed(fragment, sync) }
                 true
             }
         }

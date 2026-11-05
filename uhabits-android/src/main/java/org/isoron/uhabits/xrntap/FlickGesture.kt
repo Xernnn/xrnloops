@@ -145,7 +145,7 @@ class FlickGesture(
         if (!view.isAttachedToWindow || menu != null) return
         // From here the finger belongs to the menu, not to the list's scrolling.
         view.parent?.requestDisallowInterceptTouchEvent(true)
-        menu = Overlay(view, choices(), accent()).also { it.show() }
+        menu = Overlay(view, choices(), accent()) { menu = null }.also { it.show() }
         view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
     }
 
@@ -158,7 +158,8 @@ class FlickGesture(
     private class Overlay(
         private val view: View,
         private val choices: FlickChoices,
-        private val accent: Int
+        private val accent: Int,
+        private val onDetached: () -> Unit
     ) : Drawable(), View.OnAttachStateChangeListener {
 
         private val root = view.rootView as ViewGroup
@@ -168,7 +169,7 @@ class FlickGesture(
         private val radius = view.dp(14f)
         private val keyColor = res.getColor(R.attr.cardBgColor)
         private val edgeColor = res.getColor(R.attr.contrast20)
-        private val onAccent = if (ColorUtils.calculateLuminance(accent) > 0.45) 0xFF18181B.toInt() else 0xFFFFFFFF.toInt()
+        private val onAccent = if (ColorUtils.calculateLuminance(accent) > 0.19) 0xFF18181B.toInt() else 0xFFFFFFFF.toInt()
         private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             setShadowLayer(view.dp(8f), 0f, view.dp(2f), 0x55000000)
         }
@@ -198,8 +199,9 @@ class FlickGesture(
             root.getLocationInWindow(rootAt)
             // Centred on the day, moved in from the window's edges so every key is on screen.
             val reach = 1.5f * tile + gap + view.dp(8f)
-            cx = (at[0] - rootAt[0] + view.width / 2f).coerceIn(reach, root.width - reach)
-            cy = (at[1] - rootAt[1] + view.height / 2f).coerceIn(reach, root.height - reach)
+            // (A window can be too small for that, in split screen: coerceIn would throw.)
+            cx = if (root.width > 2 * reach) (at[0] - rootAt[0] + view.width / 2f).coerceIn(reach, root.width - reach) else root.width / 2f
+            cy = if (root.height > 2 * reach) (at[1] - rootAt[1] + view.height / 2f).coerceIn(reach, root.height - reach) else root.height / 2f
             setBounds(0, 0, root.width, root.height)
             root.overlay.add(this)
             view.addOnAttachStateChangeListener(this)
@@ -225,7 +227,10 @@ class FlickGesture(
 
         override fun onViewAttachedToWindow(v: View) = Unit
 
-        override fun onViewDetachedFromWindow(v: View) = dismiss()
+        override fun onViewDetachedFromWindow(v: View) {
+            dismiss()
+            onDetached() // no UP or CANCEL may ever come: the gesture has to forget this menu
+        }
 
         override fun draw(canvas: Canvas) {
             val scale = 0.85f + 0.15f * shown
