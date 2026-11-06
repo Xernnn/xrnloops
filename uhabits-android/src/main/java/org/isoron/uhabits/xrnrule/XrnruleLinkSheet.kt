@@ -90,7 +90,7 @@ class XrnruleLinkSheet : BottomSheetDialogFragment() {
     private fun addBlock(link: XrnruleLink) {
         val context = requireContext()
         val row = XrnlinkRowBinding.inflate(layoutInflater, view.blocks, true)
-        XrnruleLinkBadge.paint(row.lock, link)
+        XrnruleLinkBadge.paint(row.lock, link, requireArguments().getInt(ARG_COLOR))
         // Without a name of its own, a block goes by what it holds back, and that isn't said twice.
         row.block.text = link.blockName.ifBlank { link.targets }
         row.status.text = status(context, link)

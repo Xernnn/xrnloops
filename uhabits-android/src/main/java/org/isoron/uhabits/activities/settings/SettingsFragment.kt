@@ -40,7 +40,6 @@ import org.isoron.platform.time.DayOfWeek
 import org.isoron.platform.time.JavaLocalDateFormatter
 import org.isoron.uhabits.HabitsApplication
 import org.isoron.uhabits.R
-import org.isoron.uhabits.activities.habits.list.RESULT_BUG_REPORT
 import org.isoron.uhabits.activities.habits.list.RESULT_EXPORT_CSV
 import org.isoron.uhabits.activities.habits.list.RESULT_EXPORT_DB
 import org.isoron.uhabits.activities.habits.list.RESULT_IMPORT_DATA
@@ -97,7 +96,6 @@ class SettingsFragment : PreferenceFragmentCompat(), OnSharedPreferenceChangeLis
         setResultOnPreferenceClick("exportCSV", RESULT_EXPORT_CSV)
         setResultOnPreferenceClick("exportDB", RESULT_EXPORT_DB)
         setResultOnPreferenceClick("repairDB", RESULT_REPAIR_DB)
-        setResultOnPreferenceClick("bugReport", RESULT_BUG_REPORT)
         XrnSyncPreferences.attach(this)
         XrnTap.attach(this)
     }

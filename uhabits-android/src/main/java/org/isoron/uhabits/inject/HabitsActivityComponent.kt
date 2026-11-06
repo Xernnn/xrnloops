@@ -26,7 +26,6 @@ import org.isoron.uhabits.activities.AndroidThemeSwitcher
 import org.isoron.uhabits.activities.HabitsDirFinder
 import org.isoron.uhabits.activities.common.dialogs.ColorPickerDialogFactory
 import org.isoron.uhabits.activities.habits.list.ListHabitsMenu
-import org.isoron.uhabits.activities.habits.list.ListHabitsModule
 import org.isoron.uhabits.activities.habits.list.ListHabitsRootView
 import org.isoron.uhabits.activities.habits.list.ListHabitsScreen
 import org.isoron.uhabits.activities.habits.list.ListHabitsSelectionMenu
@@ -61,9 +60,6 @@ abstract class HabitsActivityComponent(
     ): ThemeSwitcher = AndroidThemeSwitcher(context, prefs)
 
     open val HabitCardListAdapter.bindAdapter: ListHabitsMenuBehavior.Adapter
-        @Provides get() = this
-
-    open val ListHabitsModule.bindBugReporter: ListHabitsBehavior.BugReporter
         @Provides get() = this
 
     open val ListHabitsScreen.bindMenuScreen: ListHabitsMenuBehavior.Screen

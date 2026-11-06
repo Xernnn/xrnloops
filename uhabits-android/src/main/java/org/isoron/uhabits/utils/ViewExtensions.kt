@@ -42,7 +42,6 @@ import android.widget.RelativeLayout
 import android.widget.RelativeLayout.ALIGN_PARENT_BOTTOM
 import android.widget.RelativeLayout.ALIGN_PARENT_TOP
 import android.widget.RelativeLayout.BELOW
-import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.core.content.FileProvider
@@ -140,24 +139,6 @@ fun Activity.startActivitySafely(intent: Intent) {
     } catch (e: ActivityNotFoundException) {
         this.showMessage(resources.getString(R.string.activity_not_found))
     }
-}
-
-fun Activity.showSendEmailScreen(
-    @StringRes toId: Int,
-    @StringRes subjectId: Int,
-    content: String?
-) {
-    val to = this.getString(toId)
-    val subject = this.getString(subjectId)
-    this.startActivity(
-        Intent().apply {
-            action = Intent.ACTION_SEND
-            type = "message/rfc822"
-            putExtra(Intent.EXTRA_EMAIL, arrayOf(to))
-            putExtra(Intent.EXTRA_SUBJECT, subject)
-            putExtra(Intent.EXTRA_TEXT, content)
-        }
-    )
 }
 
 fun Activity.restartWithFade(cls: Class<*>?) {

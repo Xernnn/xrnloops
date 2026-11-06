@@ -71,8 +71,9 @@ import kotlin.math.roundToInt
  * edit). A number day gets the amount and quick keys in place of the four value buttons; both
  * work in entry values, where an amount is stored ×1000, and the web app's sheet has the same keys.
  *
- * As in Loop's popups, picking a value saves it with the note as it stands, and closing the sheet
- * any other way keeps a changed note (with the day's value as it was), so typing is never lost.
+ * As in Loop's popups, picking a value saves it with the note as it stands. Closing the sheet any
+ * other way keeps what was typed, a new amount or a changed note, so typing is never lost; only
+ * Save or Clear empties a day, never a box left blank on the way out.
  */
 class NoteSheet : BottomSheetDialogFragment() {
 
@@ -81,6 +82,7 @@ class NoteSheet : BottomSheetDialogFragment() {
     private var saved = false
     private var originalValue = UNKNOWN
     private var originalNote = ""
+    private var originalAmount = ""
 
     override fun getTheme() = R.style.XrnNoteSheet
 
@@ -155,7 +157,16 @@ class NoteSheet : BottomSheetDialogFragment() {
 
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
-        if (!saved && ::view.isInitialized && note() != originalNote) save(originalValue)
+        if (saved || !::view.isInitialized) return
+        when {
+            amountTyped() -> save(amount())
+            note() != originalNote -> save(originalValue)
+        }
+    }
+
+    private fun amountTyped(): Boolean {
+        val text = view.amount.text?.toString().orEmpty()
+        return isNumber && text.isNotEmpty() && text != originalAmount
     }
 
     private fun note() = view.note.text?.toString()?.trim().orEmpty()
@@ -178,6 +189,7 @@ class NoteSheet : BottomSheetDialogFragment() {
         if (originalValue >= 0 && originalValue != SKIP) {
             view.amount.setText(AMOUNT.format(originalValue / 1000.0))
         }
+        originalAmount = view.amount.text?.toString().orEmpty()
         fixDecimalSeparator()
         view.amount.setOnEditorActionListener { _, _, _ -> view.save.performClick() }
 

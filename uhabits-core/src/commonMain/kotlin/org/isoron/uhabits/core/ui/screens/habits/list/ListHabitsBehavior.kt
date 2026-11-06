@@ -46,8 +46,7 @@ open class ListHabitsBehavior(
     private val taskRunner: TaskRunner,
     private val screen: Screen,
     private val commandRunner: CommandRunner,
-    private val prefs: Preferences,
-    private val bugReporter: BugReporter
+    private val prefs: Preferences
 ) {
     open fun onClickHabit(h: Habit) {
         screen.showHabitScreen(h)
@@ -126,17 +125,6 @@ open class ListHabitsBehavior(
         })
     }
 
-    open fun onSendBugReport() {
-        bugReporter.dumpBugReportToFile()
-        try {
-            val log = bugReporter.getBugReport()
-            screen.showSendBugReportToDeveloperScreen(log)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            screen.showMessage(Message.COULD_NOT_GENERATE_BUG_REPORT)
-        }
-    }
-
     open fun onStartup() {
         prefs.incrementLaunchCount()
         if (prefs.isFirstRun) onFirstRun()
@@ -154,14 +142,7 @@ open class ListHabitsBehavior(
         IMPORT_SUCCESSFUL,
         IMPORT_FAILED,
         DATABASE_REPAIRED,
-        COULD_NOT_GENERATE_BUG_REPORT,
         FILE_NOT_RECOGNIZED
-    }
-
-    interface BugReporter {
-        fun dumpBugReportToFile()
-
-        fun getBugReport(): String
     }
 
     interface DirFinder {
@@ -187,7 +168,6 @@ open class ListHabitsBehavior(
             date: LocalDate, // xrnloops
             callback: CheckMarkDialogCallback
         )
-        fun showSendBugReportToDeveloperScreen(log: String)
         fun showSendFileScreen(filename: String)
         fun showConfetti(color: PaletteColor, x: Float, y: Float)
     }

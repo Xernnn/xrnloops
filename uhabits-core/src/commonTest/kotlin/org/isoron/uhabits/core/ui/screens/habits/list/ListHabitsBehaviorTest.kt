@@ -57,8 +57,6 @@ class ListHabitsBehaviorTest : BaseUnitTest() {
 
     private var capturedPicker: NumberPickerCallback? = null
 
-    private val bugReporter: ListHabitsBehavior.BugReporter = mock()
-
     @BeforeTest
     override fun setUp() {
         super.setUp()
@@ -73,8 +71,7 @@ class ListHabitsBehaviorTest : BaseUnitTest() {
             taskRunner,
             screen,
             commandRunner,
-            prefs,
-            bugReporter
+            prefs
         )
     }
 
@@ -214,17 +211,6 @@ class ListHabitsBehaviorTest : BaseUnitTest() {
         behavior.onRepairDB()
         verify { habitList.repair() }
         verify { screen.showMessage(ListHabitsBehavior.Message.DATABASE_REPAIRED) }
-    }
-
-    @Test
-    fun testOnSendBugReport() {
-        every { bugReporter.getBugReport() } returns "hello"
-        behavior.onSendBugReport()
-        verify { bugReporter.dumpBugReportToFile() }
-        verify { screen.showSendBugReportToDeveloperScreen("hello") }
-        every { bugReporter.getBugReport() } throws RuntimeException()
-        behavior.onSendBugReport()
-        verify { screen.showMessage(ListHabitsBehavior.Message.COULD_NOT_GENERATE_BUG_REPORT) }
     }
 
     @Test

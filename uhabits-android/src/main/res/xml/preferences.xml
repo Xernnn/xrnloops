@@ -182,11 +182,6 @@
             android:title="@string/troubleshooting">
 
         <Preference
-                android:key="bugReport"
-                android:title="@string/generate_bug_report"
-                app:iconSpaceReserved="false" />
-
-        <Preference
                 android:key="repairDB"
                 android:title="@string/repair_database"
                 app:iconSpaceReserved="false" />
@@ -196,14 +191,6 @@
     <PreferenceCategory
             android:key="linksCategory"
             android:title="@string/links">
-
-        <Preference
-                android:title="@string/help"
-                app:iconSpaceReserved="false">
-            <intent
-                    android:action="android.intent.action.VIEW"
-                    android:data="@string/helpURL" />
-        </Preference>
 
         <Preference
                 android:title="@string/about"

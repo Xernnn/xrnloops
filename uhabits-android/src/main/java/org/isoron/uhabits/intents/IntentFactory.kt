@@ -65,9 +65,6 @@ class IntentFactory() {
             data = Uri.parse(habit.uriString)
         }
 
-    fun viewFAQ(context: Context) =
-        buildViewIntent(context.getString(R.string.helpURL))
-
     fun viewSourceCode(context: Context) =
         buildViewIntent(context.getString(R.string.sourceCodeURL))
 

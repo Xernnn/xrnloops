@@ -132,11 +132,6 @@ class ListHabitsMenu(
                 return true
             }
 
-            R.id.actionFAQ -> {
-                behavior.onViewFAQ()
-                return true
-            }
-
             R.id.actionAbout -> {
                 behavior.onViewAbout()
                 return true

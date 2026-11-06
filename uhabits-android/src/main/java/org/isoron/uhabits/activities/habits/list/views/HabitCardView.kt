@@ -154,8 +154,21 @@ class HabitCardView(
             }
         }
 
-        // xrnloops: after the name, a lock when the habit unlocks something in xrnrule (XRNLOOPS.md).
+        // xrnloops: right after the name, a lock when the habit unlocks something in xrnrule
+        // (XRNLOOPS.md). A row that wraps its content, with the weight on the name, inside a frame
+        // that takes the width: the name only gives way when the two don't fit.
         linkBadge = XrnruleLinkBadge(context)
+        val nameLine = FrameLayout(context).apply {
+            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+            addView(
+                LinearLayout(context).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    layoutParams = FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.CENTER_VERTICAL)
+                    addView(label, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, 1f))
+                    addView(linkBadge)
+                }
+            )
+        }
 
         checkmarkPanel = checkmarkPanelFactory.create().apply {
             onToggle = { date, value, notes ->
@@ -200,8 +213,7 @@ class HabitCardView(
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
 
             addView(scoreRing)
-            addView(label)
-            addView(linkBadge)
+            addView(nameLine)
             addView(checkmarkPanel)
             addView(numberPanel)
 

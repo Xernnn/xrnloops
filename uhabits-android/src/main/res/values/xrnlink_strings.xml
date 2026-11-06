@@ -24,4 +24,9 @@
     <string name="xrnlink_banner_counted">Counted towards %1$s · it needs more</string>
     <string name="xrnlink_banner_more">%1$s (+%2$d more)</string>
     <string name="xrnlink_banner_action">Open</string>
+
+    <!-- Font Awesome glyphs, the set a day's check and cross come from. -->
+    <string name="xrnlink_glyph_locked" translatable="false">&#xf023;</string>
+    <string name="xrnlink_glyph_open" translatable="false">&#xf09c;</string>
+    <string name="xrnlink_glyph_ready" translatable="false">&#xf0e7;</string>
 </resources>

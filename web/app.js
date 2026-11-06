@@ -14,8 +14,8 @@
 // A day works as on the phone (XRNLOOPS.md, "The web app"): a click does what "Tap on a day"
 // says; held for a moment, a cross of keys opens around it, and dragging towards one and letting
 // go picks it (up ✓, down ✗, left skip, right the note, the middle ?). A right-click opens the
-// same keys and leaves them open. Under each name, what the habit unlocks in xrnrule, read from
-// xrnrule-sync's shared state (`../xrnrule/state`, the same login).
+// same keys and leaves them open. After each name, a lock for what the habit unlocks in xrnrule,
+// read from xrnrule-sync's shared state (`../xrnrule/state`, the same login).
 
 import * as L from "./loop.js";
 import { ICONS, MARKS, UNITS_PER_EM } from "./icons.js";
@@ -324,7 +324,9 @@ async function live(gen) {
   while (gen === state.generation) {
     try {
       const epoch = state.epoch == null ? "" : `&epoch=${state.epoch}`;
-      const page = await api(`api/changes?since=${state.seq}&wait=25${epoch}`);
+      // Not held open while sync is failing: the first good answer has to clear the trouble.
+      const wait = state.sync.failures ? 0 : 25;
+      const page = await api(`api/changes?since=${state.seq}&wait=${wait}${epoch}`);
       if (gen !== state.generation) return;
       if (page.epoch !== state.epoch) { // restored from a backup: what's here is another history
         await loadAll(gen);
@@ -587,16 +589,13 @@ function linkStatus(link) {
 }
 
 /**
- * The phone's XrnruleLinkBadge.paint: xrnrule's colours for how a block stands, never the habit's.
- * Red while it waits on this habit, grey once the habit has done its part, an amber bolt when
- * there's an unlock to open, green while it's open.
+ * The phone's XrnruleLinkBadge.paint: a mark like a day's, in the habit's colour. Closed while the
+ * block waits on this habit, a bolt when there's an unlock to open, open while it's open; closed
+ * and in the grey of an empty day once the habit has done its part and the block wants more.
  */
-function lockClass(link) {
-  const kind = link.state === "ready" ? " ready" : link.state === "open" ? " open" : link.habitDone ? " waiting" : "";
-  return "unlock" + kind;
-}
+const lockClass = (link) => (link.state === "locked" && link.habitDone ? "unlock waiting" : "unlock");
 
-const lockIcon = (link) => icon(link.state === "ready" ? "bolt" : link.state === "open" ? "lockopen" : "lock");
+const lockIcon = (link) => mark(link.state === "ready" ? "bolt" : link.state === "open" ? "unlock" : "lock");
 
 /** A habit's lock, when a block uses it: a click shows the words, and only those go on to xrnrule. */
 function linkBadge(habit) {
@@ -730,6 +729,7 @@ function drawIfDeferred() {
 }
 
 function draw() {
+  formChanged = null; // the habit form sets it again if that's what gets drawn
   const app = document.getElementById("app");
   if (!state.signedIn) return app.replaceChildren(loginView());
   if (!state.loaded) return app.replaceChildren(h("p", { class: "boot" }, "Loading your habits…"));
@@ -753,11 +753,22 @@ function draw() {
 
 let lastRoute = null;
 
+/** Set while the habit form is open: true when leaving it would lose something. */
+let formChanged = null;
+let shownHash = location.hash;
+
 window.addEventListener("hashchange", () => {
+  if (location.hash === shownHash) return; // the next line, putting the address back
+  if (formChanged?.() && !confirm("Discard your changes?")) return void (location.hash = shownHash);
+  shownHash = location.hash;
   closePopover();
   closeSheet();
   render();
   window.scrollTo(0, 0);
+});
+
+window.addEventListener("beforeunload", (e) => {
+  if (formChanged?.()) e.preventDefault();
 });
 
 // The list holds as many days as the window does; a habit page sizes its calendar.
@@ -1347,6 +1358,7 @@ function numberSheet(habit, date) {
     type: "number", step: "any", min: 0, inputMode: "decimal", placeholder: "0",
     value: value >= 0 && value !== L.SKIP ? value / 1000 : "",
   });
+  const shownAmount = amount.value;
   const note = h("textarea", { value: originalNote, placeholder: "Note for this day", rows: 2 });
   const finish = (stored) => {
     current.onClose = null;
@@ -1372,8 +1384,11 @@ function numberSheet(habit, date) {
     note,
     h("div", { class: "actions" }, h("button", { class: "btn primary big", type: "submit" }, "Save")));
   const current = openSheet(habit, [sheetHead(habit, date), form]);
+  // Closing any other way keeps what was typed. Only Save or Clear empties a day, not a blank box.
   current.onClose = () => {
-    if (note.value.trim() !== originalNote) writeEntry(habit.uuid, date, value, note.value.trim());
+    const typed = amount.value !== "" && amount.value !== shownAmount;
+    if (typed) writeEntry(habit.uuid, date, Math.round(Number(amount.value) * 1000), note.value.trim());
+    else if (note.value.trim() !== originalNote) writeEntry(habit.uuid, date, value, note.value.trim());
   };
   amount.focus();
   amount.select();
@@ -1745,6 +1760,7 @@ function editView(habit, newType = L.YES_NO) {
       }
       if (!out.name) return (error.textContent = "Give the habit a name.");
       const uuid = habit?.uuid ?? crypto.randomUUID().replaceAll("-", "");
+      formChanged = null;
       writeHabit(uuid, out);
       location.hash = `#/habit/${uuid}`;
     },
@@ -1760,6 +1776,9 @@ function editView(habit, newType = L.YES_NO) {
       h("button", { class: "btn primary big", type: "submit" }, habit ? "Save" : "Create habit"),
       h("a", { class: "btn ghost", href: habit ? `#/habit/${habit.uuid}` : "#/" }, "Cancel")));
 
+  const fields = () => JSON.stringify([...new FormData(form)]);
+  const opened = fields();
+  formChanged = () => fields() !== opened;
   setTimeout(() => name.focus(), 0);
   return h("div", {},
     topBar(habit ? "Edit habit" : "New habit", h("a", { class: "link", href: habit ? `#/habit/${habit.uuid}` : "#/" }, "← Back")),

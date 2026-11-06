@@ -29,7 +29,8 @@ ascent = font["hhea"].ascent
 UPM = font["head"].unitsPerEm
 
 marks = {}
-for name, cp in [("check", 0xF00C), ("times", 0xF00D), ("minus", 0xF068), ("question", 0xF128)]:
+for name, cp in [("check", 0xF00C), ("times", 0xF00D), ("minus", 0xF068), ("question", 0xF128),
+                 ("lock", 0xF023), ("unlock", 0xF09C), ("bolt", 0xF0E7)]:
     g = glyphs[cmap[cp]]
     pen = SVGPathPen(glyphs, lambda v: "%g" % round(v))
     flip = (1, 0, 0, -1, 0, ascent)
@@ -41,7 +42,7 @@ for name, cp in [("check", 0xF00C), ("times", 0xF00D), ("minus", 0xF068), ("ques
 
 ANDROID = "{http://schemas.android.com/apk/res/android}"
 icons = {}
-for name in ["lock", "lock_open", "bolt", "note", "dialpad", "cloud_off", "open_in_new"]:
+for name in ["lock", "lock_open", "note", "dialpad", "cloud_off", "open_in_new"]:
     root = ET.parse(f"{repo}/uhabits-android/src/main/res/drawable/xrn_ic_{name}.xml").getroot()
     paths = [p.get(ANDROID + "pathData") for p in root.iter("path")]
     icons[name.replace("_", "")] = " ".join(paths)
@@ -54,7 +55,7 @@ out = f"""/*
 
 // The shapes the phone draws (XRNLOOPS.md, "The web app"). Made by tools/make_web_icons.py from
 // the app's own files, so a day here looks like a day there:
-// - MARKS: Font Awesome 4's check, times, minus and question glyphs (Dave Gandy, SIL OFL 1.1),
+// - MARKS: Font Awesome 4's glyphs for a day and a habit's lock (Dave Gandy, SIL OFL 1.1),
 //   from uhabits-android/src/main/assets/fontawesome-webfont.ttf, which Loop draws its days with.
 //   Units are the font's ({UPM} per em); `box` is the glyph's ink: x, y, width, height.
 // - ICONS: res/drawable/xrn_ic_*.xml, Material icons on a 24-unit grid (Apache 2.0).

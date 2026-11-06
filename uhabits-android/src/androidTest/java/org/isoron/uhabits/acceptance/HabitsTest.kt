@@ -55,6 +55,28 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 @LargeTest
 class HabitsTest : BaseUserInterfaceTest() {
+    @Test
+    @Throws(Exception::class)
+    fun shouldAskBeforeLosingChangesToAHabit() {
+        launchApp()
+        clickMenu(ADD)
+        clickText("Yes or No")
+        verifyShowsScreen(EDIT_HABIT)
+        pressBack()
+        verifyShowsScreen(LIST_HABITS)
+
+        clickMenu(ADD)
+        clickText("Yes or No")
+        typeName("Half typed")
+        pressBack()
+        verifyDisplaysText("Discard your changes?")
+        clickText("Keep editing")
+        verifyShowsScreen(EDIT_HABIT)
+        pressBack()
+        clickText("Discard")
+        verifyShowsScreen(LIST_HABITS)
+        verifyDoesNotDisplayText("Half typed")
+    }
 
     @Test
     @Throws(Exception::class)

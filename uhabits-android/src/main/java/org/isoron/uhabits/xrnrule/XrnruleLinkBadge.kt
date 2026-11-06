@@ -21,26 +21,28 @@ package org.isoron.uhabits.xrnrule
 
 import android.content.Context
 import android.content.res.ColorStateList
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.RippleDrawable
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.View
-import android.widget.ImageView
-import androidx.appcompat.widget.AppCompatImageView
+import android.widget.TextView
+import androidx.appcompat.widget.AppCompatTextView
 import androidx.core.graphics.ColorUtils
 import androidx.fragment.app.FragmentActivity
 import org.isoron.uhabits.R
 import org.isoron.uhabits.core.models.Habit
 import org.isoron.uhabits.utils.dp
+import org.isoron.uhabits.utils.getFontAwesome
 import org.isoron.uhabits.utils.sres
 
 /**
- * A habit's lock on its card in the list, after the name, when a block in xrnrule uses the habit;
- * nothing otherwise. No words, so the card stays as clean as any other; it only shows how the most
+ * A habit's lock on its card in the list, straight after the name, when a block in xrnrule uses
+ * the habit; nothing otherwise. It's drawn like the row's own marks, with no background and no
+ * words: the glyph a day's ✓ comes from, at its size, in its colour. It only shows how the most
  * useful block stands ([XrnruleLinks.ordered]). A tap brings up the words, [XrnruleLinkSheet]; the
  * rest of the card still opens the habit.
  */
-class XrnruleLinkBadge(context: Context) : AppCompatImageView(context) {
+class XrnruleLinkBadge(context: Context) : AppCompatTextView(context) {
 
     private var habit: Habit? = null
     private var tint = 0
@@ -48,6 +50,9 @@ class XrnruleLinkBadge(context: Context) : AppCompatImageView(context) {
 
     init {
         visibility = View.GONE
+        gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        setPaddingRelative(dp(GAP_DP).toInt(), 0, 0, 0)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, GLYPH_SP)
     }
 
     fun bind(habit: Habit, color: Int) {
@@ -68,8 +73,10 @@ class XrnruleLinkBadge(context: Context) : AppCompatImageView(context) {
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val side = dp(SIDE_DP).toInt()
-        setMeasuredDimension(side, side)
+        super.onMeasure(
+            MeasureSpec.makeMeasureSpec(dp(WIDTH_DP).toInt(), MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(dp(HEIGHT_DP).toInt(), MeasureSpec.EXACTLY)
+        )
     }
 
     private fun render() {
@@ -82,7 +89,12 @@ class XrnruleLinkBadge(context: Context) : AppCompatImageView(context) {
             return
         }
         visibility = View.VISIBLE
-        paint(this, link)
+        paint(this, link, tint)
+        background = RippleDrawable(
+            ColorStateList.valueOf(ColorUtils.setAlphaComponent(tint, RIPPLE_ALPHA)),
+            null,
+            null
+        ).apply { radius = dp(RIPPLE_DP).toInt() }
         contentDescription = "${link.blockName.ifBlank { link.targets }}: ${XrnruleLinkSheet.status(context, link)}"
         setOnClickListener {
             (context as? FragmentActivity)?.let { XrnruleLinkSheet.show(it, habit, tint) }
@@ -90,62 +102,37 @@ class XrnruleLinkBadge(context: Context) : AppCompatImageView(context) {
     }
 
     companion object {
-        /** The whole view, a fair target for a thumb; the circle inside it is the part that shows. */
-        private const val SIDE_DP = 40f
-        private const val CIRCLE_DP = 24f
-        private const val GLYPH_DP = 13f
+        /** A day's ✓ is this size (CheckmarkButtonView). */
+        private const val GLYPH_SP = 14f
+
+        /** From the end of the name to the glyph. */
+        private const val GAP_DP = 7f
+
+        /** A fair target for a thumb; the glyph sits at its start, close to the name. */
+        private const val WIDTH_DP = 36f
+        private const val HEIGHT_DP = 40f
+        private const val RIPPLE_DP = 18f
         private const val RIPPLE_ALPHA = 0x40
-        private const val ON_READY = 0xFF18181B.toInt()
 
         /**
-         * The lock for [link], in a [SIDE_DP] square, in xrnrule's colours for how a block stands,
-         * so it reads the same in both apps and never looks like part of the habit: red while the
-         * block waits on this habit, grey once the habit has done its part and the block wants
-         * more, green while it's open, and a solid amber bolt when an unlock is earned and only
-         * has to be opened, the one thing here worth a look from across the list.
+         * The glyph for [link], in [color], the habit's: closed while the block waits on this
+         * habit, a bolt when an unlock is earned and only has to be opened, open while it's open.
+         * Once the habit has done its part and the block wants more, it's closed and in the grey
+         * of an empty day, as there's nothing left to do here.
          */
-        fun paint(view: ImageView, link: XrnruleLink) {
-            val res = view.sres
-            val icon: Int
-            val ink: Int
-            val fill: Int
-            when {
-                link.state == XrnruleLinksContract.STATE_READY -> {
-                    icon = R.drawable.xrn_ic_bolt
-                    ink = ON_READY
-                    fill = res.getColor(R.attr.xrnReady)
+        fun paint(view: TextView, link: XrnruleLink, color: Int) {
+            val ready = link.state == XrnruleLinksContract.STATE_READY
+            val open = link.state == XrnruleLinksContract.STATE_OPEN
+            view.typeface = view.getFontAwesome()
+            view.setText(
+                when {
+                    ready -> R.string.xrnlink_glyph_ready
+                    open -> R.string.xrnlink_glyph_open
+                    else -> R.string.xrnlink_glyph_locked
                 }
-                link.state == XrnruleLinksContract.STATE_OPEN -> {
-                    icon = R.drawable.xrn_ic_lock_open
-                    ink = res.getColor(R.attr.xrnOpen)
-                    fill = res.getColor(R.attr.xrnOpenSoft)
-                }
-                link.habitDone -> {
-                    icon = R.drawable.xrn_ic_lock
-                    ink = res.getColor(R.attr.contrast60)
-                    fill = res.getColor(R.attr.contrast20)
-                }
-                else -> {
-                    icon = R.drawable.xrn_ic_lock
-                    ink = res.getColor(R.attr.xrnLocked)
-                    fill = res.getColor(R.attr.xrnLockedSoft)
-                }
-            }
-            view.setImageResource(icon)
-            view.imageTintList = ColorStateList.valueOf(ink)
-            view.scaleType = ImageView.ScaleType.FIT_CENTER
-            val pad = view.dp((SIDE_DP - GLYPH_DP) / 2).toInt()
-            view.setPadding(pad, pad, pad, pad)
-
-            val circle = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(fill)
-            }
-            view.background = RippleDrawable(
-                ColorStateList.valueOf(ColorUtils.setAlphaComponent(ink, RIPPLE_ALPHA)),
-                InsetDrawable(circle, view.dp((SIDE_DP - CIRCLE_DP) / 2).toInt()),
-                null
             )
+            val faint = !ready && !open && link.habitDone
+            view.setTextColor(if (faint) view.sres.getColor(R.attr.contrast40) else color)
         }
     }
 }

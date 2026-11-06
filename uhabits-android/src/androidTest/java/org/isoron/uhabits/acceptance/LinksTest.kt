@@ -25,8 +25,6 @@ import org.isoron.uhabits.acceptance.steps.CommonSteps.clickText
 import org.isoron.uhabits.acceptance.steps.CommonSteps.launchApp
 import org.isoron.uhabits.acceptance.steps.CommonSteps.verifyOpensWebsite
 import org.isoron.uhabits.acceptance.steps.ListHabitsSteps.MenuItem.ABOUT
-import org.isoron.uhabits.acceptance.steps.ListHabitsSteps.MenuItem.HELP
-import org.isoron.uhabits.acceptance.steps.ListHabitsSteps.MenuItem.SETTINGS
 import org.isoron.uhabits.acceptance.steps.ListHabitsSteps.clickMenu
 import org.junit.Ignore
 import org.junit.Test
@@ -52,22 +50,5 @@ class LinksTest : BaseUserInterfaceTest() {
         clickMenu(ABOUT)
         clickText("Help translate this app")
         verifyOpensWebsite("translate.loophabits.org")
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun shouldLinkToHelp() {
-        launchApp()
-        clickMenu(HELP)
-        verifyOpensWebsite("github.com")
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun shouldLinkToHelpFromSettings() {
-        launchApp()
-        clickMenu(SETTINGS)
-        clickText("Help & FAQ")
-        verifyOpensWebsite("github.com")
     }
 }

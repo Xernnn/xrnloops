@@ -45,27 +45,9 @@
     <color name="xrn_soft">#D4D4D8</color>
     <string name="xrn_wordmark" translatable="false">xrnloops</string>
 
-    <!-- How a block stands, in xrnrule's fixed colours: the same in both apps, and nothing to do
-         with any habit's own colour. -->
-    <color name="xrn_locked">#F04242</color>
-    <color name="xrn_locked_soft">#4A1F1F</color>
-    <color name="xrn_ready">#FFD60A</color>
-    <color name="xrn_open">#22C55E</color>
-    <color name="xrn_open_soft">#1F3A2A</color>
-    <color name="xrn_light_locked">#DC2626</color>
-    <color name="xrn_light_locked_soft">#FDE3E3</color>
-    <color name="xrn_light_ready">#CA8A04</color>
-    <color name="xrn_light_open">#16A34A</color>
-    <color name="xrn_light_open_soft">#DCFCE7</color>
-
     <!-- The hairline round anything on a card's surface: list rows, sheet rows, bar buttons. -->
     <attr name="xrnRowEdge" format="color" />
     <attr name="xrnBarTheme" format="reference" />
-    <attr name="xrnLocked" format="color" />
-    <attr name="xrnLockedSoft" format="color" />
-    <attr name="xrnReady" format="color" />
-    <attr name="xrnOpen" format="color" />
-    <attr name="xrnOpenSoft" format="color" />
 
     <style name="XrnAppTheme" parent="AppBaseTheme">
         <item name="aboutScreenColor">@color/xrn_light_green</item>
@@ -85,11 +67,6 @@
         <item name="actionModeTheme">?attr/xrnBarTheme</item>
         <item name="actionModeStyle">@style/XrnActionMode</item>
         <item name="android:dialogTheme">@style/XrnPlainDialog</item>
-        <item name="xrnLocked">@color/xrn_light_locked</item>
-        <item name="xrnLockedSoft">@color/xrn_light_locked_soft</item>
-        <item name="xrnReady">@color/xrn_light_ready</item>
-        <item name="xrnOpen">@color/xrn_light_open</item>
-        <item name="xrnOpenSoft">@color/xrn_light_open_soft</item>
         <item name="actionModeBackground">@color/xrn_light_bg</item>
         <item name="android:textColor">@color/xrn_light_text</item>
         <item name="android:textColorAlertDialogListItem">@color/xrn_light_text</item>
@@ -128,11 +105,6 @@
         <item name="actionModeTheme">?attr/xrnBarTheme</item>
         <item name="actionModeStyle">@style/XrnActionMode</item>
         <item name="android:dialogTheme">@style/XrnPlainDialog</item>
-        <item name="xrnLocked">@color/xrn_locked</item>
-        <item name="xrnLockedSoft">@color/xrn_locked_soft</item>
-        <item name="xrnReady">@color/xrn_ready</item>
-        <item name="xrnOpen">@color/xrn_open</item>
-        <item name="xrnOpenSoft">@color/xrn_open_soft</item>
         <item name="actionModeBackground">@color/xrn_bg</item>
         <item name="android:textColor">@color/xrn_text</item>
         <item name="android:textColorAlertDialogListItem">@color/xrn_text</item>
@@ -183,11 +155,6 @@
         <item name="actionModeTheme">?attr/xrnBarTheme</item>
         <item name="actionModeStyle">@style/XrnActionMode</item>
         <item name="android:dialogTheme">@style/XrnPlainDialog</item>
-        <item name="xrnLocked">@color/xrn_locked</item>
-        <item name="xrnLockedSoft">@color/xrn_locked_soft</item>
-        <item name="xrnReady">@color/xrn_ready</item>
-        <item name="xrnOpen">@color/xrn_open</item>
-        <item name="xrnOpenSoft">@color/xrn_open_soft</item>
         <item name="android:fontFamily">@font/xrn_misans</item>
         <item name="toolbarStyle">@style/XrnToolbar</item>
     </style>
