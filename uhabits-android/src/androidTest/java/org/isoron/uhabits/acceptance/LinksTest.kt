@@ -42,13 +42,4 @@ class LinksTest : BaseUserInterfaceTest() {
         clickText("View source code at GitHub")
         verifyOpensWebsite("github.com")
     }
-
-    @Test
-    @Throws(Exception::class)
-    fun shouldLinkToTranslationWebsite() {
-        launchApp()
-        clickMenu(ABOUT)
-        clickText("Help translate this app")
-        verifyOpensWebsite("translate.loophabits.org")
-    }
 }

@@ -32,20 +32,8 @@ class AboutScreen(
 
     private var developerCountdown = 5
 
-    fun showRateAppWebsite() =
-        activity.startActivitySafely(intents.rateApp(activity))
-
-    fun showSendFeedbackScreen() =
-        activity.startActivitySafely(intents.sendFeedback(activity))
-
     fun showSourceCodeWebsite() =
         activity.startActivitySafely(intents.viewSourceCode(activity))
-
-    fun showTranslationWebsite() =
-        activity.startActivitySafely(intents.helpTranslate(activity))
-
-    fun showPrivacyPolicyWebsite() =
-        activity.startActivitySafely(intents.privacyPolicy(activity))
 
     fun showCodeContributorsWebsite() =
         activity.startActivitySafely(intents.codeContributors(activity))
