@@ -80,7 +80,8 @@
 
             <org.isoron.uhabits.activities.habits.show.views.StreakCardView
                 android:id="@+id/streakCard"
-                style="@style/Card" />
+                style="@style/Card"
+                android:paddingRight="16dp" />
 
             <org.isoron.uhabits.activities.habits.show.views.FrequencyCardView
                 android:id="@+id/frequencyCard"
