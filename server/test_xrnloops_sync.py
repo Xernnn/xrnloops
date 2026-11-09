@@ -8,6 +8,7 @@ last-writer-wins store, and the HTTP layer.
     python3 -m unittest server/test_xrnloops_sync.py     (from the repo root)
 """
 import base64
+import concurrent.futures
 import hashlib
 import gzip
 import hashlib
@@ -20,6 +21,7 @@ import tempfile
 import threading
 import time
 import unittest
+import unittest.mock
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -281,6 +283,22 @@ class HttpTest(unittest.TestCase):
             self.assertEqual(401, self.status_of("/api/changes?since=0", password="nope", headers=forwarded))
         forwarded = {"X-Forwarded-For": "198.51.100.200, 203.0.113.20"}
         self.assertEqual(429, self.status_of("/api/changes?since=0", headers=forwarded))
+
+    def test_guesses_sent_at_once_still_stop_at_the_limit(self):
+        def slow_wrong(header):  # bcrypt takes a while: every guess is in flight at once
+            time.sleep(0.3)
+            return None
+        guesser = {"X-Forwarded-For": "203.0.113.30"}
+        limit, n = 3, 12  # a limit the test server's listen backlog lets every guess reach at once
+        start = threading.Barrier(n)
+        def guess(_):
+            start.wait()
+            return self.status_of("/api/changes?since=0", password="nope", headers=guesser)
+        with unittest.mock.patch.object(srv, "check_login", slow_wrong), unittest.mock.patch.object(srv, "FAIL_LIMIT", limit):
+            with concurrent.futures.ThreadPoolExecutor(n) as pool:
+                statuses = list(pool.map(guess, range(n)))
+        self.assertEqual(limit, statuses.count(401))
+        self.assertEqual(n - limit, statuses.count(429))
 
     def test_numbers_that_arent(self):
         self.assertEqual(400, self.status_of("/api/changes?since=0&wait=nan"))

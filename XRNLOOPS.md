@@ -109,7 +109,9 @@ web app's "today" and xrnrule's follow the phone's day. It serves `web/` at its 
 kept by the browser, anything else is asked after with its `ETag`, so a deploy shows at once and
 a repeat visit costs a few 304s instead of every file. The data is never cached. On the home server it runs at `<server>/xrnloops` (port 5234 behind Tailscale Funnel),
 with its own htpasswd file (`~/.config/xrn-sync/users`, shared with xrnrule-sync). Ten wrong
-passwords from one address within 15 minutes get 429 until they age out.
+passwords from one address within 15 minutes get 429 until they age out. A password counts as
+wrong until bcrypt has found it right, so guesses sent all at once can't get past the ten
+(until 2026-11-10 they were counted after the check, and every guess in flight got through).
 
 The phone sends its password (Basic auth) with every request. The web app trades it once for a
 cookie (`POST /api/session`; `DELETE` signs out) and keeps nothing but a "signed in" hint in
