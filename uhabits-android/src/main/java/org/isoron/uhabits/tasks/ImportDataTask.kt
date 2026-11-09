@@ -26,6 +26,7 @@ import org.isoron.uhabits.core.io.GenericImporter
 import org.isoron.uhabits.core.models.ModelFactory
 import org.isoron.uhabits.core.models.sqlite.SQLModelFactory
 import org.isoron.uhabits.core.tasks.Task
+import org.isoron.uhabits.xrnsync.XrnSync
 
 class ImportDataTask(
     private val importer: GenericImporter,
@@ -36,6 +37,17 @@ class ImportDataTask(
     private var result = 0
     private val modelFactory: SQLModelFactory = modelFactory as SQLModelFactory
     override suspend fun doInBackground() {
+        // xrnloops: sync waits for the import, then sends what it changed as old (XRNLOOPS.md).
+        val sync = XrnSync.instance
+        val base = sync?.beginImport()
+        try {
+            importAll()
+        } finally {
+            if (base != null) sync.endImport(base)
+        }
+    }
+
+    private suspend fun importAll() {
         modelFactory.database.begin()
         try {
             if (importer.canHandle(file)) {

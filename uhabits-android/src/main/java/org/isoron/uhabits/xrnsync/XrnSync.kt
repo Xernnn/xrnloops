@@ -55,6 +55,7 @@ import java.io.IOException
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Two-way sync of every habit and entry with xrnloops-sync on the home server, so the web app
@@ -62,7 +63,9 @@ import java.util.concurrent.TimeUnit
  *
  * Local changes are found by diffing the habit list against a snapshot of what the server last
  * agreed to (`files/xrnsync-snapshot.json`), not by watching commands: that also catches a
- * backup import, which bypasses [CommandRunner]. Remote changes are applied directly on the one
+ * backup import, which bypasses [CommandRunner]. Each goes out stamped with when it was made
+ * ([XrnSyncEdits]), not when it is sent, so a change made offline loses to a later one made
+ * elsewhere, and an import counts as old. Remote changes are applied directly on the one
  * sync thread, never queued behind it, so a diff can't run between "server sent X" and "X is
  * stored" and push the old value back. A record changed here since this sync read it is left
  * alone; it goes out on the next round.
@@ -83,6 +86,10 @@ class XrnSync(
     val settings = XrnSyncSettings(context)
     private val appContext = context.applicationContext
     private val snapshotFile = File(context.filesDir, "xrnsync-snapshot.json")
+    private val edits = XrnSyncEdits(File(context.filesDir, "xrnsync-edits.txt"))
+
+    /** Imports under way ([beginImport]): no round runs meanwhile. */
+    private val imports = AtomicInteger()
     private val executor = Executors.newSingleThreadScheduledExecutor { r ->
         Thread(r, "xrnsync").apply { isDaemon = true }
     }
@@ -142,6 +149,8 @@ class XrnSync(
 
     override fun onCommandFinished(command: Command) {
         if (command === SyncedFromServer || !settings.isConfigured) return
+        // When it was made, for its stamp: it may only get out hours from now.
+        edits.noteChanged(XrnSyncEdits.changedBy(command, habitList), System.currentTimeMillis())
         requestSync(DEBOUNCE_MS)
         // In case Android ends this process before then (it does, right after the app is left).
         XrnSyncJob.schedulePush(appContext)
@@ -246,27 +255,64 @@ class XrnSync(
         }
     }
 
-    private fun runSync(): Boolean = try {
-        val summary = sync()
-        settings.recordAttempt(true, summary)
-        true
-    } catch (e: Exception) {
-        Log.w(TAG, "sync failed", e)
-        val locked = e is XrnSyncApi.ServerException && e.code == 429
-        val message = when {
-            e is XrnSyncApi.AuthException -> "Wrong user name or password"
-            locked -> "Locked out after wrong passwords; the server waits 15 minutes"
-            e is XrnSyncApi.ServerException -> "The server answered ${e.code}"
-            e is IOException -> "Can't reach the server (${e.message})"
-            else -> "Failed: $e"
+    /**
+     * Before a backup is imported, off the main thread: holds off sync until [endImport], after a
+     * round already under way has finished, so none of the import goes out as a change made now.
+     * What it returns is for [endImport].
+     */
+    internal fun beginImport(): ImportBase {
+        imports.incrementAndGet()
+        try {
+            executor.submit { }.get(IMPORT_WAIT_MS, TimeUnit.MILLISECONDS)
+        } catch (e: Exception) {
+            Log.w(TAG, "importing while a sync is still under way", e)
         }
-        settings.recordAttempt(false, message, needsYou = e is XrnSyncApi.AuthException || locked)
-        false
+        return ImportBase(readLocal(), System.currentTimeMillis())
+    }
+
+    /** After the import: what it changed is old, and goes out filling gaps only ([stampFor]). */
+    internal fun endImport(base: ImportBase) {
+        try {
+            if (settings.isConfigured) {
+                // A change made here meanwhile was noted with its own time, and keeps it.
+                val noted = edits.changes()
+                val keys = importedKeys(base.local, readLocal()).filter { (noted[it] ?: -1) < base.started }
+                edits.noteImported(keys)
+            }
+        } finally {
+            imports.decrementAndGet()
+            requestSync(0)
+        }
+    }
+
+    internal class ImportBase(val local: LocalState, val started: Long)
+
+    private fun runSync(): Boolean {
+        // An import is under way: endImport syncs once it's over.
+        if (imports.get() > 0) return false
+        return try {
+            val summary = sync()
+            settings.recordAttempt(true, summary)
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "sync failed", e)
+            val locked = e is XrnSyncApi.ServerException && e.code == 429
+            val message = when {
+                e is XrnSyncApi.AuthException -> "Wrong user name or password"
+                locked -> "Locked out after wrong passwords; the server waits 15 minutes"
+                e is XrnSyncApi.ServerException -> "The server answered ${e.code}"
+                e is IOException -> "Can't reach the server (${e.message})"
+                else -> "Failed: $e"
+            }
+            settings.recordAttempt(false, message, needsYou = e is XrnSyncApi.AuthException || locked)
+            false
+        }
     }
 
     // ---- the round ---------------------------------------------------------------------
 
-    private class Round(val before: LocalState, var snap: Snapshot) {
+    /** [started]: when the round read the phone's state ([before]). */
+    private class Round(val before: LocalState, var snap: Snapshot, val started: Long) {
         var serverDayStartHour: Int? = null
         var applied = 0
         var refetchAll = false
@@ -282,8 +328,9 @@ class XrnSync(
 
     private fun sync(): String {
         val api = XrnSyncApi(settings.url, settings.user, settings.password)
+        val started = System.currentTimeMillis()
         val before = readLocal()
-        val round = Round(before, agreed(before))
+        val round = Round(before, agreed(before), started)
         try {
             var sent = push(api, round)
             if (!pull(api, round)) {
@@ -342,33 +389,11 @@ class XrnSync(
     }
 
     private fun push(api: XrnSyncApi, round: Round): Int {
-        val (before, snap) = round.before to round.snap
-        val now = System.currentTimeMillis()
-        fun stamp(previous: Long?) = maxOf(now, (previous ?: 0) + 1) // our write beats what it replaces
-
-        val habits = mutableListOf<HabitRecord>()
-        for ((uuid, data) in before.habits) {
-            val old = snap.habits[uuid]
-            if (old?.data == data) continue
-            // Only the order moved (Loop renumbers whenever a habit is added or removed), so this
-            // is no newer than what was agreed: an edit from elsewhere since then must beat it.
-            val reordered = old != null && old.data.copy(position = data.position) == data
-            habits += HabitRecord(uuid, data, if (reordered) old!!.mtime + 1 else stamp(old?.mtime), deleted = false)
-        }
-        for ((uuid, old) in snap.habits) {
-            if (uuid !in before.habits) habits += HabitRecord(uuid, old.data, stamp(old.mtime), deleted = true)
-        }
-        val entries = mutableListOf<EntryRecord>()
-        for ((key, data) in before.entries) {
-            val old = snap.entries[key]
-            if ((old?.data ?: EntryData.EMPTY) != data) entries += EntryRecord(key, data, stamp(old?.mtime))
-        }
-        for ((key, old) in snap.entries) {
-            val uuid = key.substringBefore('|')
-            if (key !in before.entries && uuid in before.habits && old.data != EntryData.EMPTY) {
-                entries += EntryRecord(key, EntryData.EMPTY, stamp(old.mtime))
-            }
-        }
+        val snap = round.snap
+        val noted = edits.changes()
+        val (habits, entries) = planPush(round.before, snap, noted, System.currentTimeMillis())
+        // Noted before this round read the phone, yet the same as what was agreed: undone since.
+        edits.forgetAllBut(habits.map { it.uuid }.toSet() + entries.map { it.key }, round.started)
         if (habits.isEmpty() && entries.isEmpty()) return 0
 
         // Habits go first, so the server (and the web app reading its feed) knows an entry's habit.
@@ -397,6 +422,9 @@ class XrnSync(
             // What we lost to a newer write elsewhere comes back as the winner: take it.
             applyRemote(rejected.getJSONArray("habits"), rejected.getJSONArray("entries"), round)
             snap.save(snapshotFile)
+            // Taken, or beaten by what is now here: either way it's settled.
+            val sent = sentHabits.map { it.uuid } + chunk.map { it.key }
+            edits.settle(sent.mapNotNull { key -> noted[key]?.let { key to it } }.toMap())
         }
         return habits.size + entries.size
     }
@@ -504,7 +532,7 @@ class XrnSync(
 
     // ---- local state -------------------------------------------------------------------
 
-    private class LocalState(val habits: MutableMap<String, HabitData>, val entries: MutableMap<String, EntryData>)
+    internal class LocalState(val habits: MutableMap<String, HabitData>, val entries: MutableMap<String, EntryData>)
 
     private fun readLocal(): LocalState {
         val habits = mutableMapOf<String, HabitData>()
@@ -567,8 +595,75 @@ class XrnSync(
         private const val WATCH_RETRY_MAX_MS = 5 * 60_000L
         private const val AUTH_RETRY_MS = 30 * 60_000L
         private const val LOCKED_OUT_RETRY_MS = 15 * 60_000L
+        private const val IMPORT_WAIT_MS = 60_000L
     }
 }
+
+// ---- what a push sends -----------------------------------------------------------------
+
+/** What an import brought in or changed, by [XrnSyncEdits]' keys. A new order alone isn't news. */
+internal fun importedKeys(before: XrnSync.LocalState, after: XrnSync.LocalState): List<String> {
+    val keys = mutableListOf<String>()
+    for ((uuid, data) in after.habits) {
+        if (before.habits[uuid]?.copy(position = data.position) != data) keys += uuid
+    }
+    for ((key, data) in after.entries) if (before.entries[key] != data) keys += key
+    return keys
+}
+
+/**
+ * The records [local] has that differ from what the server agreed to ([snap]), each stamped by
+ * [stampFor] from when it was changed here ([noted], from [XrnSyncEdits]).
+ */
+internal fun planPush(
+    local: XrnSync.LocalState,
+    snap: Snapshot,
+    noted: Map<String, Long>,
+    now: Long
+): Pair<List<HabitRecord>, List<EntryRecord>> {
+    fun stamp(key: String, previous: Long?) = stampFor(noted[key], previous, now)
+
+    val habits = mutableListOf<HabitRecord>()
+    for ((uuid, data) in local.habits) {
+        val old = snap.habits[uuid]
+        if (old?.data == data) continue
+        // Only the order moved (Loop renumbers whenever a habit is added or removed), so this
+        // is no newer than what was agreed: an edit from elsewhere since then must beat it.
+        val reordered = old != null && old.data.copy(position = data.position) == data
+        habits += HabitRecord(uuid, data, if (reordered) old!!.mtime + 1 else stamp(uuid, old?.mtime), deleted = false)
+    }
+    for ((uuid, old) in snap.habits) {
+        if (uuid !in local.habits) habits += HabitRecord(uuid, old.data, stamp(uuid, old.mtime), deleted = true)
+    }
+    val entries = mutableListOf<EntryRecord>()
+    for ((key, data) in local.entries) {
+        val old = snap.entries[key]
+        if ((old?.data ?: EntryData.EMPTY) != data) entries += EntryRecord(key, data, stamp(key, old?.mtime))
+    }
+    for ((key, old) in snap.entries) {
+        val uuid = key.substringBefore('|')
+        if (key !in local.entries && uuid in local.habits && old.data != EntryData.EMPTY) {
+            entries += EntryRecord(key, EntryData.EMPTY, stamp(key, old.mtime))
+        }
+    }
+    return habits to entries
+}
+
+/**
+ * The mtime a record changed here goes out with, the server keeping the newest per record: when
+ * the change was made ([changedAt]), or [now] for one nobody noted, as before; and always past
+ * the version it was made on ([previous]), so a phone clock that runs behind can't lose a tick.
+ * A record an import brought in ([XrnSyncEdits.FROM_BACKUP]) is older than anything the server
+ * has, so it fills a gap but replaces nothing.
+ */
+internal fun stampFor(changedAt: Long?, previous: Long?, now: Long): Long = when (changedAt) {
+    XrnSyncEdits.FROM_BACKUP -> BACKUP_MTIME
+    null -> maxOf(now, (previous ?: 0) + 1)
+    else -> maxOf(changedAt, (previous ?: 0) + 1)
+}
+
+/** The stamp of a record from a backup: older than any write the server can have. */
+internal const val BACKUP_MTIME = 1L
 
 // ---- records ---------------------------------------------------------------------------
 
@@ -677,7 +772,7 @@ data class HabitData(
     }
 }
 
-private data class HabitRecord(val uuid: String, val data: HabitData, val mtime: Long, val deleted: Boolean) {
+internal data class HabitRecord(val uuid: String, val data: HabitData, val mtime: Long, val deleted: Boolean) {
     fun toJson(): JSONObject = JSONObject()
         .put("uuid", uuid)
         .put("mtime", mtime)
@@ -685,7 +780,7 @@ private data class HabitRecord(val uuid: String, val data: HabitData, val mtime:
         .put("data", data.toJson())
 }
 
-private data class EntryRecord(val key: String, val data: EntryData, val mtime: Long) {
+internal data class EntryRecord(val key: String, val data: EntryData, val mtime: Long) {
     fun toJson(): JSONObject = JSONObject()
         .put("habit", key.substringBefore('|'))
         .put("date", key.substringAfter('|'))
@@ -695,7 +790,7 @@ private data class EntryRecord(val key: String, val data: EntryData, val mtime: 
 }
 
 /** What the server last agreed to, with each record's mtime; and how far its feed has been read. */
-private class Snapshot(
+internal class Snapshot(
     var seq: Long,
     var initialized: Boolean,
     val habits: MutableMap<String, Stamped<HabitData>>,

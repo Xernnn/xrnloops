@@ -125,8 +125,12 @@ The phone side (`xrnsync/XrnSync.kt`) finds local changes by diffing the habit l
 `files/xrnsync-snapshot.json`, what the server last agreed to. That also catches backup
 imports, which bypass `CommandRunner`. It then:
 
-- pushes local changes with a stamp newer than the record it replaces, so a slow phone clock
-  can't lose a tick;
+- pushes local changes stamped with when they were made, noted as each command finishes
+  (`xrnsync/XrnSyncEdits.kt`, `files/xrnsync-edits.txt`, kept until the server has them), and
+  past the record each replaces, so a slow phone clock can't lose a tick while a tick made
+  offline still loses to a later change made elsewhere. What an import brings in is stamped
+  older than anything the server has: it fills gaps and replaces nothing. Until 2026-11-10 a
+  change carried the time it was sent, so an offline tick or an old backup beat newer edits;
 - pulls and applies remote ones directly on its one sync thread, then announces them as
   `XrnSync.SyncedFromServer`, so lists, widgets and xrnrule refresh without triggering
   another sync;
