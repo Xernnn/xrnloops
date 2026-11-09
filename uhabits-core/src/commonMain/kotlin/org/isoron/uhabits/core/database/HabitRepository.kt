@@ -4,6 +4,8 @@ import org.isoron.platform.Synchronized
 import org.isoron.platform.io.Database
 import org.isoron.platform.io.PreparedStatement
 import org.isoron.platform.io.StepResult
+import org.isoron.platform.io.begin
+import org.isoron.platform.io.commit
 import org.isoron.platform.io.queryLong
 import org.isoron.platform.io.run
 
@@ -91,8 +93,19 @@ class HabitRepository(private val db: Database) {
         }
         insertStmt.reset()
         bindForInsert(insertStmt, data)
-        insertStmt.step()
-        return db.queryLong("SELECT last_insert_rowid()")
+        // xrnloops: the id in the same transaction as the insert. last_insert_rowid() is the
+        // connection's, and Android's one connection serves every thread: a day inserted by
+        // another in between gave the new habit that day's row id.
+        db.begin()
+        try {
+            insertStmt.step()
+            val id = db.queryLong("SELECT last_insert_rowid()")
+            db.commit()
+            return id
+        } catch (e: Exception) {
+            db.run("ROLLBACK")
+            throw e
+        }
     }
 
     @Synchronized
