@@ -31,8 +31,11 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
-/** A change goes out stamped with when it was made here, not when it was sent ([planPush]). */
-class XrnSyncStampTest {
+/**
+ * What a push sends ([planPush]): a change stamped with when it was made here, not when it was
+ * sent, and a habit gone from the phone sent as deleted only if it was deleted here.
+ */
+class XrnSyncPushTest {
     @get:Rule
     val tmp = TemporaryFolder()
 
@@ -59,14 +62,14 @@ class XrnSyncStampTest {
     fun anOfflineTickLosesToALaterEditElsewhere() {
         // Ticked offline at 08:00 over the agreed day, sent at 18:00; the web changed it at 12:00.
         val agreed = snapshot(entries = mapOf(day to Stamped(EntryData(Entry.NO, ""), 7 * hour)))
-        val (_, entries) = planPush(local(entries = mapOf(day to tick)), agreed, mapOf(day to at8), at18)
+        val (_, entries) = planPush(local(entries = mapOf(day to tick)), agreed, mapOf(day to at8), at18, emptySet())
         assertEquals(at8, entries.single().mtime)
         assertTrue("the server keeps the newer write", entries.single().mtime < at12)
     }
 
     @Test
     fun aChangeNobodyNotedGoesOutAsBefore() {
-        val (_, entries) = planPush(local(entries = mapOf(day to tick)), snapshot(), emptyMap(), at18)
+        val (_, entries) = planPush(local(entries = mapOf(day to tick)), snapshot(), emptyMap(), at18, emptySet())
         assertEquals(at18, entries.single().mtime)
     }
 
@@ -74,7 +77,7 @@ class XrnSyncStampTest {
     fun aChangeStillBeatsTheVersionItWasMadeOn() {
         // The agreed version came from a clock running ahead of this phone's.
         val agreed = snapshot(entries = mapOf(day to Stamped(EntryData(Entry.NO, ""), 9 * hour)))
-        val (_, entries) = planPush(local(entries = mapOf(day to tick)), agreed, mapOf(day to at8), at18)
+        val (_, entries) = planPush(local(entries = mapOf(day to tick)), agreed, mapOf(day to at8), at18, emptySet())
         assertEquals(9 * hour + 1, entries.single().mtime)
         assertEquals(9 * hour + 1, stampFor(null, 9 * hour, at8))
     }
@@ -83,7 +86,7 @@ class XrnSyncStampTest {
     fun anImportOnlyFillsGaps() {
         val agreed = snapshot(entries = mapOf(day to Stamped(EntryData(Entry.NO, ""), 7 * hour)))
         val noted = mapOf(day to XrnSyncEdits.FROM_BACKUP, "h1" to XrnSyncEdits.FROM_BACKUP)
-        val (habits, entries) = planPush(local(mapOf("h1" to habit("Old name")), mapOf(day to tick)), agreed, noted, at18)
+        val (habits, entries) = planPush(local(mapOf("h1" to habit("Old name")), mapOf(day to tick)), agreed, noted, at18, emptySet())
         assertEquals(listOf(BACKUP_MTIME), entries.map { it.mtime })
         assertEquals(listOf(BACKUP_MTIME), habits.map { it.mtime })
         assertTrue(BACKUP_MTIME < 7 * hour)
@@ -91,14 +94,42 @@ class XrnSyncStampTest {
 
     @Test
     fun aDeletionCarriesItsTime() {
-        val (habits, _) = planPush(local(habits = emptyMap()), snapshot(), mapOf("h1" to at8), at18)
+        val (habits, _) = planPush(local(habits = emptyMap()), snapshot(), mapOf("h1" to at8), at18, setOf("h1"))
         assertEquals(listOf(Triple("h1", true, at8)), habits.map { Triple(it.uuid, it.deleted, it.mtime) })
     }
 
     @Test
     fun aNewOrderAloneStaysJustPastTheAgreedVersion() {
-        val (habits, _) = planPush(local(mapOf("h1" to habit("Read", position = 3))), snapshot(), mapOf("h1" to at8), at18)
+        val (habits, _) = planPush(local(mapOf("h1" to habit("Read", position = 3))), snapshot(), mapOf("h1" to at8), at18, emptySet())
         assertEquals(2L, habits.single().mtime)
+    }
+
+    @Test
+    fun deletingTheLastHabitsDeletesThem() {
+        val agreed = snapshot(mapOf("h1" to Stamped(read, 1L), "h2" to Stamped(habit("Walk"), 1L)))
+        val plan = planPush(local(habits = emptyMap()), agreed, mapOf("h1" to at8, "h2" to at8), at18, setOf("h1", "h2"))
+        assertEquals(setOf("h1", "h2"), plan.habits.filter { it.deleted }.map { it.uuid }.toSet())
+        assertEquals(emptySet<String>(), plan.lost)
+    }
+
+    @Test
+    fun habitsTheDatabaseLostAreNotDeletions() {
+        // A new, empty database: a habit made in it since doesn't make the others deletions.
+        val agreed = snapshot(entries = mapOf(day to Stamped(tick, 1L)))
+        val plan = planPush(local(mapOf("h9" to habit("New"))), agreed, emptyMap(), at18, emptySet())
+        assertEquals(listOf("h9" to false), plan.habits.map { it.uuid to it.deleted })
+        assertEquals(emptyList<EntryRecord>(), plan.entries)
+        assertEquals(setOf("h1"), plan.lost)
+    }
+
+    @Test
+    fun deletionsAreNotedUntilTheServerHasThem() {
+        val file = tmp.newFile("edits.txt")
+        XrnSyncEdits(file).noteDeleted(listOf("h1", "h2"), at8)
+        val edits = XrnSyncEdits(file) // the next process
+        assertEquals(setOf("h1", "h2"), edits.deletedHere())
+        edits.settle(emptyMap(), tombstones = listOf("h1"))
+        assertEquals(setOf("h2"), XrnSyncEdits(file).deletedHere())
     }
 
     @Test

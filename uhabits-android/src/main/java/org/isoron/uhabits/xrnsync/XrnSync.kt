@@ -52,6 +52,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
@@ -90,6 +91,12 @@ class XrnSync(
 
     /** Imports under way ([beginImport]): no round runs meanwhile. */
     private val imports = AtomicInteger()
+
+    /**
+     * Every habit this process has had in its database. One of these gone from it was deleted
+     * here; one the snapshot has that never was here was lost with a database ([planPush]).
+     */
+    private val seenHere: MutableSet<String> = ConcurrentHashMap.newKeySet()
     private val executor = Executors.newSingleThreadScheduledExecutor { r ->
         Thread(r, "xrnsync").apply { isDaemon = true }
     }
@@ -122,6 +129,7 @@ class XrnSync(
 
     fun start(app: Application) {
         instance = this
+        for (habit in habitList) habit.uuid?.let(seenHere::add)
         commandRunner.addListener(this)
         app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityResumed(activity: Activity) {
@@ -148,9 +156,13 @@ class XrnSync(
     }
 
     override fun onCommandFinished(command: Command) {
-        if (command === SyncedFromServer || !settings.isConfigured) return
+        if (command === SyncedFromServer) return
+        val now = System.currentTimeMillis()
+        // Even with sync off: a snapshot from before must not take them for a lost database.
+        if (command is DeleteHabitsCommand) edits.noteDeleted(command.selected.mapNotNull { it.uuid }, now)
+        if (!settings.isConfigured) return
         // When it was made, for its stamp: it may only get out hours from now.
-        edits.noteChanged(XrnSyncEdits.changedBy(command, habitList), System.currentTimeMillis())
+        edits.noteChanged(XrnSyncEdits.changedBy(command, habitList), now)
         requestSync(DEBOUNCE_MS)
         // In case Android ends this process before then (it does, right after the app is left).
         XrnSyncJob.schedulePush(appContext)
@@ -330,7 +342,7 @@ class XrnSync(
         val api = XrnSyncApi(settings.url, settings.user, settings.password)
         val started = System.currentTimeMillis()
         val before = readLocal()
-        val round = Round(before, agreed(before), started)
+        val round = Round(before, agreed(), started)
         try {
             var sent = push(api, round)
             if (!pull(api, round)) {
@@ -370,18 +382,14 @@ class XrnSync(
     /**
      * The snapshot to diff against, or a blank one if it can't be trusted, which makes this a
      * first sync ("fill gaps"): nothing is deleted and neither side's data is overwritten.
-     * It says what one account on one server agreed to, so it means nothing for another; and a
-     * list that's empty while the snapshot isn't means the database was lost or replaced
-     * (HabitsApplication starts a new one when it can't open the old), not that every habit was
-     * deleted here. Sending that as deletions would empty the web app and xrnrule too.
+     * It says what one account on one server agreed to, so it means nothing for another. A
+     * habit it has that the database lost isn't taken for a deletion either: see [planPush].
      */
-    private fun agreed(before: LocalState): Snapshot {
+    private fun agreed(): Snapshot {
         val server = "${settings.url}\n${settings.user}"
         val snap = Snapshot.load(snapshotFile)
-        val otherServer = snap.server != null && snap.server != server
-        val databaseLost = before.habits.isEmpty() && snap.habits.isNotEmpty()
-        if (otherServer || databaseLost) {
-            Log.w(TAG, "starting over: otherServer=$otherServer databaseLost=$databaseLost")
+        if (snap.server != null && snap.server != server) {
+            Log.w(TAG, "starting over: another server or account")
             return Snapshot.fresh(server)
         }
         snap.server = server
@@ -391,7 +399,19 @@ class XrnSync(
     private fun push(api: XrnSyncApi, round: Round): Int {
         val snap = round.snap
         val noted = edits.changes()
-        val (habits, entries) = planPush(round.before, snap, noted, System.currentTimeMillis())
+        val deletedHere = edits.deletedHere() + seenHere
+        val (habits, entries, lost) = planPush(round.before, snap, noted, System.currentTimeMillis(), deletedHere)
+        if (lost.isNotEmpty()) {
+            // Not deleted here: the database lost them (HabitsApplication starts a new one when
+            // it can't open the old). Sent as deletions they'd be gone from the web app and
+            // xrnrule too; read the feed from the start instead, and they come back.
+            Log.w(TAG, "${lost.size} habits missing from the database, not deleted here: fetching them again")
+            for (uuid in lost) {
+                snap.habits.remove(uuid)
+                snap.entries.keys.removeAll { it.startsWith("$uuid|") }
+            }
+            round.refetchAll = true
+        }
         // Noted before this round read the phone, yet the same as what was agreed: undone since.
         edits.forgetAllBut(habits.map { it.uuid }.toSet() + entries.map { it.key }, round.started)
         if (habits.isEmpty() && entries.isEmpty()) return 0
@@ -424,7 +444,7 @@ class XrnSync(
             snap.save(snapshotFile)
             // Taken, or beaten by what is now here: either way it's settled.
             val sent = sentHabits.map { it.uuid } + chunk.map { it.key }
-            edits.settle(sent.mapNotNull { key -> noted[key]?.let { key to it } }.toMap())
+            edits.settle(sent.mapNotNull { key -> noted[key]?.let { key to it } }.toMap(), sentHabits.filter { it.deleted }.map { it.uuid })
         }
         return habits.size + entries.size
     }
@@ -485,6 +505,7 @@ class XrnSync(
                 data.applyTo(model)
                 model.uuid = uuid
                 CreateHabitCommand(modelFactory, habitList, model).run()
+                seenHere += uuid
                 // Brought back after we deleted it: its older entries are behind our cursor.
                 if (uuid in snap.habits) round.refetchAll = true
                 round.listChanged = true
@@ -539,6 +560,7 @@ class XrnSync(
         val entries = mutableMapOf<String, EntryData>()
         for (habit in habitList) {
             val uuid = habit.uuid ?: continue
+            seenHere += uuid
             habits[uuid] = HabitData.of(habit)
             for (entry in habit.originalEntries.getKnown()) {
                 entries["$uuid|${entry.date.toCSVString()}"] = EntryData(entry.value, entry.notes)
@@ -611,16 +633,25 @@ internal fun importedKeys(before: XrnSync.LocalState, after: XrnSync.LocalState)
     return keys
 }
 
+/** What [planPush] sends, and the habits it found [lost]. */
+internal data class PushPlan(val habits: List<HabitRecord>, val entries: List<EntryRecord>, val lost: Set<String>)
+
 /**
  * The records [local] has that differ from what the server agreed to ([snap]), each stamped by
  * [stampFor] from when it was changed here ([noted], from [XrnSyncEdits]).
+ *
+ * A habit the snapshot has and the phone doesn't is a deletion only if it was deleted here
+ * ([deletedHere]: noted as deleted, or once in this process's database). Otherwise the database
+ * it was in is gone, a new empty one in its place: it is [lost], not deleted. Deleting the last
+ * habits used to look like that, when the test was "an empty list under a full snapshot".
  */
 internal fun planPush(
     local: XrnSync.LocalState,
     snap: Snapshot,
     noted: Map<String, Long>,
-    now: Long
-): Pair<List<HabitRecord>, List<EntryRecord>> {
+    now: Long,
+    deletedHere: Set<String>
+): PushPlan {
     fun stamp(key: String, previous: Long?) = stampFor(noted[key], previous, now)
 
     val habits = mutableListOf<HabitRecord>()
@@ -632,8 +663,10 @@ internal fun planPush(
         val reordered = old != null && old.data.copy(position = data.position) == data
         habits += HabitRecord(uuid, data, if (reordered) old!!.mtime + 1 else stamp(uuid, old?.mtime), deleted = false)
     }
+    val lost = mutableSetOf<String>()
     for ((uuid, old) in snap.habits) {
-        if (uuid !in local.habits) habits += HabitRecord(uuid, old.data, stamp(uuid, old.mtime), deleted = true)
+        if (uuid in local.habits) continue
+        if (uuid in deletedHere) habits += HabitRecord(uuid, old.data, stamp(uuid, old.mtime), deleted = true) else lost += uuid
     }
     val entries = mutableListOf<EntryRecord>()
     for ((key, data) in local.entries) {
@@ -646,7 +679,7 @@ internal fun planPush(
             entries += EntryRecord(key, EntryData.EMPTY, stamp(key, old.mtime))
         }
     }
-    return habits to entries
+    return PushPlan(habits, entries, lost)
 }
 
 /**

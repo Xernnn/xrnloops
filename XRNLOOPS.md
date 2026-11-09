@@ -142,8 +142,12 @@ against the real server):
 - A pull comes in pages by `seq`, so an entry can arrive before its habit. It waits, and the
   saved cursor stays behind it, so a stop halfway doesn't lose it.
 - The snapshot belongs to one server and account. Another one means a first sync, not "you
-  deleted everything". So does an empty database under a full snapshot (a lost or restored
-  phone): nothing is tombstoned, and everything comes back down.
+  deleted everything". A habit the snapshot has and the database doesn't is a deletion only if
+  it was deleted here: noted as it happens (`XrnSyncEdits`), or once in this process's database.
+  Otherwise the database was lost or replaced (a restored phone, a new empty one): it isn't
+  tombstoned, and the feed is read from the start, so it comes back down. Until 2026-11-10 the
+  test was "an empty database under a full snapshot", so deleting your last habits brought them
+  back, and a habit made in a new database before its first sync deleted all the others;
 - A server restored from a backup gets a new epoch; every client starts over from `since=0`,
   and the phone sends what the server lost.
 - A push of a new order only is stamped just past the record's own `mtime`, so reordering on the

@@ -39,9 +39,13 @@ import java.io.IOException
  * outlive the process, so each one is appended to [file] as it is noted; what the server has
  * taken is forgotten again, and the file rewritten without it. Keys are [XrnSync]'s: a habit's
  * uuid, or an entry's "uuid|yyyy-mm-dd".
+ *
+ * It also keeps which habits were deleted here, which is how a habit gone from the phone's
+ * database is told apart from one the database lost ([planPush]).
  */
 internal class XrnSyncEdits(private val file: File?) {
     private val changed = HashMap<String, Long>()
+    private val deleted = HashMap<String, Long>()
 
     init {
         load()
@@ -55,6 +59,18 @@ internal class XrnSyncEdits(private val file: File?) {
         append(keys.map { "$KIND_CHANGED\t$it\t$time" })
     }
 
+    /** The habits [uuids] were deleted here at [time]. */
+    @Synchronized
+    fun noteDeleted(uuids: Collection<String>, time: Long) {
+        if (uuids.isEmpty()) return
+        for (uuid in uuids) deleted[uuid] = time
+        append(uuids.map { "$KIND_DELETED\t$it\t$time" })
+    }
+
+    /** The habits deleted here whose deletion the server hasn't settled yet. */
+    @Synchronized
+    fun deletedHere(): Set<String> = HashSet(deleted.keys)
+
     /** [keys] came in from a backup: old, of no known age, so they only fill gaps on the server. */
     @Synchronized
     fun noteImported(keys: Collection<String>) = noteChanged(keys, FROM_BACKUP)
@@ -65,10 +81,11 @@ internal class XrnSyncEdits(private val file: File?) {
 
     /**
      * The server has settled these (taken them, or answered with a newer version that is now
-     * here): forget each, unless it was changed again after the time it was sent with.
+     * here): forget each, unless it was changed again after the time it was sent with; and the
+     * deletions of [tombstones].
      */
     @Synchronized
-    fun settle(sent: Map<String, Long>) {
+    fun settle(sent: Map<String, Long>, tombstones: Collection<String> = emptyList()) {
         var forgot = false
         for ((key, time) in sent) {
             if (changed[key] == time) {
@@ -76,6 +93,7 @@ internal class XrnSyncEdits(private val file: File?) {
                 forgot = true
             }
         }
+        for (uuid in tombstones) forgot = deleted.remove(uuid) != null || forgot
         if (forgot) rewrite()
     }
 
@@ -86,8 +104,10 @@ internal class XrnSyncEdits(private val file: File?) {
     @Synchronized
     fun forgetAllBut(pending: Set<String>, time: Long) {
         val stale = changed.filter { (key, at) -> key !in pending && at < time }.keys
-        if (stale.isEmpty()) return
+        val gone = deleted.filter { (uuid, at) -> uuid !in pending && at < time }.keys
+        if (stale.isEmpty() && gone.isEmpty()) return
         changed.keys.removeAll(stale)
+        deleted.keys.removeAll(gone)
         rewrite()
     }
 
@@ -100,7 +120,10 @@ internal class XrnSyncEdits(private val file: File?) {
         for (line in text.lines()) {
             val parts = line.split('\t')
             val time = parts.getOrNull(2)?.toLongOrNull() ?: continue // a line cut short by a crash
-            if (parts[0] == KIND_CHANGED) changed[parts[1]] = time
+            when (parts[0]) {
+                KIND_CHANGED -> changed[parts[1]] = time
+                KIND_DELETED -> deleted[parts[1]] = time
+            }
         }
         // Cut short: the next line appended would run on from it and be lost too.
         if (text.isNotEmpty() && !text.endsWith("\n")) rewrite()
@@ -121,7 +144,10 @@ internal class XrnSyncEdits(private val file: File?) {
         val file = file ?: return
         try {
             val tmp = File(file.path + ".tmp")
-            tmp.writeText(changed.entries.joinToString("") { (key, time) -> "$KIND_CHANGED\t$key\t$time\n" })
+            tmp.writeText(
+                changed.entries.joinToString("") { (key, time) -> "$KIND_CHANGED\t$key\t$time\n" } +
+                    deleted.entries.joinToString("") { (uuid, time) -> "$KIND_DELETED\t$uuid\t$time\n" }
+            )
             if (!tmp.renameTo(file)) throw IOException("can't replace $file")
         } catch (e: IOException) {
             // The old file keeps settled changes too; their stamps are still the right ones.
@@ -132,6 +158,7 @@ internal class XrnSyncEdits(private val file: File?) {
         /** Noted for a record brought in by an import: see [noteImported]. */
         const val FROM_BACKUP = 0L
         private const val KIND_CHANGED = "c"
+        private const val KIND_DELETED = "d"
 
         /**
          * The records [command] changed, by key, for one of Loop's commands; nothing for one it
