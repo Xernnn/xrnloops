@@ -110,6 +110,30 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(answer["epoch"], self.store.changes(first["seq"] + 5, epoch=epoch)["epoch"])
         self.assertEqual(answer["epoch"], self.store.changes(0)["epoch"])
 
+    def test_a_write_cant_hide_a_restore(self):
+        self.store.apply({"entries": [self.entry(YES_MANUAL, 1, f"2026-10-{d:02d}") for d in range(1, 6)]})
+        page = self.store.changes(0)
+        epoch, read = page["epoch"], page["seq"] + 3  # the client read 3 changes the backup lacks
+        seq = self.store.seq()
+        # Enough records to move seq past what the client read, had they gone in.
+        many = [self.entry(NO, 9, f"2026-09-{d:02d}") for d in range(1, 11)]
+        with self.assertRaises(srv.StaleEpoch) as refused:
+            self.store.apply({"epoch": epoch, "since": read, "entries": many})
+        self.assertNotEqual(epoch, refused.exception.epoch)
+        self.assertEqual(seq, self.store.seq())  # nothing written
+        # Every other client hears of it too, and a write from the new history goes in.
+        self.assertEqual(refused.exception.epoch, self.store.changes(0, epoch=epoch)["epoch"])
+        self.store.apply({"epoch": refused.exception.epoch, "since": 0, "entries": many})
+        self.assertEqual(seq + len(many), self.store.seq())
+
+    def test_a_write_from_the_current_history_goes_in(self):
+        page = self.store.changes(0)
+        result = self.store.apply({"epoch": page["epoch"], "since": page["seq"], "entries": [self.entry(YES_MANUAL, 1)]})
+        self.assertEqual(1, len(result["accepted"]["entries"]))
+        for bad in ({"epoch": "1"}, {"epoch": page["epoch"], "since": True}):
+            with self.assertRaises(ValueError):
+                self.store.apply({**bad, "entries": []})
+
     def test_a_write_that_fails_half_way_leaves_nothing(self):
         with self.assertRaises(ValueError):
             self.store.apply({"entries": [self.entry(YES_MANUAL, 1), {"habit": "h1", "date": "not a day", "value": 2, "mtime": 1}]})
@@ -268,6 +292,15 @@ class HttpTest(unittest.TestCase):
             token = base64.b64encode(b"sonn:secret").decode()
             status, _ = self.raw("POST", "/api/changes", bad, {"Authorization": f"Basic {token}"})
             self.assertEqual(400, status, bad)
+
+    def test_a_write_from_a_lost_history_gets_409(self):
+        _, text, _ = self.request("/api/changes?since=0")
+        feed = json.loads(text)
+        body = json.dumps({"epoch": feed["epoch"], "since": feed["seq"] + 100, "entries": []}).encode()
+        status, res = self.raw("POST", "/api/changes", body, {"Authorization": self.basic(), "Content-Type": "application/json"})
+        self.assertEqual(409, status)
+        _, text, _ = self.request("/api/changes?since=0")
+        self.assertNotEqual(feed["epoch"], json.loads(text)["epoch"])
 
     def test_numbers_too_big_for_the_database(self):
         self.assertEqual(400, self.status_of("/api/changes?since=" + "9" * 30))

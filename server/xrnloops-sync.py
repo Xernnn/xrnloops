@@ -24,7 +24,7 @@ to the new one instead of replacing it. A habit write keeps the stored value of 
 leaves out, so an older client (xrnloops) can't wipe fields it doesn't know (`icon`, `timer`).
 
     POST /api/changes          {"habits": [...], "entries": [...], "ifAbsent": false,
-                                "dayStartHour": 0}
+                                "dayStartHour": 0, "epoch": E, "since": N}
                                -> {"seq", "rejected": {"habits": [...], "entries": [...]},
                                    "accepted": {"habits": [{"uuid", "seq"}],
                                                 "entries": [{"habit", "date", "seq"}]}}
@@ -33,6 +33,9 @@ leaves out, so an older client (xrnloops) can't wipe fields it doesn't know (`ic
                                With ifAbsent, records only fill gaps (a first sync).
                                dayStartHour (optional): the phone's "Extend the day past
                                midnight" setting, the hour its new day starts (0 or 3).
+                               epoch and since (optional): the history the writer read and how
+                               far. One this server no longer has gets 409 {"epoch"} and nothing
+                               is written, so a write can't hide a restore (see Store.epoch).
     GET  /api/changes?since=N[&epoch=E] -> {"seq", "more", "habits": [...], "entries": [...], "dayStartHour", "epoch"}
                                &wait=S long-polls up to S seconds for something newer.
     POST /api/session          with Basic auth: sets the web app's login cookie (below)
@@ -315,6 +318,14 @@ def clean_habit_data(data):
     return out
 
 
+class StaleEpoch(Exception):
+    """A write made from a history this server no longer has: it was restored from a backup."""
+
+    def __init__(self, epoch):
+        super().__init__("the server's history went back")
+        self.epoch = epoch
+
+
 def parse_day(text):
     y, m, d = (int(p) for p in str(text).split("-"))
     return date(y, m, d)
@@ -379,6 +390,17 @@ class Store:
 
     def _apply(self, body):
         """`apply` under the lock."""
+        epoch = body.get("epoch")
+        if epoch is not None:
+            since = body.get("since", 0)
+            for value in (epoch, since):
+                if isinstance(value, bool) or not isinstance(value, int):
+                    raise ValueError("epoch and since must be numbers")
+            # Before anything is written: one write would move seq past what the writer has read,
+            # and then neither it nor any other client could tell the history went back.
+            current = self._current_epoch(epoch, since)
+            if epoch != current:
+                raise StaleEpoch(current)
         if_absent = bool(body.get("ifAbsent"))
         rejected_habits, rejected_entries = [], []
         accepted_habits, accepted_entries = [], []
@@ -471,14 +493,19 @@ class Store:
         self.db.commit()
         return epoch
 
+    def _current_epoch(self, epoch, since):
+        """The epoch, once a client that read [since] in [epoch] has been heard (under the lock)."""
+        current = self.epoch()
+        if epoch is not None and epoch == current and since > self.seq():
+            # The client has read further than this server ever wrote, so its history went
+            # back. A new epoch makes every client, not only this one, read it all again.
+            current = self._new_epoch()
+            sys.stderr.write(f"since={since} is past seq={self.seq()}: restored from a backup? new epoch\n")
+        return current
+
     def changes(self, since, wait_s=0, epoch=None):
         with self.lock:
-            current = self.epoch()
-            if epoch is not None and epoch == current and since > self.seq():
-                # The client has read further than this server ever wrote, so its history went
-                # back. A new epoch makes every client, not only this one, read it all again.
-                current = self._new_epoch()
-                sys.stderr.write(f"since={since} is past seq={self.seq()}: restored from a backup? new epoch\n")
+            current = self._current_epoch(epoch, since)
             if epoch is not None and epoch != current:
                 wait_s = 0  # that client starts over: tell it now
             deadline = time.monotonic() + min(max(wait_s, 0), MAX_WAIT_S)
@@ -644,6 +671,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             body = self.read_json()
             result = store_for(user).apply(body)
+        except StaleEpoch as e:
+            return self.send_json({"epoch": e.epoch}, 409)
         except (KeyError, ValueError, TypeError, OverflowError) as e:
             return self.send(400, f"bad request: {e}")
         except (OSError, sqlite3.Error) as e:

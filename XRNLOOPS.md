@@ -141,22 +141,30 @@ against the real server):
 
 - A pull comes in pages by `seq`, so an entry can arrive before its habit. It waits, and the
   saved cursor stays behind it, so a stop halfway doesn't lose it.
-- The snapshot belongs to one server and account. Another one means a first sync, not "you
-  deleted everything". A habit the snapshot has and the database doesn't is a deletion only if
+- The snapshot belongs to one server and account. Another one starts over as after a restore
+  (below), not "you deleted everything". A habit the snapshot has and the database doesn't is a deletion only if
   it was deleted here: noted as it happens (`XrnSyncEdits`), or once in this process's database.
   Otherwise the database was lost or replaced (a restored phone, a new empty one): it isn't
   tombstoned, and the feed is read from the start, so it comes back down. Until 2026-11-10 the
   test was "an empty database under a full snapshot", so deleting your last habits brought them
   back, and a habit made in a new database before its first sync deleted all the others;
-- A server restored from a backup gets a new epoch; every client starts over from `since=0`,
-  and the phone sends what the server lost.
+- A server restored from a backup gets a new epoch; every client starts over from `since=0`.
+  The phone sends everything again, each record with the stamp it was agreed with (or, changed
+  here since, when it changed) and every deletion it knows of (the snapshot keeps them), so the
+  restored server's older copies lose and deleted habits stay deleted. A write carries the epoch
+  and how far its writer read (`epoch`, `since`; the phone and the web app): one from a history
+  the server no longer has gets 409 and isn't taken, since taking it would move `seq` past what
+  clients have read and hide the restore from all of them. Until 2026-11-10 starting over pushed
+  a blank snapshot with `ifAbsent`, so the server's older copy beat newer phone edits and
+  deleted habits came back; an unreadable snapshot did the same.
 - A push of a new order only is stamped just past the record's own `mtime`, so reordering on the
   phone can't undo a rename made on the web.
 - Recompute, resort and the announcement run even if the round failed partway, and a remote
   change to today's entry, or a deletion, clears that habit's notification.
 
 Remote positions are ignored: Loop keeps positions dense, and the phone's order is pushed.
-The first sync only fills gaps on the server. A sync runs after any command (3 s later, and a
+A first sync, or one whose snapshot is unreadable, sends what has no known age so that it only
+fills gaps; a change noted here keeps its stamp. A sync runs after any command (3 s later, and a
 one-off `XrnSyncJob` 5 s later in case Android ends the process first, which leaving the app
 right after a tick can do), when the app comes to the front, when xrnrule asks
 (`call("sync")`), about every half hour in the background (`XrnSyncJob`, a JobScheduler job

@@ -34,6 +34,9 @@ class XrnSyncApi(private val baseUrl: String, user: String, password: String) {
     /** Any other answer outside 2xx; [code] 429 means too many wrong passwords from this address. */
     class ServerException(val code: Int, message: String) : IOException(message)
 
+    /** A push made from a history the server no longer has (restored from a backup): nothing was written. */
+    class StaleEpochException : IOException("the server's history went back")
+
     /**
      * Changes after [since]; with [waitS], the server holds the answer until there are some
      * (long-poll). With [epoch], the history [since] counts in: if that's gone the answer says so.
@@ -60,6 +63,7 @@ class XrnSyncApi(private val baseUrl: String, user: String, password: String) {
             }
             val code = conn.responseCode
             if (code == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthException()
+            if (code == HttpURLConnection.HTTP_CONFLICT) throw StaleEpochException()
             if (code !in 200..299) {
                 val text = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
                 throw ServerException(code, "server answered $code ${text.take(200)}")

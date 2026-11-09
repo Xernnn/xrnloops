@@ -344,10 +344,18 @@ class XrnSync(
         val before = readLocal()
         val round = Round(before, agreed(), started)
         try {
-            var sent = push(api, round)
-            if (!pull(api, round)) {
-                // The server went back or was wiped: it may have lost anything we've sent.
-                round.snap = Snapshot.fresh(round.snap.server)
+            var restored = false
+            var sent = try {
+                push(api, round)
+            } catch (e: XrnSyncApi.StaleEpochException) {
+                restored = true // refused before anything was written
+                0
+            }
+            if (restored || !pull(api, round)) {
+                // The server went back or was wiped: it may have lost anything we've sent. What
+                // we agreed on still says when each record was written, and what was deleted.
+                Log.w(TAG, "the server's history went back: sending everything again")
+                round.snap.startOver()
                 sent += push(api, round)
                 pull(api, round)
             }
@@ -380,17 +388,18 @@ class XrnSync(
     }
 
     /**
-     * The snapshot to diff against, or a blank one if it can't be trusted, which makes this a
-     * first sync ("fill gaps"): nothing is deleted and neither side's data is overwritten.
-     * It says what one account on one server agreed to, so it means nothing for another. A
+     * The snapshot to diff against: blank if there's none or it can't be read, which makes this a
+     * first sync, where only what was noted here keeps its stamp ([planPush]). Its cursor is one
+     * server's and account's, so another one starts over; what it agreed to still says when each
+     * record was written and what was deleted, so everything goes again with those stamps. A
      * habit it has that the database lost isn't taken for a deletion either: see [planPush].
      */
     private fun agreed(): Snapshot {
         val server = "${settings.url}\n${settings.user}"
         val snap = Snapshot.load(snapshotFile)
         if (snap.server != null && snap.server != server) {
-            Log.w(TAG, "starting over: another server or account")
-            return Snapshot.fresh(server)
+            Log.w(TAG, "another server or account: sending everything again")
+            snap.startOver()
         }
         snap.server = server
         return snap
@@ -399,8 +408,7 @@ class XrnSync(
     private fun push(api: XrnSyncApi, round: Round): Int {
         val snap = round.snap
         val noted = edits.changes()
-        val deletedHere = edits.deletedHere() + seenHere
-        val (habits, entries, lost) = planPush(round.before, snap, noted, System.currentTimeMillis(), deletedHere)
+        val (habits, entries, lost) = planPush(round.before, snap, noted, System.currentTimeMillis(), edits.deletedHere(), seenHere)
         if (lost.isNotEmpty()) {
             // Not deleted here: the database lost them (HabitsApplication starts a new one when
             // it can't open the old). Sent as deletions they'd be gone from the web app and
@@ -414,16 +422,18 @@ class XrnSync(
         }
         // Noted before this round read the phone, yet the same as what was agreed: undone since.
         edits.forgetAllBut(habits.map { it.uuid }.toSet() + entries.map { it.key }, round.started)
-        if (habits.isEmpty() && entries.isEmpty()) return 0
+        if (habits.isEmpty() && entries.isEmpty()) return 0.also { resent(snap) }
 
         // Habits go first, so the server (and the web app reading its feed) knows an entry's habit.
         val chunks = entries.chunked(PUSH_CHUNK).ifEmpty { listOf(emptyList()) }
         for ((i, chunk) in chunks.withIndex()) {
             val sentHabits = if (i == 0) habits else emptyList()
             val body = JSONObject()
-                .put("ifAbsent", !snap.initialized)
                 .put("habits", JSONArray(sentHabits.map { it.toJson() }))
                 .put("entries", JSONArray(chunk.map { it.toJson() }))
+            // The history this was made from: if the server has gone back since, it says so
+            // (StaleEpochException) instead of taking it, which would hide that from every client.
+            snap.epoch?.let { body.put("epoch", it).put("since", snap.seq) }
             val result = api.push(body)
             val rejected = result.getJSONObject("rejected")
             val lostHabits = rejected.getJSONArray("habits").objects().map { it.getString("uuid") }.toSet()
@@ -434,8 +444,10 @@ class XrnSync(
                 if (h.deleted) {
                     snap.habits.remove(h.uuid)
                     snap.entries.keys.removeAll { it.startsWith("${h.uuid}|") }
+                    snap.tombstones[h.uuid] = h.mtime
                 } else {
-                    snap.habits[h.uuid] = Stamped(h.data, h.mtime)
+                    snap.habits[h.uuid] = Stamped(h.data!!, h.mtime)
+                    snap.tombstones.remove(h.uuid)
                 }
             }
             for (e in chunk) if (e.key !in lostEntries) snap.entries[e.key] = Stamped(e.data, e.mtime)
@@ -446,7 +458,15 @@ class XrnSync(
             val sent = sentHabits.map { it.uuid } + chunk.map { it.key }
             edits.settle(sent.mapNotNull { key -> noted[key]?.let { key to it } }.toMap(), sentHabits.filter { it.deleted }.map { it.uuid })
         }
+        resent(snap)
         return habits.size + entries.size
+    }
+
+    /** Everything went again after starting over: from now on only what changes goes. */
+    private fun resent(snap: Snapshot) {
+        if (!snap.resend) return
+        snap.resend = false
+        snap.save(snapshotFile)
     }
 
     /** Reads the feed to its end; false, with nothing read, if the server has started over. */
@@ -498,6 +518,7 @@ class XrnSync(
                 before.habits.remove(uuid)
                 snap.habits.remove(uuid)
                 snap.entries.keys.removeAll { it.startsWith("$uuid|") }
+                snap.tombstones[uuid] = mtime
                 continue
             }
             if (current == null) {
@@ -522,6 +543,7 @@ class XrnSync(
             // What we just applied isn't a change "made here" if a newer version follows it.
             habitList.getByUUID(uuid)?.let { before.habits[uuid] = HabitData.of(it) }
             snap.habits[uuid] = Stamped(data, mtime)
+            snap.tombstones.remove(uuid)
         }
         // Written per habit once they're all read: one commit each, however long the history.
         val incoming = mutableMapOf<EntryList, MutableList<Entry>>()
@@ -641,23 +663,39 @@ internal data class PushPlan(val habits: List<HabitRecord>, val entries: List<En
  * [stampFor] from when it was changed here ([noted], from [XrnSyncEdits]).
  *
  * A habit the snapshot has and the phone doesn't is a deletion only if it was deleted here
- * ([deletedHere]: noted as deleted, or once in this process's database). Otherwise the database
+ * ([deleted], noted with its time, or [seen] in this process's database). Otherwise the database
  * it was in is gone, a new empty one in its place: it is [lost], not deleted. Deleting the last
  * habits used to look like that, when the test was "an empty list under a full snapshot".
+ *
+ * After starting over ([Snapshot.resend]: a server restored from a backup, or another one) it is
+ * everything: what didn't change goes with the stamp it was agreed with, and the habits deleted
+ * once agreed go as deleted again, so a server that lost them learns them back and nothing older
+ * wins. A blank snapshot (none yet, or unreadable) knows no stamps: what was noted here keeps its
+ * own, and the rest, of no known age, only fills gaps ([UNKNOWN_AGE_MTIME]). That used to be the
+ * whole first push ("ifAbsent"), so the server's older copy beat newer edits made here, and a
+ * habit deleted here came back.
  */
 internal fun planPush(
     local: XrnSync.LocalState,
     snap: Snapshot,
     noted: Map<String, Long>,
     now: Long,
-    deletedHere: Set<String>
+    deleted: Map<String, Long>,
+    seen: Set<String>
 ): PushPlan {
-    fun stamp(key: String, previous: Long?) = stampFor(noted[key], previous, now)
+    fun stamp(key: String, previous: Long?): Long {
+        val changedAt = noted[key] ?: deleted[key]
+        if (changedAt == null && previous == null && !snap.initialized) return UNKNOWN_AGE_MTIME
+        return stampFor(changedAt, previous, now)
+    }
 
     val habits = mutableListOf<HabitRecord>()
     for ((uuid, data) in local.habits) {
         val old = snap.habits[uuid]
-        if (old?.data == data) continue
+        if (old?.data == data) {
+            if (snap.resend) habits += HabitRecord(uuid, data, old.mtime, deleted = false)
+            continue
+        }
         // Only the order moved (Loop renumbers whenever a habit is added or removed), so this
         // is no newer than what was agreed: an edit from elsewhere since then must beat it.
         val reordered = old != null && old.data.copy(position = data.position) == data
@@ -666,17 +704,41 @@ internal fun planPush(
     val lost = mutableSetOf<String>()
     for ((uuid, old) in snap.habits) {
         if (uuid in local.habits) continue
-        if (uuid in deletedHere) habits += HabitRecord(uuid, old.data, stamp(uuid, old.mtime), deleted = true) else lost += uuid
+        if (uuid in deleted || uuid in seen) {
+            habits += HabitRecord(uuid, old.data, stamp(uuid, old.mtime), deleted = true)
+        } else {
+            lost += uuid
+        }
+    }
+    if (snap.resend || !snap.initialized) {
+        // Deleted here, but the snapshot has no record of it to send: the server may still have it.
+        for (uuid in deleted.keys) {
+            if (uuid !in local.habits && uuid !in snap.habits) habits += HabitRecord(uuid, null, stamp(uuid, null), deleted = true)
+        }
+    }
+    if (snap.resend) {
+        val sent = habits.map { it.uuid }.toSet()
+        for ((uuid, mtime) in snap.tombstones) {
+            if (uuid !in local.habits && uuid !in snap.habits && uuid !in sent) {
+                habits += HabitRecord(uuid, null, mtime, deleted = true)
+            }
+        }
     }
     val entries = mutableListOf<EntryRecord>()
     for ((key, data) in local.entries) {
         val old = snap.entries[key]
-        if ((old?.data ?: EntryData.EMPTY) != data) entries += EntryRecord(key, data, stamp(key, old?.mtime))
+        if ((old?.data ?: EntryData.EMPTY) != data) {
+            entries += EntryRecord(key, data, stamp(key, old?.mtime))
+        } else if (snap.resend && old != null) {
+            entries += EntryRecord(key, data, old.mtime)
+        }
     }
     for ((key, old) in snap.entries) {
-        val uuid = key.substringBefore('|')
-        if (key !in local.entries && uuid in local.habits && old.data != EntryData.EMPTY) {
-            entries += EntryRecord(key, EntryData.EMPTY, stamp(key, old.mtime))
+        if (key in local.entries || key.substringBefore('|') !in local.habits) continue
+        when {
+            old.data != EntryData.EMPTY -> entries += EntryRecord(key, EntryData.EMPTY, stamp(key, old.mtime))
+            // Cleared once that was agreed: a server back from a backup may have the old value.
+            snap.resend -> entries += EntryRecord(key, EntryData.EMPTY, old.mtime)
         }
     }
     return PushPlan(habits, entries, lost)
@@ -697,6 +759,9 @@ internal fun stampFor(changedAt: Long?, previous: Long?, now: Long): Long = when
 
 /** The stamp of a record from a backup: older than any write the server can have. */
 internal const val BACKUP_MTIME = 1L
+
+/** The stamp of a record nothing says the age of: like one from a backup, it only fills a gap. */
+internal const val UNKNOWN_AGE_MTIME = BACKUP_MTIME
 
 // ---- records ---------------------------------------------------------------------------
 
@@ -805,12 +870,13 @@ data class HabitData(
     }
 }
 
-internal data class HabitRecord(val uuid: String, val data: HabitData, val mtime: Long, val deleted: Boolean) {
+/** [data] is null for a deletion the snapshot has no record of: the server keeps what it has. */
+internal data class HabitRecord(val uuid: String, val data: HabitData?, val mtime: Long, val deleted: Boolean) {
     fun toJson(): JSONObject = JSONObject()
         .put("uuid", uuid)
         .put("mtime", mtime)
         .put("deleted", deleted)
-        .put("data", data.toJson())
+        .put("data", data?.toJson() ?: JSONObject())
 }
 
 internal data class EntryRecord(val key: String, val data: EntryData, val mtime: Long) {
@@ -831,8 +897,25 @@ internal class Snapshot(
     /** The url and user this was agreed with; null in a snapshot from before it was kept. */
     var server: String? = null,
     /** The server's history this cursor belongs to; a new one means it went back. */
-    var epoch: Long? = null
+    var epoch: Long? = null,
+    /**
+     * Habits deleted once that was agreed, with its mtime: what a server restored from a backup
+     * has to hear again (none in a snapshot from before 2026-11-10).
+     */
+    val tombstones: MutableMap<String, Long> = mutableMapOf(),
+    /** Started over ([startOver]): the next push sends everything, not just what changed. */
+    var resend: Boolean = false
 ) {
+    /**
+     * For a server whose history went back, or another one: read its feed from the start, and
+     * send everything again with the stamps agreed here (see [planPush]).
+     */
+    fun startOver() {
+        seq = 0
+        epoch = null
+        resend = true
+    }
+
     /** The file as last read or written: most rounds change nothing, and then don't touch it. */
     private var onDisk: String? = null
 
@@ -841,8 +924,11 @@ internal class Snapshot(
         for ((uuid, s) in habits) h.put(uuid, JSONObject().put("d", s.data.toJson()).put("m", s.mtime))
         val e = JSONObject()
         for ((key, s) in entries) e.put(key, JSONArray().put(s.data.value).put(s.data.notes).put(s.mtime))
+        val t = JSONObject()
+        for ((uuid, mtime) in tombstones) t.put(uuid, mtime)
         val json = JSONObject().put("seq", cursor).put("initialized", initialized).put("habits", h).put("entries", e)
             .put("server", server ?: JSONObject.NULL).put("epoch", epoch ?: JSONObject.NULL)
+            .put("tombstones", t).put("resend", resend)
         val text = json.toString()
         if (text == onDisk) return
         val tmp = File(file.path + ".tmp")
@@ -872,13 +958,17 @@ internal class Snapshot(
                     val a = e.getJSONArray(key)
                     entries[key] = Stamped(EntryData(a.getInt(0), a.getString(1)), a.getLong(2))
                 }
+                val tombstones = mutableMapOf<String, Long>()
+                json.optJSONObject("tombstones")?.let { t -> for (uuid in t.keys()) tombstones[uuid] = t.getLong(uuid) }
                 Snapshot(
                     json.getLong("seq"),
                     json.getBoolean("initialized"),
                     habits,
                     entries,
                     if (json.isNull("server")) null else json.optString("server"),
-                    if (json.isNull("epoch")) null else json.optLong("epoch")
+                    if (json.isNull("epoch")) null else json.optLong("epoch"),
+                    tombstones,
+                    json.optBoolean("resend")
                 ).also { it.onDisk = text }
             } catch (e: Exception) {
                 // An unreadable snapshot only costs a first-sync again ("fill gaps"), never data.

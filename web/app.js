@@ -98,6 +98,9 @@ class AuthError extends Error {}
 
 const WRONG_LOGIN = "Wrong user name or password.";
 
+/** The server went back to a backup since what this page read, and refused a write (HTTP 409). */
+class StaleEpochError extends Error {}
+
 /** The server refuses this address for a while after too many wrong passwords (HTTP 429). */
 class LockedOutError extends Error {
   constructor() {
@@ -234,6 +237,7 @@ async function api(path, body) {
   });
   if (res.status === 401) throw new AuthError();
   if (res.status === 429) throw new LockedOutError();
+  if (res.status === 409) throw new StaleEpochError();
   if (!res.ok) throw new Error(`the server answered ${res.status}`);
   return res.json();
 }
@@ -399,9 +403,12 @@ async function flush() {
   flushing = true;
   clearTimeout(flushTimer);
   updateSyncBadge();
-  let sent = false;
+  let sent = false, restored = false;
   try {
-    const result = await api("api/changes", batch);
+    // The history this page read: a server that went back since says so instead of taking it,
+    // since taking it would move its seq past what clients have read and hide that it went back.
+    const body = state.epoch == null ? batch : { ...batch, epoch: state.epoch, since: state.seq };
+    const result = await api("api/changes", body);
     sent = true;
     // Drop what was sent, unless it was written again meanwhile.
     state.pending.habits = state.pending.habits.filter((p) => !batch.habits.includes(p));
@@ -411,11 +418,26 @@ async function flush() {
     syncWorked();
   } catch (e) {
     if (e instanceof AuthError) return signOut("You were signed out. Sign in again.");
-    syncFailed(e);
-    flushTimer = setTimeout(flush, 10000);
+    if (e instanceof StaleEpochError) restored = true;
+    else {
+      syncFailed(e);
+      flushTimer = setTimeout(flush, 10000);
+    }
   } finally {
     flushing = false;
     updateSyncBadge();
+  }
+  if (restored) {
+    // Read it all again, then send what's waiting; it shows again once the feed brings it back.
+    try {
+      await loadAll(state.generation);
+      render(true);
+    } catch (e) {
+      syncFailed(e);
+      flushTimer = setTimeout(flush, 10000);
+      return;
+    }
+    return flush();
   }
   // What was written while this batch was out goes next. After a failure the timer retries:
   // calling again at once would ask a server that's down as fast as the request can fail.

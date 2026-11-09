@@ -67,9 +67,9 @@ internal class XrnSyncEdits(private val file: File?) {
         append(uuids.map { "$KIND_DELETED\t$it\t$time" })
     }
 
-    /** The habits deleted here whose deletion the server hasn't settled yet. */
+    /** The habits deleted here whose deletion the server hasn't settled yet, and when. */
     @Synchronized
-    fun deletedHere(): Set<String> = HashSet(deleted.keys)
+    fun deletedHere(): Map<String, Long> = HashMap(deleted)
 
     /** [keys] came in from a backup: old, of no known age, so they only fill gaps on the server. */
     @Synchronized
