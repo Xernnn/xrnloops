@@ -1076,13 +1076,16 @@ function checkChoices(habit, date) {
 /** The keys around a number day (NumberFlick): up the target, down 0, right any amount. */
 function numberChoices(habit, date) {
   const c = "var(--c)", faint = "var(--muted)";
-  const amount = (x) => ({
-    text: L.formatNumber(x), tint: meets(habit, x) ? c : faint, label: `${L.formatNumber(x)} ${habit.data.unit}`.trim(),
-    run: () => setDay(habit, date, Math.round(x * 1000)), // Loop stores amounts ×1000
-  });
+  const amount = (entry) => { // as Loop stores it, the amount ×1000
+    const x = entry / 1000;
+    return {
+      text: L.formatNumber(x), tint: meets(habit, x) ? c : faint, label: `${L.formatNumber(x)} ${habit.data.unit}`.trim(),
+      run: () => setDay(habit, date, entry),
+    };
+  };
   return {
     center: { glyph: "question", tint: faint, label: "Clear", run: () => setDay(habit, date, L.UNKNOWN) },
-    up: amount(dayTarget(habit)),
+    up: amount(L.dayTargetEntry(habit)),
     right: { icon: "dialpad", tint: faint, label: "Another amount", run: () => numberSheet(habit, date) },
     down: amount(0),
     left: { glyph: "minus", tint: c, label: "Skip", run: () => setDay(habit, date, L.SKIP) },
@@ -1365,7 +1368,7 @@ function numberSheet(habit, date) {
     closeSheet();
     writeEntry(habit.uuid, date, stored, note.value.trim());
   };
-  const target = dayTarget(habit);
+  const target = L.dayTargetEntry(habit);
   const form = h("form", {
     style: { display: "grid", gap: "16px" },
     onsubmit: (e) => {
@@ -1377,7 +1380,7 @@ function numberSheet(habit, date) {
   },
     h("div", { class: "amount-row" }, amount, habit.data.unit && h("span", {}, habit.data.unit)),
     h("div", { class: "quick" },
-      h("button", { type: "button", class: "btn", onclick: () => finish(Math.round(target * 1000)) }, `${L.formatNumber(target)} ${habit.data.unit}`.trim()),
+      h("button", { type: "button", class: "btn", onclick: () => finish(target) }, `${L.formatNumber(target / 1000)} ${habit.data.unit}`.trim()),
       h("button", { type: "button", class: "btn", onclick: () => finish(0) }, "0"),
       h("button", { type: "button", class: "btn", onclick: () => finish(L.SKIP) }, "Skip"),
       h("button", { type: "button", class: "btn ghost", onclick: () => finish(L.UNKNOWN) }, "Clear")),

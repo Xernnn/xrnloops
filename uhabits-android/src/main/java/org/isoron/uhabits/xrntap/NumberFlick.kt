@@ -26,10 +26,10 @@ import org.isoron.uhabits.activities.habits.list.views.toShortString
 import org.isoron.uhabits.core.models.Entry.Companion.SKIP
 import org.isoron.uhabits.core.models.Entry.Companion.UNKNOWN
 import org.isoron.uhabits.core.models.NumericalHabitType.AT_LEAST
+import org.isoron.uhabits.core.models.dayTargetEntry
 import org.isoron.uhabits.utils.getFontAwesome
 import org.isoron.uhabits.utils.sres
 import org.isoron.uhabits.xrnlook.XrnFonts
-import kotlin.math.roundToInt
 
 /**
  * The flick menu on a number habit's day, laid out like the yes/no one ([CheckmarkFlick]): up
@@ -46,20 +46,21 @@ object NumberFlick {
         val faint = sres.getColor(R.attr.contrast60)
         val bold = XrnFonts.bold(context)
         fun meets(amount: Double) = if (targetType == AT_LEAST) amount >= threshold else amount <= threshold
-        fun amount(amount: Double): FlickChoice {
-            val label = amount.toShortString()
+        fun amount(entry: Int): FlickChoice { // as Loop stores it, the amount ×1000
+            val label = (entry / 1000.0).toShortString()
             return FlickChoice(
-                tint = if (meets(amount)) color else faint,
+                tint = if (meets(entry / 1000.0)) color else faint,
                 glyph = label,
                 typeface = bold,
                 glyphSp = if (label.length > 3) 14f else 18f
-            ) { set(this, (amount * 1000).roundToInt()) } // Loop stores amounts ×1000
+            ) { set(this, entry) }
         }
         FlickChoices(
             center = FlickChoice(faint, resources.getString(R.string.fa_question), fa, 17f) { set(this, UNKNOWN) },
-            up = amount(threshold),
+            // The share rounded could fall short of it (5 a week is 0.714… a day, and 714 isn't done).
+            up = amount(dayTargetEntry(threshold, targetType)),
             right = FlickChoice(tint = faint, icon = context.getDrawable(R.drawable.xrn_ic_dialpad)?.mutate()) { onEdit() },
-            down = amount(0.0),
+            down = amount(0),
             left = FlickChoice(color, resources.getString(R.string.fa_skipped), fa) { set(this, SKIP) }
         )
     }

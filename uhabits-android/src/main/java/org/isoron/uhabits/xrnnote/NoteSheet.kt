@@ -51,6 +51,7 @@ import org.isoron.uhabits.core.models.Entry.Companion.SKIP
 import org.isoron.uhabits.core.models.Entry.Companion.UNKNOWN
 import org.isoron.uhabits.core.models.Entry.Companion.YES_MANUAL
 import org.isoron.uhabits.core.models.Habit
+import org.isoron.uhabits.core.models.dayTargetEntry
 import org.isoron.uhabits.databinding.XrnnoteSheetBinding
 import org.isoron.uhabits.utils.InterfaceUtils
 import org.isoron.uhabits.utils.StyledResources
@@ -180,7 +181,7 @@ class NoteSheet : BottomSheetDialogFragment() {
     private fun bindNumber(color: Int) {
         val args = requireArguments()
         val unit = args.getString(ARG_UNIT).orEmpty()
-        val target = args.getDouble(ARG_TARGET)
+        val target = args.getInt(ARG_TARGET)
         view.amountRow.visibility = View.VISIBLE
         view.amountLayout.setBoxStrokeColorStateList(ColorStateList.valueOf(color))
         view.unit.text = unit
@@ -196,8 +197,8 @@ class NoteSheet : BottomSheetDialogFragment() {
         val res = StyledResources(requireContext())
         val strong = res.getColor(R.attr.contrast100)
         val faint = res.getColor(R.attr.contrast60)
-        val targetLabel = "${AMOUNT.format(target)} $unit".trim()
-        if (target > 0) addKey((target * 1000).roundToInt(), targetLabel, color, color, 1f)
+        val targetLabel = "${AMOUNT.format(target / 1000.0)} $unit".trim()
+        if (target > 0) addKey(target, targetLabel, color, color, 1f)
         addKey(0, "0", strong, color, 0f)
         addKey(SKIP, getString(R.string.xrnnote_skip), color, color, 0f)
         addKey(UNKNOWN, getString(R.string.xrnnote_clear), faint, color, 0f)
@@ -356,7 +357,7 @@ class NoteSheet : BottomSheetDialogFragment() {
         private const val ARG_FOCUS = "focus"
         private const val ARG_NUMBER = "number"
         private const val ARG_UNIT = "unit"
-        private const val ARG_TARGET = "target"
+        private const val ARG_TARGET = "target" // the day's target as an entry stores it (×1000)
 
         // Three places, as an amount is kept to the thousandth: fewer would change it on Save.
         private val AMOUNT get() = DecimalFormat("#.###")
@@ -418,7 +419,8 @@ class NoteSheet : BottomSheetDialogFragment() {
             val extras = Bundle().apply {
                 putBoolean(ARG_NUMBER, true)
                 putString(ARG_UNIT, habit.unit)
-                putDouble(ARG_TARGET, habit.targetValue / habit.frequency.denominator)
+                // Rounded, the day's share could fall short of it: 5 a week is 0.714… a day.
+                putInt(ARG_TARGET, habit.dayTargetEntry())
             }
             open(activity, habit.name, date, color, stored, note, extras) { v, n ->
                 onSave(if (v == stored) value else v / 1000.0, n)

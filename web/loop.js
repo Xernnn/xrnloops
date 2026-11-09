@@ -191,6 +191,20 @@ export function computeStreaks(habit, computed, from, to) {
   return streaks;
 }
 
+/**
+ * A number habit's target for one day as an entry stores it (the amount ×1000), as the phone's
+ * dayTargetEntry has it: the least amount that meets an "at least" target, the most an "at most"
+ * one allows. The share rounded can miss: 5 a week is 0.714… a day, and 714 isn't done.
+ */
+export function dayTargetEntry(habit) {
+  const share = habit.data.targetValue / habit.data.freqDen;
+  if (!Number.isFinite(share) || share <= 0) return 0;
+  let entry = Math.round(share * 1000);
+  if (habit.data.targetType === AT_MOST) while (entry > 0 && entry / 1000 > share) entry--;
+  else while (entry / 1000 < share) entry++;
+  return entry;
+}
+
 /** Everything the screens show about one habit, computed the way Loop's Habit.recompute does. */
 export function summarize(habit, entries, today = todayNum()) {
   const computed = computeEntries(habit, entries);

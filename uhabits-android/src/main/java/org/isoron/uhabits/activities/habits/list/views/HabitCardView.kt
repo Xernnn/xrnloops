@@ -314,7 +314,9 @@ class HabitCardView(
             color = c
             units = h.unit
             targetType = h.targetType
-            threshold = h.targetValue
+            // xrnloops: the day's share, as HabitCardListView sets it; the flick's target key
+            // enters it, and an edit (this habit's model change) mustn't turn it into the whole.
+            threshold = h.targetValue / h.frequency.denominator
             visibility = when (h.isNumerical) {
                 true -> View.VISIBLE
                 false -> View.GONE
