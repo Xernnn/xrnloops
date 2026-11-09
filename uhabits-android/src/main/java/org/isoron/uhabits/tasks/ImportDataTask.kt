@@ -20,22 +20,16 @@ package org.isoron.uhabits.tasks
 
 import android.util.Log
 import org.isoron.platform.io.UserFile
-import org.isoron.platform.io.begin
-import org.isoron.platform.io.commit
 import org.isoron.uhabits.core.io.GenericImporter
-import org.isoron.uhabits.core.models.ModelFactory
-import org.isoron.uhabits.core.models.sqlite.SQLModelFactory
 import org.isoron.uhabits.core.tasks.Task
 import org.isoron.uhabits.xrnsync.XrnSync
 
 class ImportDataTask(
     private val importer: GenericImporter,
-    modelFactory: ModelFactory,
     private val file: UserFile,
     private val listener: Listener
 ) : Task {
     private var result = 0
-    private val modelFactory: SQLModelFactory = modelFactory as SQLModelFactory
     override suspend fun doInBackground() {
         // xrnloops: sync waits for the import, then sends what it changed as old (XRNLOOPS.md).
         val sync = XrnSync.instance
@@ -47,22 +41,24 @@ class ImportDataTask(
         }
     }
 
+    /**
+     * xrnloops: not inside a transaction. Android hands its one connection to the thread that
+     * began one until it ends, and the import takes the habit list's and the repositories' locks
+     * as it goes, which any other thread holds while it waits for that connection: sync applying
+     * the server's changes, a tick, a screen loading a habit's days. Each importer writes a
+     * habit's days in one go instead (EntryList.addAll), so an import stays quick.
+     */
     private suspend fun importAll() {
-        modelFactory.database.begin()
         try {
             if (importer.canHandle(file)) {
                 importer.importHabitsFromFile(file)
                 result = SUCCESS
-                modelFactory.database.commit()
             } else {
                 result = NOT_RECOGNIZED
-                modelFactory.database.commit()
             }
         } catch (e: Exception) {
             result = FAILED
             Log.e("ImportDataTask", "Import failed", e)
-            // On failure, commit anyway to close the transaction
-            try { modelFactory.database.commit() } catch (_: Exception) {}
         }
     }
 

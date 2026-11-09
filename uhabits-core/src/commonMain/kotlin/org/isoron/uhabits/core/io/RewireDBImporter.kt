@@ -108,6 +108,7 @@ class RewireDBImporter(
     }
 
     private fun createCheckmarks(db: Database, habit: Habit, rewireHabitId: Int) {
+        val entries = mutableListOf<Entry>() // xrnloops: written in one go (see LoopDBImporter)
         db.query(
             "select distinct date from checkins where habit_id=? and type=2",
             rewireHabitId.toString()
@@ -116,8 +117,9 @@ class RewireDBImporter(
             val year = dateStr.substring(0, 4).toInt()
             val month = dateStr.substring(4, 6).toInt()
             val day = dateStr.substring(6, 8).toInt()
-            habit.originalEntries.add(Entry(LocalDate(year, month, day), Entry.YES_MANUAL))
+            entries.add(Entry(LocalDate(year, month, day), Entry.YES_MANUAL))
         }
+        habit.originalEntries.addAll(entries)
     }
 
     private fun createReminder(db: Database, habit: Habit, rewireHabitId: Int) {

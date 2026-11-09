@@ -99,6 +99,10 @@ class LoopDBImporter(
             habit = habitList.getByUUID(habitData.uuid)!!
             val entries = habit.originalEntries
 
+            // xrnloops: one write for the habit's entries (XRNLOOPS.md), not a transaction held
+            // around the whole import, which deadlocked with any thread that waited for the
+            // database while holding a lock the import needed next.
+            val changed = mutableListOf<Entry>()
             db.query(
                 "SELECT timestamp, value, notes FROM Repetitions WHERE habit = ? ORDER BY timestamp DESC",
                 habitData.id.toString()
@@ -109,9 +113,10 @@ class LoopDBImporter(
                 val date = LocalDate.fromUnixTime(timestamp)
                 val (_, existingValue, existingNotes) = entries.get(date)
                 if (existingValue != value || existingNotes != notes) {
-                    entries.add(Entry(date, value, notes))
+                    changed.add(Entry(date, value, notes))
                 }
             }
+            entries.addAll(changed)
             habit.recompute()
         }
         habitList.resort()

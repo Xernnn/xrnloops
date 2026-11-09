@@ -22,13 +22,11 @@ package org.isoron.uhabits.tasks
 import me.tatarka.inject.annotations.Inject
 import org.isoron.platform.io.UserFile
 import org.isoron.uhabits.core.io.GenericImporter
-import org.isoron.uhabits.core.models.ModelFactory
 
 @Inject
 class ImportDataTaskFactory(
-    private val importer: GenericImporter,
-    private val modelFactory: ModelFactory
+    private val importer: GenericImporter
 ) {
     fun create(file: UserFile, listener: ImportDataTask.Listener) =
-        ImportDataTask(importer, modelFactory, file, listener)
+        ImportDataTask(importer, file, listener)
 }
