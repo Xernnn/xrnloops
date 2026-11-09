@@ -1385,18 +1385,26 @@ function numberSheet(habit, date) {
   });
   const shownAmount = amount.value;
   const note = h("textarea", { value: originalNote, placeholder: "Note for this day", rows: 2 });
+  // The day as it is now: the phone may have entered an amount while this sheet was open, and
+  // an amount nobody typed here mustn't be written back over it (as NoteSheet on the phone).
+  const valueNow = () => entriesOf(habit.uuid).get(date)?.value ?? value;
+  const keepNote = () => {
+    if (note.value.trim() !== originalNote) writeEntry(habit.uuid, date, valueNow(), note.value.trim());
+  };
   const finish = (stored) => {
     current.onClose = null;
     closeSheet();
-    writeEntry(habit.uuid, date, stored, note.value.trim());
+    if (stored == null) keepNote();
+    else writeEntry(habit.uuid, date, stored, note.value.trim());
   };
   const target = L.dayTargetEntry(habit);
   const form = h("form", {
     style: { display: "grid", gap: "16px" },
     onsubmit: (e) => {
       e.preventDefault();
+      if (amount.value === shownAmount) return finish(null);
       // An empty box means no amount, not "undo the skip".
-      const empty = value === L.SKIP ? L.SKIP : L.UNKNOWN;
+      const empty = valueNow() === L.SKIP ? L.SKIP : L.UNKNOWN;
       finish(amount.value === "" ? empty : Math.round(Number(amount.value) * 1000));
     },
   },
@@ -1413,7 +1421,7 @@ function numberSheet(habit, date) {
   current.onClose = () => {
     const typed = amount.value !== "" && amount.value !== shownAmount;
     if (typed) writeEntry(habit.uuid, date, Math.round(Number(amount.value) * 1000), note.value.trim());
-    else if (note.value.trim() !== originalNote) writeEntry(habit.uuid, date, value, note.value.trim());
+    else keepNote();
   };
   amount.focus();
   amount.select();
