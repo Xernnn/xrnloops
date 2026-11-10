@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2026 the xrnhabit authors
+ * Copyright (C) 2026 the xrnrule authors
  *
  * This file is part of Loop Habit Tracker.
  *
@@ -19,16 +19,20 @@
 
 package org.isoron.uhabits.xrnsync
 
-import android.app.AlertDialog
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
 import android.text.format.DateUtils
-import android.widget.EditText
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import androidx.preference.EditTextPreference
-import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
 import org.isoron.uhabits.R
 import kotlin.concurrent.thread
 
@@ -50,21 +54,29 @@ object XrnSyncPreferences {
             pref.summary = pref.text
             pref.setOnPreferenceChangeListener { p, value ->
                 p.summary = value as? String
-                changed(fragment, sync)
+                // Afterwards: this runs before the new value is saved, and `changed` reads it.
+                fragment.view?.post { if (fragment.isAdded) changed(fragment, sync) }
                 true
             }
         }
         fragment.findPreference(XrnSyncSettings.KEY_PASSWORD)?.setOnPreferenceClickListener { pref ->
-            val input = EditText(pref.context).apply {
+            // The app's Material dialog, not android.app.AlertDialog: on HyperOS the framework one
+            // came out as a narrow white box whose field was invisible and never took focus. The
+            // eye button lets you check what you typed before saving.
+            val input = TextInputEditText(pref.context).apply {
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
                 setText(settings.password)
+            }
+            val field = TextInputLayout(pref.context).apply {
+                endIconMode = TextInputLayout.END_ICON_PASSWORD_TOGGLE
+                addView(input, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
             }
             val pad = (20 * pref.context.resources.displayMetrics.density).toInt()
             val frame = FrameLayout(pref.context).apply {
                 setPadding(pad, pad / 2, pad, 0)
-                addView(input)
+                addView(field, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
             }
-            AlertDialog.Builder(pref.context)
+            MaterialAlertDialogBuilder(pref.context)
                 .setTitle(R.string.xrnsync_password)
                 .setView(frame)
                 .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -73,6 +85,8 @@ object XrnSyncPreferences {
                 }
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
+                .window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+            input.requestFocus()
             true
         }
         fragment.findPreference(XrnSyncSettings.KEY_SYNC_NOW)?.setOnPreferenceClickListener { pref ->

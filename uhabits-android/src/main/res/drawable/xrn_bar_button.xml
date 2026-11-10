@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- xrnloops (XRNLOOPS.md): a bar action, the round button xrnrule's bar has. The view stays Loop's
+     full-height target; only the circle in the middle shows. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?android:colorControlHighlight">
+    <item android:gravity="center" android:width="38dp" android:height="38dp">
+        <shape android:shape="oval">
+            <solid android:color="?attr/cardBgColor" />
+            <stroke android:width="1dp" android:color="?attr/xrnRowEdge" />
+        </shape>
+    </item>
+</ripple>

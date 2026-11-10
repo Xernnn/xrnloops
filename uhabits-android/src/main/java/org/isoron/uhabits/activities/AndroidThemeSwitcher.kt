@@ -28,12 +28,12 @@ import androidx.core.content.ContextCompat
 import org.isoron.uhabits.R
 import org.isoron.uhabits.core.preferences.Preferences
 import org.isoron.uhabits.core.ui.ThemeSwitcher
-import org.isoron.uhabits.core.ui.views.DarkTheme
-import org.isoron.uhabits.core.ui.views.LightTheme
 import org.isoron.uhabits.core.ui.views.PureBlackTheme
 import org.isoron.uhabits.core.ui.views.Theme
 import org.isoron.uhabits.inject.ActivityContext
 import org.isoron.uhabits.inject.ActivityScope
+import org.isoron.uhabits.xrnlook.XrnDarkTheme
+import org.isoron.uhabits.xrnlook.XrnLightTheme
 
 @ActivityScope
 class AndroidThemeSwitcher
@@ -42,7 +42,7 @@ constructor(
     preferences: Preferences
 ) : ThemeSwitcher(preferences) {
 
-    override var currentTheme: Theme = LightTheme()
+    override var currentTheme: Theme = XrnLightTheme()
 
     override fun getSystemTheme(): Int {
         if (SDK_INT < 29) return THEME_LIGHT
@@ -54,21 +54,22 @@ constructor(
         }
     }
 
+    // xrnloops: the xrn family themes (res/values/xrn_app_theme.xml, xrnlook/XrnThemes.kt).
     override fun applyDarkTheme() {
-        currentTheme = DarkTheme()
-        context.setTheme(R.style.AppBaseThemeDark)
+        currentTheme = XrnDarkTheme()
+        context.setTheme(R.style.XrnAppThemeDark)
         (context as Activity).window.navigationBarColor =
-            ContextCompat.getColor(context, R.color.grey_900)
+            ContextCompat.getColor(context, R.color.xrn_bg)
     }
 
     override fun applyLightTheme() {
-        currentTheme = LightTheme()
-        context.setTheme(R.style.AppBaseTheme)
+        currentTheme = XrnLightTheme()
+        context.setTheme(R.style.XrnAppTheme)
     }
 
     override fun applyPureBlackTheme() {
         currentTheme = PureBlackTheme()
-        context.setTheme(R.style.AppBaseThemeDark_PureBlack)
+        context.setTheme(R.style.XrnAppThemeDark_PureBlack)
         (context as Activity).window.navigationBarColor =
             ContextCompat.getColor(context, R.color.black)
     }
@@ -76,9 +77,6 @@ constructor(
     fun applyDialog() {
         if (isNightMode) {
             context.setTheme(R.style.BaseDialogDark)
-            (context as Activity).window.decorView.setBackgroundColor(
-                ContextCompat.getColor(context, R.color.grey_900)
-            )
         } else {
             context.setTheme(R.style.BaseDialog)
         }

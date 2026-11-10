@@ -69,6 +69,15 @@ class SQLiteEntryList(val repository: EntryRepository) : EntryList() {
         super.add(entry)
     }
 
+    override fun addAll(entries: List<Entry>) {
+        loadRecords()
+        val habitId = habitId ?: throw IllegalStateException("habitId must be set")
+        repository.replaceAll(
+            entries.map { EntryData(habitId = habitId, timestamp = it.date.unixTime, value = it.value, notes = it.notes) }
+        )
+        for (entry in entries) super.add(entry)
+    }
+
     override fun getKnown(): List<Entry> {
         loadRecords()
         return super.getKnown()

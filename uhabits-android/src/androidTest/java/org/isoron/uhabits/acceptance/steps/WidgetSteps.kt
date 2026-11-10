@@ -28,7 +28,7 @@ import org.junit.Assert.assertTrue
 object WidgetSteps {
     @Throws(Exception::class)
     fun clickCheckmarkWidget() {
-        val viewId = "org.isoron.uhabits:id/imageView"
+        val viewId = "${BaseUserInterfaceTest.PKG}:id/imageView" // xrnloops: the app id
         BaseUserInterfaceTest.device.findObject(UiSelector().resourceId(viewId)).click()
     }
 
@@ -69,7 +69,7 @@ object WidgetSteps {
 
     @Throws(Exception::class)
     fun verifyCheckmarkWidgetIsShown() {
-        val viewId = "org.isoron.uhabits:id/imageView"
+        val viewId = "${BaseUserInterfaceTest.PKG}:id/imageView" // xrnloops: the app id
         assertTrue(
             BaseUserInterfaceTest.device.findObject(UiSelector().resourceId(viewId)).exists()
         )

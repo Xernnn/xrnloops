@@ -44,6 +44,17 @@ class SQLiteEntryListTest {
     }
 
     @Test
+    fun testAddAll() = runTest {
+        initTest()
+        entries.add(Entry(today, 500))
+        entries.addAll(listOf(Entry(today, 600), Entry(today.minus(1), 300)))
+        assertEquals(Entry(today, 600), entries.get(today))
+        assertEquals(Entry(today.minus(1), 300), entries.get(today.minus(1)))
+        val stored = factory.entryRepository.findAllByHabitId(entries.habitId!!)
+        assertEquals(listOf(600, 300), stored.map { it.value })
+    }
+
+    @Test
     fun testLoad() = runTest {
         initTest()
         val today = LocalDate(2015, 1, 25)

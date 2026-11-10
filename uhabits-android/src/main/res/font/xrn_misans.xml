@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- xrnloops (XRNLOOPS.md): MiSans Latin as one family, so textStyle="bold" picks a bold file
+     instead of a synthetic bold. Each weight takes the file xrnrule gives it: 700 is MiSans
+     Semibold and 800 is MiSans Bold, which look like those weights did in Nunito. -->
+<font-family xmlns:android="http://schemas.android.com/apk/res/android">
+    <font
+        android:font="@font/xrn_misans_regular"
+        android:fontStyle="normal"
+        android:fontWeight="400" />
+    <font
+        android:font="@font/xrn_misans_semibold"
+        android:fontStyle="normal"
+        android:fontWeight="700" />
+    <font
+        android:font="@font/xrn_misans_bold"
+        android:fontStyle="normal"
+        android:fontWeight="800" />
+</font-family>

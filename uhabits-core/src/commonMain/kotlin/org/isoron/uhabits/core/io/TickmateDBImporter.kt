@@ -63,6 +63,7 @@ class TickmateDBImporter(
     }
 
     private fun createCheckmarks(db: Database, habit: Habit, tickmateTrackId: Int) {
+        val entries = mutableListOf<Entry>() // xrnloops: written in one go (see LoopDBImporter)
         db.query(
             "select distinct year, month, day from ticks where _track_id=?",
             tickmateTrackId.toString()
@@ -70,8 +71,9 @@ class TickmateDBImporter(
             val year = stmt.getInt(0)
             val month = stmt.getInt(1)
             val day = stmt.getInt(2)
-            habit.originalEntries.add(Entry(LocalDate(year, month + 1, day), Entry.YES_MANUAL))
+            entries.add(Entry(LocalDate(year, month + 1, day), Entry.YES_MANUAL))
         }
+        habit.originalEntries.addAll(entries)
     }
 
     private fun createHabits(db: Database) {

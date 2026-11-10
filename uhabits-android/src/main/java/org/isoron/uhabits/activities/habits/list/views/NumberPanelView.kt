@@ -84,6 +84,13 @@ class NumberPanelView(
             setupButtons()
         }
 
+    // xrnloops: a value picked in the flick menu (XRNLOOPS.md).
+    var onToggle: (LocalDate, Int, String) -> Unit = { _, _, _ -> }
+        set(value) {
+            field = value
+            setupButtons()
+        }
+
     override fun createButton() = buttonFactory.create()
 
     @Synchronized
@@ -105,6 +112,7 @@ class NumberPanelView(
             button.threshold = threshold
             button.units = units
             button.onEdit = { onEdit(date) }
+            button.onToggle = { value, notes -> onToggle(date, value, notes) } // xrnloops
         }
     }
 }

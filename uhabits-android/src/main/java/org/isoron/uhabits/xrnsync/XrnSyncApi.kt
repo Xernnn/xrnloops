@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2026 the xrnhabit authors
+ * Copyright (C) 2026 the xrnrule authors
  *
  * This file is part of Loop Habit Tracker.
  *
@@ -25,22 +25,35 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** The two calls xrnloops-sync answers (see `server/xrnloops-sync.py`). Blocking; call off the main thread. */
+/** The calls xrnloops-sync answers (see `server/xrnloops-sync.py`). Blocking; call off the main thread. */
 class XrnSyncApi(private val baseUrl: String, user: String, password: String) {
     private val auth = "Basic " + Base64.encodeToString("$user:$password".toByteArray(), Base64.NO_WRAP)
 
     class AuthException : IOException("the server refused the user name or password")
 
-    fun pull(since: Long): JSONObject = request("GET", "/api/changes?since=$since", null)
+    /** Any other answer outside 2xx; [code] 429 means too many wrong passwords from this address. */
+    class ServerException(val code: Int, message: String) : IOException(message)
+
+    /** A push made from a history the server no longer has (restored from a backup): nothing was written. */
+    class StaleEpochException : IOException("the server's history went back")
+
+    /**
+     * Changes after [since]; with [waitS], the server holds the answer until there are some
+     * (long-poll). With [epoch], the history [since] counts in: if that's gone the answer says so.
+     */
+    fun pull(since: Long, waitS: Int = 0, epoch: Long? = null): JSONObject {
+        val wait = if (waitS > 0) "&wait=$waitS" else ""
+        return request("GET", "/api/changes?since=$since$wait" + (epoch?.let { "&epoch=$it" } ?: ""), null, waitS * 1000)
+    }
 
     fun push(body: JSONObject): JSONObject = request("POST", "/api/changes", body)
 
-    private fun request(method: String, path: String, body: JSONObject?): JSONObject {
+    private fun request(method: String, path: String, body: JSONObject?, waitMs: Int = 0): JSONObject {
         val conn = URL(baseUrl + path).openConnection() as HttpURLConnection
         try {
             conn.requestMethod = method
             conn.connectTimeout = TIMEOUT_MS
-            conn.readTimeout = TIMEOUT_MS
+            conn.readTimeout = TIMEOUT_MS + waitMs
             conn.setRequestProperty("Authorization", auth)
             conn.setRequestProperty("Accept", "application/json")
             if (body != null) {
@@ -50,9 +63,10 @@ class XrnSyncApi(private val baseUrl: String, user: String, password: String) {
             }
             val code = conn.responseCode
             if (code == HttpURLConnection.HTTP_UNAUTHORIZED) throw AuthException()
+            if (code == HttpURLConnection.HTTP_CONFLICT) throw StaleEpochException()
             if (code !in 200..299) {
                 val text = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                throw IOException("server answered $code ${text.take(200)}")
+                throw ServerException(code, "server answered $code ${text.take(200)}")
             }
             return JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
         } finally {

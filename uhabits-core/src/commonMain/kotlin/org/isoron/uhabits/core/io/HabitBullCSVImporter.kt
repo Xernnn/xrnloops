@@ -54,6 +54,7 @@ class HabitBullCSVImporter(
     override suspend fun importHabitsFromFile(file: UserFile) {
         val lines = file.lines()
         val map = HashMap<String, Habit>()
+        val entries = HashMap<String, MutableList<Entry>>() // xrnloops: by name, one write per habit (see LoopDBImporter)
         for (line in lines) {
             val cols = parseCsvLine(line)
             if (cols.size < 6) continue
@@ -72,19 +73,21 @@ class HabitBullCSVImporter(
                 logger.info("Creating habit: $name")
             }
             val notes = cols[5]
+            val habitEntries = entries.getOrPut(name) { mutableListOf() }
             when (val value = parseInt(cols[4])) {
-                0 -> h.originalEntries.add(Entry(date, Entry.NO, notes))
-                1 -> h.originalEntries.add(Entry(date, Entry.YES_MANUAL, notes))
+                0 -> habitEntries.add(Entry(date, Entry.NO, notes))
+                1 -> habitEntries.add(Entry(date, Entry.YES_MANUAL, notes))
                 else -> {
                     if (value > 1 && h.type != HabitType.NUMERICAL) {
                         logger.info("Found a value of $value, considering this habit as numerical.")
                         h.type = HabitType.NUMERICAL
                     }
-                    h.originalEntries.add(Entry(date, value * 1000, notes))
+                    habitEntries.add(Entry(date, value * 1000, notes))
                 }
             }
         }
 
+        entries.forEach { (name, list) -> map.getValue(name).originalEntries.addAll(list) }
         map.forEach { (_, habit) -> habit.recompute() }
     }
 

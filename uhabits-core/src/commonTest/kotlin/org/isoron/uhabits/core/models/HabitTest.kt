@@ -84,6 +84,21 @@ class HabitTest : BaseUnitTest() {
     }
 
     @Test
+    fun test_isCompleted_numerical_isTheDaysShare() {
+        val h = modelFactory.buildHabit()
+        h.type = HabitType.NUMERICAL
+        h.targetType = NumericalHabitType.AT_LEAST
+        h.targetValue = 70.0
+        h.frequency = Frequency.WEEKLY
+        h.originalEntries.add(Entry(getToday(), 9000))
+        h.recompute()
+        assertFalse(h.isCompletedToday())
+        h.originalEntries.add(Entry(getToday(), 10000))
+        h.recompute()
+        assertTrue(h.isCompletedToday())
+    }
+
+    @Test
     fun test_isCompleted_numerical() {
         val h = modelFactory.buildHabit()
         h.type = HabitType.NUMERICAL

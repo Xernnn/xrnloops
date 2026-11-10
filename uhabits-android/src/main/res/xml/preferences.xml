@@ -24,11 +24,15 @@
             android:key="interfaceCategory"
             android:title="@string/interface_preferences">
 
-        <SwitchPreferenceCompat
-                android:defaultValue="false"
-                android:key="pref_short_toggle"
-                android:summary="@string/pref_toggle_description_2"
-                android:title="@string/pref_toggle_title"
+        <!-- xrnloops (XRNLOOPS.md): what a tap does, in place of Loop's "Toggle with short press"
+             switch (pref_short_toggle), which xrntap/XrnTap.kt keeps in step. -->
+        <ListPreference
+                android:dialogTitle="@string/xrntap_title"
+                android:entries="@array/xrntap_entries"
+                android:entryValues="@array/xrntap_values"
+                android:key="pref_xrn_tap"
+                android:summary="@string/xrntap_summary"
+                android:title="@string/xrntap_title"
                 app:iconSpaceReserved="false" />
 
         <SwitchPreferenceCompat
@@ -178,11 +182,6 @@
             android:title="@string/troubleshooting">
 
         <Preference
-                android:key="bugReport"
-                android:title="@string/generate_bug_report"
-                app:iconSpaceReserved="false" />
-
-        <Preference
                 android:key="repairDB"
                 android:title="@string/repair_database"
                 app:iconSpaceReserved="false" />
@@ -192,20 +191,6 @@
     <PreferenceCategory
             android:key="linksCategory"
             android:title="@string/links">
-
-        <Preference
-                android:title="@string/help"
-                app:iconSpaceReserved="false">
-            <intent
-                    android:action="android.intent.action.VIEW"
-                    android:data="@string/helpURL" />
-        </Preference>
-
-        <Preference
-                android:key="rateApp"
-                android:title="@string/pref_rate_this_app"
-                app:iconSpaceReserved="false">
-        </Preference>
 
         <Preference
                 android:title="@string/about"
@@ -227,27 +212,6 @@
                 android:key="pref_developer"
                 android:title="Enable developer mode"
                 app:iconSpaceReserved="false" />
-
-        <EditTextPreference
-            android:defaultValue="@string/syncBaseURL"
-            android:key="pref_sync_base_url"
-            android:title="Sync server"
-            app:iconSpaceReserved="false"
-            />
-
-        <EditTextPreference
-            android:defaultValue=""
-            android:key="pref_sync_key"
-            android:title="Sync key"
-            app:iconSpaceReserved="false"
-            />
-
-        <EditTextPreference
-            android:defaultValue=""
-            android:key="pref_encryption_key"
-            android:title="Encryption key"
-            app:iconSpaceReserved="false"
-            />
 
     </PreferenceCategory>
 

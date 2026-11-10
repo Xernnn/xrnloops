@@ -20,7 +20,6 @@
 package org.isoron.uhabits.activities.habits.list.views
 
 import android.content.Context
-import android.graphics.Rect
 import android.os.Bundle
 import android.os.Parcelable
 import android.view.GestureDetector
@@ -59,7 +58,6 @@ class HabitCardListView(
 ) : RecyclerView(context, null, R.attr.scrollableRecyclerViewStyle) {
 
     var checkmarkCount: Int = 0
-    private var insetDecorationsAdded: Boolean = false
 
     var dataOffset: Int = 0
         set(value) {
@@ -82,24 +80,13 @@ class HabitCardListView(
         super.setAdapter(adapter)
     }
 
+    // xrnloops: padding, not an offset on the last row. Offsets are cached per row, and the list
+    // loads bit by bit, so whichever row was last for a moment kept a gap under it (XRNLOOPS.md).
     private fun applyBottomInset() {
-        ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
-            if (insetDecorationsAdded) return@setOnApplyWindowInsetsListener insets
-            insetDecorationsAdded = true
-            val systemBarsInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            addItemDecoration(object : ItemDecoration() {
-                override fun getItemOffsets(
-                    outRect: Rect,
-                    view: View,
-                    parent: RecyclerView,
-                    state: State
-                ) {
-                    val itemCount = parent.adapter?.itemCount
-                    if (parent.getChildAdapterPosition(view) == itemCount?.minus(1)) {
-                        outRect.bottom = systemBarsInsets.bottom
-                    }
-                }
-            })
+        clipToPadding = false
+        ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
+            val bottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
+            view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, bottom)
             insets
         }
     }

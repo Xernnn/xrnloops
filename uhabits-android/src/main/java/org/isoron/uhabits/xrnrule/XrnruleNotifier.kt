@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2026 the xrnhabit authors
+ * Copyright (C) 2026 the xrnrule authors
  *
  * This file is part of Loop Habit Tracker.
  *
@@ -17,27 +17,30 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.isoron.uhabits.xrnhabit
+package org.isoron.uhabits.xrnrule
 
 import android.content.Context
 import android.content.Intent
 import org.isoron.uhabits.core.commands.Command
 import org.isoron.uhabits.core.commands.CommandRunner
+import org.isoron.uhabits.core.commands.CreateRepetitionCommand
 
 /**
- * Tells xrnhabit that habits changed. Every check — list screen, history card, widget,
+ * Tells xrnrule that habits changed. Every check — list screen, history card, widget,
  * notification action — runs as a [Command], so listening to the [CommandRunner] catches all
  * of them. The broadcast carries no data and only reaches holders of the signature permission.
  */
-class XrnhabitNotifier(
+class XrnruleNotifier(
     private val context: Context,
     private val commandRunner: CommandRunner
 ) : CommandRunner.Listener {
 
     override fun onCommandFinished(command: Command) {
-        val intent = Intent(XrnhabitContract.ACTION_HABITS_CHANGED)
-            .setPackage(XrnhabitContract.XRNHABIT_PACKAGE)
-        context.sendBroadcast(intent, XrnhabitContract.PERMISSION)
+        // So the answer xrnrule sends back can say what this tick earned (XrnruleBanner).
+        if (command is CreateRepetitionCommand) XrnruleLinks.instance?.noteEntered(command.habit.uuid.orEmpty())
+        val intent = Intent(XrnruleContract.ACTION_HABITS_CHANGED)
+            .setPackage(XrnruleContract.XRNRULE_PACKAGE)
+        context.sendBroadcast(intent, XrnruleContract.PERMISSION)
     }
 
     fun startListening() {

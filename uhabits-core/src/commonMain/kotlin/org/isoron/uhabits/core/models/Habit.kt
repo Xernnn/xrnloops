@@ -62,7 +62,8 @@ data class Habit(
         val value = computedEntries.get(today).value
         return if (isNumerical) {
             when (targetType) {
-                NumericalHabitType.AT_LEAST -> value / 1000.0 >= targetValue
+                // xrnloops: the day's share of the target, as the list shows it
+                NumericalHabitType.AT_LEAST -> value / 1000.0 >= targetValue / frequency.denominator
                 NumericalHabitType.AT_MOST -> false
             }
         } else {

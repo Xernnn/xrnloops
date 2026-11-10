@@ -29,15 +29,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.isoron.platform.gui.toInt
+import org.isoron.platform.time.LocalDate
 import org.isoron.uhabits.AndroidDirFinder
 import org.isoron.uhabits.HabitsApplication
 import org.isoron.uhabits.R
 import org.isoron.uhabits.activities.AndroidThemeSwitcher
 import org.isoron.uhabits.activities.HabitsDirFinder
-import org.isoron.uhabits.activities.common.dialogs.CheckmarkDialog
 import org.isoron.uhabits.activities.common.dialogs.ConfirmDeleteDialog
 import org.isoron.uhabits.activities.common.dialogs.HistoryEditorDialog
-import org.isoron.uhabits.activities.common.dialogs.NumberDialog
 import org.isoron.uhabits.core.commands.Command
 import org.isoron.uhabits.core.commands.CommandRunner
 import org.isoron.uhabits.core.models.Habit
@@ -57,6 +56,7 @@ import org.isoron.uhabits.utils.dismissCurrentDialog
 import org.isoron.uhabits.utils.showMessage
 import org.isoron.uhabits.utils.showSendFileScreen
 import org.isoron.uhabits.widgets.WidgetUpdater
+import org.isoron.uhabits.xrnnote.NoteSheet
 
 class ShowHabitActivity : AppCompatActivity(), CommandRunner.Listener {
 
@@ -175,32 +175,30 @@ class ShowHabitActivity : AppCompatActivity(), CommandRunner.Listener {
         override fun showNumberPopup(
             value: Double,
             notes: String,
+            habit: Habit,
+            date: LocalDate,
             callback: NumberPickerCallback
         ) {
-            val dialog = NumberDialog()
-            dialog.arguments = Bundle().apply {
-                putDouble("value", value)
-                putString("notes", notes)
+            // xrnloops: the same sheet as a yes/no day, in place of Loop's number box (XRNLOOPS.md)
+            val color = view.currentTheme().color(habit.color).toInt()
+            NoteSheet.showNumber(this@ShowHabitActivity, habit, date, color, value, notes) { v, n ->
+                callback.onNumberPicked(v, n)
             }
-            dialog.onToggle = { v, n -> callback.onNumberPicked(v, n) }
-            dialog.dismissCurrentAndShow(supportFragmentManager, "numberDialog")
         }
 
         override fun showCheckmarkPopup(
             selectedValue: Int,
             notes: String,
             color: PaletteColor,
+            habitName: String,
+            date: LocalDate,
             callback: CheckMarkDialogCallback
         ) {
+            // xrnloops: our note sheet in place of Loop's popup (XRNLOOPS.md)
             val theme = view.currentTheme()
-            val dialog = CheckmarkDialog()
-            dialog.arguments = Bundle().apply {
-                putInt("color", theme.color(color).toInt())
-                putInt("value", selectedValue)
-                putString("notes", notes)
+            NoteSheet.show(this@ShowHabitActivity, habitName, date, theme.color(color).toInt(), selectedValue, notes) { v, n ->
+                callback.onNotesSaved(v, n)
             }
-            dialog.onToggle = { v, n -> callback.onNotesSaved(v, n) }
-            dialog.dismissCurrentAndShow(supportFragmentManager, "checkmarkDialog")
         }
 
         private fun getPopupAnchor(): View? {

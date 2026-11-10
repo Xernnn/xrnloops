@@ -46,8 +46,7 @@ open class ListHabitsBehavior(
     private val taskRunner: TaskRunner,
     private val screen: Screen,
     private val commandRunner: CommandRunner,
-    private val prefs: Preferences,
-    private val bugReporter: BugReporter
+    private val prefs: Preferences
 ) {
     open fun onClickHabit(h: Habit) {
         screen.showHabitScreen(h)
@@ -57,12 +56,18 @@ open class ListHabitsBehavior(
         val entry = habit.computedEntries.get(date)
         if (habit.type == HabitType.NUMERICAL) {
             val oldValue = entry.value.toDouble() / 1000
-            screen.showNumberPopup(oldValue, entry.notes) { newValue: Double, newNotes: String ->
-                val value = (newValue * 1000).roundToInt()
+            screen.showNumberPopup(oldValue, entry.notes, habit, date) { newValue: Double, newNotes: String ->
+                // xrnloops: a note on its own keeps the day as it is now; sync may have changed it
+                val value = when (newValue) {
+                    oldValue -> habit.computedEntries.get(date).value
+                    else -> (newValue * 1000).roundToInt()
+                }
                 if (newValue != oldValue) {
+                    // xrnloops: the day's share of the target, as the list shows it
+                    val target = habit.targetValue / habit.frequency.denominator
                     if (
-                        (habit.targetType == AT_LEAST && newValue >= habit.targetValue) ||
-                        (habit.targetType == AT_MOST && newValue <= habit.targetValue)
+                        (habit.targetType == AT_LEAST && newValue >= target) ||
+                        (habit.targetType == AT_MOST && newValue <= target)
                     ) {
                         screen.showConfetti(habit.color, x, y)
                     }
@@ -73,10 +78,14 @@ open class ListHabitsBehavior(
             screen.showCheckmarkPopup(
                 entry.value,
                 entry.notes,
-                habit.color
+                habit.color,
+                habit.name, // xrnloops: the note screen names the habit and the day (XRNLOOPS.md)
+                date
             ) { newValue: Int, newNotes: String ->
                 if (newValue != entry.value && newValue == YES_MANUAL) screen.showConfetti(habit.color, x, y)
-                commandRunner.run(CreateRepetitionCommand(habitList, habit, date, newValue, newNotes))
+                // xrnloops: a note on its own keeps the day as it is now; sync may have changed it
+                val value = if (newValue == entry.value) habit.computedEntries.get(date).value else newValue
+                commandRunner.run(CreateRepetitionCommand(habitList, habit, date, value, newNotes))
             }
         }
     }
@@ -116,17 +125,6 @@ open class ListHabitsBehavior(
         })
     }
 
-    open fun onSendBugReport() {
-        bugReporter.dumpBugReportToFile()
-        try {
-            val log = bugReporter.getBugReport()
-            screen.showSendBugReportToDeveloperScreen(log)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            screen.showMessage(Message.COULD_NOT_GENERATE_BUG_REPORT)
-        }
-    }
-
     open fun onStartup() {
         prefs.incrementLaunchCount()
         if (prefs.isFirstRun) onFirstRun()
@@ -144,14 +142,7 @@ open class ListHabitsBehavior(
         IMPORT_SUCCESSFUL,
         IMPORT_FAILED,
         DATABASE_REPAIRED,
-        COULD_NOT_GENERATE_BUG_REPORT,
         FILE_NOT_RECOGNIZED
-    }
-
-    interface BugReporter {
-        fun dumpBugReportToFile()
-
-        fun getBugReport(): String
     }
 
     interface DirFinder {
@@ -165,15 +156,18 @@ open class ListHabitsBehavior(
         fun showNumberPopup(
             value: Double,
             notes: String,
+            habit: Habit, // xrnloops
+            date: LocalDate, // xrnloops
             callback: NumberPickerCallback
         )
         fun showCheckmarkPopup(
             selectedValue: Int,
             notes: String,
             color: PaletteColor,
+            habitName: String, // xrnloops
+            date: LocalDate, // xrnloops
             callback: CheckMarkDialogCallback
         )
-        fun showSendBugReportToDeveloperScreen(log: String)
         fun showSendFileScreen(filename: String)
         fun showConfetti(color: PaletteColor, x: Float, y: Float)
     }

@@ -6,6 +6,7 @@ import org.isoron.platform.io.queryLong
 import org.isoron.platform.io.run
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class EntryRepositoryTest {
@@ -40,6 +41,57 @@ class EntryRepositoryTest {
         assertEquals(1700100000000, all[1].timestamp)
         assertEquals(1700000000000, all[2].timestamp)
         assertEquals("good", all[1].notes)
+
+        db.close()
+    }
+
+    @Test
+    fun testReplaceAllAddsAndReplacesInOneGo() = runTest {
+        val db = TestDatabaseHelper.createEmptyDatabase()
+        val repo = EntryRepository(db)
+        val habitId = insertTestHabit(db)
+        repo.insert(EntryData(habitId = habitId, timestamp = 1000, value = 2, notes = "old"))
+        repo.insert(EntryData(habitId = habitId, timestamp = 2000, value = 2, notes = "kept"))
+
+        repo.replaceAll(
+            listOf(
+                EntryData(habitId = habitId, timestamp = 1000, value = 3, notes = "new"),
+                EntryData(habitId = habitId, timestamp = 3000, value = 0)
+            )
+        )
+
+        val byTime = repo.findAllByHabitId(habitId).associateBy { it.timestamp }
+        assertEquals(3, byTime.size)
+        assertEquals(3, byTime[1000L]?.value)
+        assertEquals("new", byTime[1000L]?.notes)
+        assertEquals("kept", byTime[2000L]?.notes)
+        assertEquals(0, byTime[3000L]?.value)
+
+        db.close()
+    }
+
+    @Test
+    fun testReplaceAllThatFailsLeavesNothing() = runTest {
+        val db = TestDatabaseHelper.createEmptyDatabase()
+        val repo = EntryRepository(db)
+        val habitId = insertTestHabit(db)
+        repo.insert(EntryData(habitId = habitId, timestamp = 1000, value = 2, notes = "old"))
+
+        val missingHabit: Long? = null
+        assertFailsWith<Exception> {
+            repo.replaceAll(
+                listOf(
+                    EntryData(habitId = habitId, timestamp = 1000, value = 3),
+                    EntryData(habitId = missingHabit, timestamp = 2000, value = 2)
+                )
+            )
+        }
+
+        val rows = repo.findAllByHabitId(habitId)
+        assertEquals(1, rows.size)
+        assertEquals("old", rows[0].notes)
+        repo.insert(EntryData(habitId = habitId, timestamp = 3000, value = 2)) // not stuck in the transaction
+        assertEquals(2, repo.findAllByHabitId(habitId).size)
 
         db.close()
     }

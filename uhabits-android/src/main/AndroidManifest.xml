@@ -29,14 +29,14 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
-    <!-- xrnhabit link (see XRNLOOPS.md). xrnhabit declares the same signature permission,
+    <!-- xrnrule link (see XRNLOOPS.md). xrnrule declares the same signature permission,
          so either app can be installed first; both must be signed with the same key. -->
     <permission
-        android:name="com.xern.xrnhabit.permission.HABITS"
+        android:name="com.xern.xrnrule.permission.HABITS"
         android:protectionLevel="signature" />
-    <uses-permission android:name="com.xern.xrnhabit.permission.HABITS" />
+    <uses-permission android:name="com.xern.xrnrule.permission.HABITS" />
     <queries>
-        <package android:name="com.xern.xrnhabit" />
+        <package android:name="com.xern.xrnrule" />
     </queries>
 
     <application
@@ -47,7 +47,7 @@
         android:label="@string/xrnloops_app_name"
         android:localeConfig="@xml/locales_config"
         android:supportsRtl="true"
-        android:theme="@style/AppBaseTheme">
+        android:theme="@style/XrnAppTheme">
 
         <activity
             android:name=".activities.habits.edit.EditHabitActivity"
@@ -302,27 +302,19 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- xrnhabit: open one habit's page by uuid, signature-protected (XRNLOOPS.md). -->
+        <!-- xrnloops: the welcome screen, in place of Loop's intro (XRNLOOPS.md). -->
         <activity
-            android:name=".xrnhabit.OpenHabitActivity"
-            android:excludeFromRecents="true"
-            android:exported="true"
-            android:noHistory="true"
-            android:permission="com.xern.xrnhabit.permission.HABITS"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar">
-            <intent-filter>
-                <action android:name="com.xern.xrnhabit.action.OPEN_HABIT" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
+            android:name=".xrnwelcome.WelcomeActivity"
+            android:label="@string/xrnwelcome_menu"
+            android:theme="@style/XrnTheme" />
 
-        <!-- xrnhabit: read-only habit status, signature-protected (XRNLOOPS.md). -->
+        <!-- xrnrule: asks for a sync, signature-protected (XRNLOOPS.md). -->
         <provider
-            android:name=".xrnhabit.XrnhabitProvider"
+            android:name=".xrnrule.XrnruleProvider"
             android:authorities="${applicationId}.provider"
             android:exported="true"
-            android:readPermission="com.xern.xrnhabit.permission.HABITS"
-            android:writePermission="com.xern.xrnhabit.permission.HABITS" />
+            android:readPermission="com.xern.xrnrule.permission.HABITS"
+            android:writePermission="com.xern.xrnrule.permission.HABITS" />
 
         <!-- xrnloops: background sync with the home server (XRNLOOPS.md, "Sync"). -->
         <service

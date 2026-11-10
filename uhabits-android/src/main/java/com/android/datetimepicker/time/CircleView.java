@@ -50,7 +50,7 @@ public class CircleView extends View {
         super(context);
 
         StyledResources styledResources = new StyledResources(context);
-        mCircleColor = styledResources.getColor(R.attr.contrast0);
+        mCircleColor = styledResources.getColor(R.attr.contrast20);
         mDotColor = mCircleColor;
         mPaint.setAntiAlias(true);
 

@@ -1,4 +1,4 @@
-# Copyright (C) 2026 the xrnhabit authors
+# Copyright (C) 2026 the xrnrule authors
 #
 # This file is part of Loop Habit Tracker (the xrnloops fork). GPLv3 or later; see
 # xrnloops-sync.py for the notice.
@@ -8,16 +8,22 @@ last-writer-wins store, and the HTTP layer.
     python3 -m unittest server/test_xrnloops_sync.py     (from the repo root)
 """
 import base64
+import concurrent.futures
+import hashlib
+import gzip
+import hashlib
+import http.client
 import importlib.util
 import json
 import os
+import socket
 import tempfile
 import threading
 import time
 import unittest
+import unittest.mock
 import urllib.error
 import urllib.request
-from datetime import date, timedelta
 from http.server import ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -25,91 +31,7 @@ spec = importlib.util.spec_from_file_location("xrnloops_sync", os.path.join(HERE
 srv = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(srv)
 
-UNKNOWN, NO, YES_AUTO, YES_MANUAL, SKIP = srv.UNKNOWN, srv.NO, srv.YES_AUTO, srv.YES_MANUAL, srv.SKIP
-TODAY = date(2015, 1, 25)
-
-
-def day(offset):
-    return TODAY - timedelta(days=offset)
-
-
-def habit(**kw):
-    return srv.clean_habit_data({"name": "Plank", **kw})
-
-
-class LoopRulesTest(unittest.TestCase):
-    """The cases from uhabits-core's EntryListTest, so the port can't drift from Loop."""
-
-    def test_compute_boolean(self):
-        entries = {day(4): YES_MANUAL, day(9): YES_MANUAL, day(10): YES_MANUAL}
-        computed = srv.computed_entries(habit(freqNum=1, freqDen=3), entries)
-        expected = {
-            day(2): YES_AUTO, day(3): YES_AUTO, day(4): YES_MANUAL, day(7): YES_AUTO, day(8): YES_AUTO,
-            day(9): YES_MANUAL, day(10): YES_MANUAL, day(11): YES_AUTO, day(12): YES_AUTO,
-        }
-        self.assertEqual(expected, computed)
-        self.assertEqual({}, srv.computed_entries(habit(freqNum=1, freqDen=3), {}))
-
-    def test_compute_numerical_keeps_entries(self):
-        entries = {day(4): 100, day(9): 200, day(10): 300}
-        self.assertEqual(entries, srv.computed_entries(habit(type=srv.NUMERICAL), entries))
-
-    def test_add_from_interval(self):
-        original = [(day(1), YES_MANUAL), (day(2), NO), (day(4), NO), (day(5), YES_MANUAL),
-                    (day(10), YES_MANUAL), (day(11), NO)]
-        intervals = [[day(2), day(2), day(1)], [day(6), day(5), day(4)], [day(10), day(8), day(8)]]
-        expected = {
-            day(1): YES_MANUAL, day(2): YES_AUTO, day(3): UNKNOWN, day(4): YES_AUTO, day(5): YES_MANUAL,
-            day(6): YES_AUTO, day(7): UNKNOWN, day(8): YES_AUTO, day(9): YES_AUTO, day(10): YES_MANUAL,
-            day(11): NO,
-        }
-        self.assertEqual(expected, srv.build_entries_from_intervals(original, intervals))
-
-    def test_snap_intervals_together(self):
-        original = [[day(8), day(8), day(2)], [day(12), day(12), day(6)],
-                    [day(20), day(20), day(14)], [day(27), day(27), day(21)]]
-        srv.snap_intervals_together(original)
-        self.assertEqual([[day(8), day(8), day(2)], [day(15), day(12), day(9)],
-                          [day(22), day(20), day(16)], [day(29), day(27), day(23)]], original)
-        original = [[day(6), day(4), day(0)], [day(11), day(8), day(5)]]
-        srv.snap_intervals_together(original)
-        self.assertEqual([[day(6), day(4), day(0)], [day(13), day(8), day(7)]], original)
-
-    def test_build_intervals(self):
-        entries = [(day(8), YES_MANUAL), (day(18), YES_MANUAL), (day(23), YES_MANUAL)]
-        self.assertEqual([[day(8), day(8), day(2)], [day(18), day(18), day(12)], [day(23), day(23), day(17)]],
-                         srv.build_intervals(1, 7, entries))
-        self.assertEqual([[day(8), day(8), day(8)], [day(18), day(18), day(18)], [day(23), day(23), day(23)]],
-                         srv.build_intervals(1, 1, entries))
-        entries = [(day(8), YES_MANUAL), (day(15), YES_MANUAL), (day(18), YES_MANUAL),
-                   (day(22), YES_MANUAL), (day(23), YES_MANUAL)]
-        self.assertEqual([[day(18), day(15), day(12)], [day(22), day(18), day(16)], [day(23), day(22), day(17)]],
-                         srv.build_intervals(2, 7, entries))
-        entries = [(day(10), YES_MANUAL), (day(20), SKIP), (day(30), YES_MANUAL)]
-        self.assertEqual([[day(10), day(10), day(8)], [day(30), day(30), day(28)]],
-                         srv.build_intervals(1, 3, entries))
-
-    def test_status_matches_provider(self):
-        weekly = habit(freqNum=3, freqDen=7)
-        entries = {day(1): YES_MANUAL, day(2): YES_MANUAL, day(3): YES_MANUAL}
-        # Three ticks this week: the other days count as goal met (Loop's YES_AUTO), not done.
-        s = srv.habit_status(weekly, entries, day(0))
-        self.assertEqual((False, True, False), (s["done"], s["goal_met"], s["daily"]))
-        s = srv.habit_status(weekly, entries, day(1))
-        self.assertEqual((True, True), (s["done"], s["goal_met"]))
-        # An auto-check or a skip is never "done".
-        daily = habit()
-        self.assertFalse(srv.habit_status(daily, {day(0): YES_AUTO}, day(0))["done"])
-        self.assertFalse(srv.habit_status(daily, {day(0): SKIP}, day(0))["done"])
-        self.assertTrue(srv.habit_status(daily, {day(0): YES_MANUAL}, day(0))["daily"])
-        # Numerical: "at least" counts once the target is reached; "at most" never does.
-        pushups = habit(type=srv.NUMERICAL, targetValue=20)
-        self.assertTrue(srv.habit_status(pushups, {day(0): 20_000}, day(0))["done"])
-        self.assertFalse(srv.habit_status(pushups, {day(0): 19_000}, day(0))["done"])
-        sugar = habit(type=srv.NUMERICAL, targetType=srv.AT_MOST, targetValue=2)
-        s = srv.habit_status(sugar, {day(0): 0}, day(0))
-        self.assertEqual((False, False), (s["countable"], s["done"]))
-
+NO, YES_MANUAL, SKIP = 0, 2, 3  # as Entry has them in uhabits-core
 
 class StoreTest(unittest.TestCase):
     def setUp(self):
@@ -163,18 +85,88 @@ class StoreTest(unittest.TestCase):
         finally:
             srv.PAGE_ROWS = old_page
 
+    def test_a_write_from_the_stored_version_wins_whatever_the_clock(self):
+        first = self.store.apply({"entries": [self.entry(5000, 100)]})["accepted"]["entries"][0]["seq"]
+        # Made from the stored version: taken, though its clock is behind.
+        result = self.store.apply({"entries": [{**self.entry(7000, 50), "baseSeq": first}]})
+        self.assertEqual([], result["rejected"]["entries"])
+        second = result["accepted"]["entries"][0]["seq"]
+        self.assertGreater(second, first)
+        # Made from the old version: refused, though its clock is ahead; the newer one comes back.
+        result = self.store.apply({"entries": [{**self.entry(6000, 999), "baseSeq": first}]})
+        self.assertEqual([], result["accepted"]["entries"])
+        self.assertEqual({"value": 7000, "seq": second},
+                         {k: result["rejected"]["entries"][0][k] for k in ("value", "seq")})
+        self.assertEqual(second, self.store.changes(0)["entries"][0]["seq"])
+
+    def test_a_client_past_the_seq_gets_everyone_a_new_epoch(self):
+        self.store.apply({"entries": [self.entry(YES_MANUAL, 1)]})
+        first = self.store.changes(0)
+        epoch = first["epoch"]
+        self.assertEqual(epoch, self.store.changes(first["seq"], epoch=epoch)["epoch"])  # nothing went back
+        # Restored from a backup: a client has read further than the server has written.
+        answer = self.store.changes(first["seq"] + 5, wait_s=30, epoch=epoch)  # answers at once
+        self.assertNotEqual(epoch, answer["epoch"])
+        # Another client, behind the server's seq, still hears of it; the new epoch stays put.
+        self.assertEqual(answer["epoch"], self.store.changes(0, epoch=epoch)["epoch"])
+        self.assertEqual(answer["epoch"], self.store.changes(first["seq"] + 5, epoch=epoch)["epoch"])
+        self.assertEqual(answer["epoch"], self.store.changes(0)["epoch"])
+
+    def test_a_write_cant_hide_a_restore(self):
+        self.store.apply({"entries": [self.entry(YES_MANUAL, 1, f"2026-10-{d:02d}") for d in range(1, 6)]})
+        page = self.store.changes(0)
+        epoch, read = page["epoch"], page["seq"] + 3  # the client read 3 changes the backup lacks
+        seq = self.store.seq()
+        # Enough records to move seq past what the client read, had they gone in.
+        many = [self.entry(NO, 9, f"2026-09-{d:02d}") for d in range(1, 11)]
+        with self.assertRaises(srv.StaleEpoch) as refused:
+            self.store.apply({"epoch": epoch, "since": read, "entries": many})
+        self.assertNotEqual(epoch, refused.exception.epoch)
+        self.assertEqual(seq, self.store.seq())  # nothing written
+        # Every other client hears of it too, and a write from the new history goes in.
+        self.assertEqual(refused.exception.epoch, self.store.changes(0, epoch=epoch)["epoch"])
+        self.store.apply({"epoch": refused.exception.epoch, "since": 0, "entries": many})
+        self.assertEqual(seq + len(many), self.store.seq())
+
+    def test_a_write_from_the_current_history_goes_in(self):
+        page = self.store.changes(0)
+        result = self.store.apply({"epoch": page["epoch"], "since": page["seq"], "entries": [self.entry(YES_MANUAL, 1)]})
+        self.assertEqual(1, len(result["accepted"]["entries"]))
+        for bad in ({"epoch": "1"}, {"epoch": page["epoch"], "since": True}):
+            with self.assertRaises(ValueError):
+                self.store.apply({**bad, "entries": []})
+
+    def test_a_write_that_fails_half_way_leaves_nothing(self):
+        with self.assertRaises(ValueError):
+            self.store.apply({"entries": [self.entry(YES_MANUAL, 1), {"habit": "h1", "date": "not a day", "value": 2, "mtime": 1}]})
+        self.store.apply({"entries": [self.entry(NO, 5, "2026-10-01")]})
+        self.assertEqual(["2026-10-01"], [e["date"] for e in self.store.changes(0)["entries"]])
+
+    def test_a_habit_write_keeps_the_fields_it_leaves_out(self):
+        self.store.apply({"habits": [{"uuid": "h1", "mtime": 1, "data": {"name": "Read", "icon": "book", "timer": True}}]})
+        # xrnloops doesn't know icon and timer: an edit from it keeps them.
+        self.store.apply({"habits": [{"uuid": "h1", "mtime": 2, "data": {"name": "Read more"}}]})
+        data = self.store.changes(0)["habits"][0]["data"]
+        self.assertEqual(("Read more", "book", True), (data["name"], data["icon"], data["timer"]))
+        result = self.store.apply({"habits": [{"uuid": "h1", "mtime": 3, "baseSeq": 0, "data": {"name": "Stale"}}]})
+        self.assertEqual("Read more", result["rejected"]["habits"][0]["data"]["name"])
+
+    def test_bad_base_seq_is_refused(self):
+        with self.assertRaises(ValueError):
+            self.store.apply({"entries": [{**self.entry(1, 1), "baseSeq": "3"}]})
+
     def test_identical_write_does_not_bump_seq(self):
         self.store.apply({"entries": [self.entry(YES_MANUAL, 100)]})
         seq = self.store.seq()
         self.store.apply({"entries": [self.entry(YES_MANUAL, 200)]})
         self.assertEqual(seq, self.store.seq())
 
-    def test_deleted_habit_leaves_status(self):
+    def test_a_deleted_habit_stays_in_the_feed_marked_deleted(self):
         self.store.apply({"habits": [{"uuid": "h1", "mtime": 1, "data": {"name": "Plank"}},
                                      {"uuid": "h2", "mtime": 1, "data": {"name": "Read"}}]})
         self.store.apply({"habits": [{"uuid": "h2", "mtime": 2, "deleted": True, "data": {"name": "Read"}}]})
-        names = [h["name"] for h in self.store.status(date(2026, 10, 16))["habits"]]
-        self.assertEqual(["Plank"], names)
+        deleted = {h["uuid"]: h["deleted"] for h in self.store.changes(0)["habits"]}
+        self.assertEqual({"h1": False, "h2": True}, deleted)
 
     def test_long_poll_wakes_on_write(self):
         seq = self.store.seq()
@@ -187,6 +179,22 @@ class StoreTest(unittest.TestCase):
     def test_bad_habit_data_is_refused(self):
         with self.assertRaises(ValueError):
             self.store.apply({"habits": [{"uuid": "h1", "mtime": 1, "data": {"freqNum": 0}}]})
+
+    def test_day_start_hour_is_kept_and_wakes_long_polls(self):
+        self.assertEqual(0, self.store.changes(0)["dayStartHour"])
+        seq = self.store.seq()
+        threading.Timer(0.2, lambda: self.store.apply({"dayStartHour": 3})).start()
+        start = time.monotonic()
+        page = self.store.changes(seq, wait_s=5)
+        self.assertLess(time.monotonic() - start, 3)
+        self.assertEqual(3, page["dayStartHour"])
+        self.assertEqual(3, self.store.changes(0)["dayStartHour"])
+        seq = self.store.seq()
+        self.store.apply({"dayStartHour": 3, "entries": []})  # unchanged: no new seq
+        self.assertEqual(seq, self.store.seq())
+        for bad in (24, -1, "3", True):
+            with self.assertRaises(ValueError):
+                self.store.apply({"dayStartHour": bad})
 
 
 class HttpTest(unittest.TestCase):
@@ -204,6 +212,7 @@ class HttpTest(unittest.TestCase):
             f.write("<!doctype html>hi")
         srv.args = type("Args", (), {"data": os.path.join(cls.tmp.name, "data"), "users": users, "web": web})()
         srv.FAIL_DELAY_S = 0
+        srv.session_key = srv.load_session_key()
         cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), srv.Handler)
         cls.base = f"http://127.0.0.1:{cls.httpd.server_address[1]}"
         threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
@@ -249,11 +258,10 @@ class HttpTest(unittest.TestCase):
                 "entries": [{"habit": "abc", "date": "2026-10-16", "value": YES_MANUAL, "mtime": 1}]}
         status, text, _ = self.request("/xrnloops/api/changes", body)
         self.assertEqual(200, status)
-        _, text, _ = self.request("/api/status?date=2026-10-16")
-        plank = json.loads(text)["habits"][0]
-        self.assertEqual(("Plank", True, True), (plank["name"], plank["done"], plank["goal_met"]))
         _, text, _ = self.request("/api/changes?since=0")
-        self.assertEqual(["abc"], [h["uuid"] for h in json.loads(text)["habits"]])
+        feed = json.loads(text)
+        self.assertEqual(["abc"], [h["uuid"] for h in feed["habits"]])
+        self.assertEqual([("2026-10-16", YES_MANUAL)], [(e["date"], e["value"]) for e in feed["entries"]])
 
     def status_of(self, path, **kw):
         try:
@@ -268,6 +276,192 @@ class HttpTest(unittest.TestCase):
         # Locked out now, even with the right password; everyone else isn't.
         self.assertEqual(429, self.status_of("/api/changes?since=0", headers=guesser))
         self.assertEqual(200, self.status_of("/api/changes?since=0", headers={"X-Forwarded-For": "203.0.113.10"}))
+
+    def test_a_made_up_first_hop_doesnt_dodge_the_lockout(self):
+        for i in range(srv.FAIL_LIMIT):
+            forwarded = {"X-Forwarded-For": f"198.51.100.{i}, 203.0.113.20"}  # what a proxy appends to
+            self.assertEqual(401, self.status_of("/api/changes?since=0", password="nope", headers=forwarded))
+        forwarded = {"X-Forwarded-For": "198.51.100.200, 203.0.113.20"}
+        self.assertEqual(429, self.status_of("/api/changes?since=0", headers=forwarded))
+
+    def test_guesses_sent_at_once_still_stop_at_the_limit(self):
+        def slow_wrong(header):  # bcrypt takes a while: every guess is in flight at once
+            time.sleep(0.3)
+            return None
+        guesser = {"X-Forwarded-For": "203.0.113.30"}
+        limit, n = 3, 12  # a limit the test server's listen backlog lets every guess reach at once
+        start = threading.Barrier(n)
+        def guess(_):
+            start.wait()
+            return self.status_of("/api/changes?since=0", password="nope", headers=guesser)
+        with unittest.mock.patch.object(srv, "check_login", slow_wrong), unittest.mock.patch.object(srv, "FAIL_LIMIT", limit):
+            with concurrent.futures.ThreadPoolExecutor(n) as pool:
+                statuses = list(pool.map(guess, range(n)))
+        self.assertEqual(limit, statuses.count(401))
+        self.assertEqual(n - limit, statuses.count(429))
+
+    def test_numbers_that_arent(self):
+        self.assertEqual(400, self.status_of("/api/changes?since=0&wait=nan"))
+        self.assertEqual(400, self.status_of("/api/changes?since=0&wait=inf"))
+        for bad in (b'{"habits":[{"uuid":"n","mtime":1,"data":{"targetValue":NaN}}],"entries":[]}',
+                    b'{"habits":[{"uuid":"n","mtime":1,"data":{"targetValue":1e999}}],"entries":[]}',
+                    b'{"habits":[{"uuid":"n","mtime":1e999,"data":{}}],"entries":[]}',
+                    b'{"habits":[],"entries":[{"habit":"n","date":"2026-10-16","value":1180591620717411303424,"mtime":1}]}'):
+            token = base64.b64encode(b"sonn:secret").decode()
+            status, _ = self.raw("POST", "/api/changes", bad, {"Authorization": f"Basic {token}"})
+            self.assertEqual(400, status, bad)
+
+    def test_a_write_from_a_lost_history_gets_409(self):
+        _, text, _ = self.request("/api/changes?since=0")
+        feed = json.loads(text)
+        body = json.dumps({"epoch": feed["epoch"], "since": feed["seq"] + 100, "entries": []}).encode()
+        status, res = self.raw("POST", "/api/changes", body, {"Authorization": self.basic(), "Content-Type": "application/json"})
+        self.assertEqual(409, status)
+        _, text, _ = self.request("/api/changes?since=0")
+        self.assertNotEqual(feed["epoch"], json.loads(text)["epoch"])
+
+    def test_numbers_too_big_for_the_database(self):
+        self.assertEqual(400, self.status_of("/api/changes?since=" + "9" * 30))
+
+    def fetch(self, path, **headers):
+        """Unlike request(): the raw status and headers, for what the browser's cache sees."""
+        req = urllib.request.Request(f"{self.base}{path}", headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=5) as r:
+                return r.status, r.headers, r.read()
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers, e.read()
+
+    def web_file(self, name, data):
+        path = os.path.join(srv.args.web, name)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(data)
+        self.addCleanup(lambda: os.path.exists(path) and os.remove(path))
+        return path
+
+    def test_a_file_that_has_not_changed_costs_a_304(self):
+        self.web_file("app.js", b"// the app")
+        status, headers, body = self.fetch("/app.js")
+        self.assertEqual(200, status)
+        self.assertEqual("no-cache", headers["Cache-Control"])
+        self.assertGreater(len(body), 0)
+        again = self.fetch("/app.js", **{"If-None-Match": headers["ETag"]})
+        self.assertEqual((304, b""), (again[0], again[2]))
+        self.assertEqual(headers["ETag"], again[1]["ETag"])
+        self.assertIsNone(again[1]["Content-Length"])  # it would describe the file, not this answer
+        self.assertEqual(200, self.fetch("/app.js", **{"If-None-Match": '"stale"'})[0])
+
+    def test_a_deploy_changes_the_tag(self):
+        self.web_file("app.js", b"// the app")
+        tag = self.fetch("/app.js")[1]["ETag"]
+        self.web_file("app.js", b"// the next release")
+        status, headers, _ = self.fetch("/app.js", **{"If-None-Match": tag})
+        self.assertEqual(200, status)
+        self.assertNotEqual(tag, headers["ETag"])
+
+    def test_fonts_are_kept_and_not_packed_again(self):
+        self.web_file("fonts/a.woff2", os.urandom(4096))
+        status, headers, _ = self.fetch("/fonts/a.woff2", **{"Accept-Encoding": "gzip"})
+        self.assertEqual(200, status)
+        self.assertIn("max-age", headers["Cache-Control"])
+        self.assertIsNone(headers["Content-Encoding"])
+
+    def test_the_data_is_never_kept(self):
+        token = base64.b64encode(b"sonn:secret").decode()
+        status, headers, _ = self.fetch("/api/changes?since=0", Authorization=f"Basic {token}")
+        self.assertEqual((200, "no-store"), (status, headers["Cache-Control"]))
+        self.assertIsNone(headers["ETag"])
+
+    def test_the_policy_follows_index_html(self):
+        page = os.path.join(srv.args.web, "index.html")
+        with open(page) as f:
+            original = f.read()
+        def restore():
+            with open(page, "w") as f:
+                f.write(original)
+        self.addCleanup(restore)
+        for script in ("first()", "second()"):
+            with open(page, "w") as f:
+                f.write(f"<script>{script}</script>")
+            digest = base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()
+            with urllib.request.urlopen(self.base + "/") as r:
+                self.assertIn(digest, r.headers["Content-Security-Policy"])
+
+    def test_head_answers_like_get_with_no_body(self):
+        status, res = self.raw("HEAD", "/health")
+        self.assertEqual(200, status)
+        self.assertEqual("2", res.headers["Content-Length"])
+
+    def test_a_null_string_field_is_empty(self):
+        self.assertEqual("", srv.clean_habit_data({"name": "N", "unit": None})["unit"])
+
+    def test_a_cookie_with_a_non_ascii_mac_is_just_refused(self):
+        self.assertIsNone(srv.check_session(f"{srv.SESSION_COOKIE}=c29ubg.9999999999.\u00e9\u00e9"))
+
+    def test_an_unparseable_request_gets_an_answer(self):
+        with socket.create_connection(("127.0.0.1", self.httpd.server_address[1]), timeout=10) as s:
+            s.sendall(b"GARBAGE\r\n\r\n")
+            self.assertIn(b"400", s.recv(200))
+
+    def raw(self, method, path, body=b"", headers=None):
+        conn = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1], timeout=10)
+        conn.request(method, path, body=body, headers=headers or {})
+        res = conn.getresponse()
+        res.read()
+        conn.close()
+        return res.status, res
+
+    def basic(self, password="secret"):
+        return "Basic " + base64.b64encode(f"sonn:{password}".encode()).decode()
+
+    def test_the_web_app_signs_in_with_a_cookie_scripts_cannot_read(self):
+        status, res = self.raw("POST", "/xrnloops/api/session", headers={"Authorization": self.basic(), "X-Xrn-Client": "web"})
+        self.assertEqual(200, status)
+        set_cookie = res.getheader("Set-Cookie")
+        for flag in ("HttpOnly", "Secure", "SameSite=Strict", "Path=/"):
+            self.assertIn(flag, set_cookie)
+        cookie = set_cookie.split(";")[0]
+        web = {"Cookie": cookie, "X-Xrn-Client": "web"}
+        self.assertEqual(200, self.raw("GET", "/api/changes?since=0", headers=web)[0])
+        # Without the header another site's page can't add, the cookie is worth nothing.
+        self.assertEqual(401, self.raw("GET", "/api/changes?since=0", headers={"Cookie": cookie})[0])
+        # Nor does a forged, tampered or missing one, and a cookie can't mint a new one.
+        who, expires, mac = cookie.partition("=")[2].split(".")
+        for bad in (f"{who}.{int(expires) + 1}.{mac}", f"{who}.{expires}.{'0' * 64}", "junk", ""):
+            self.assertEqual(401, self.raw("GET", "/api/changes?since=0", headers={"Cookie": f"{srv.SESSION_COOKIE}={bad}", "X-Xrn-Client": "web"})[0])
+        self.assertEqual(401, self.raw("POST", "/api/session", headers=web)[0])
+        self.assertEqual(401, self.raw("POST", "/api/session", headers={"Authorization": self.basic("nope"), "X-Xrn-Client": "web"})[0])
+        status, res = self.raw("DELETE", "/api/session", headers=web)
+        self.assertEqual(200, status)
+        self.assertIn("Max-Age=0", res.getheader("Set-Cookie"))
+
+    def test_pages_cannot_be_framed_or_sniffed(self):
+        _, res = self.raw("GET", "/")
+        self.assertEqual("DENY", res.getheader("X-Frame-Options"))
+        self.assertEqual("nosniff", res.getheader("X-Content-Type-Options"))
+        self.assertEqual("no-referrer", res.getheader("Referrer-Policy"))
+
+    def test_the_content_policy_allows_index_html_inline_scripts_by_hash(self):
+        with tempfile.TemporaryDirectory() as web:
+            with open(os.path.join(web, "index.html"), "w") as f:
+                f.write("<head><script>go()</script><script type=module src=app.js></script></head>")
+            policy = srv.content_policy(web)
+        digest = base64.b64encode(hashlib.sha256(b"go()").digest()).decode()
+        self.assertIn(f"script-src 'self' 'sha256-{digest}';", policy)
+        self.assertIn("frame-ancestors 'none'", policy)
+
+    def test_gzip_bodies_are_unpacked_only_so_far(self):
+        headers = {"Authorization": self.basic(), "Content-Type": "application/json", "Content-Encoding": "gzip"}
+        old, srv.MAX_BODY = srv.MAX_BODY, 64 * 1024
+        try:
+            bomb = gzip.compress(b'{"habits": [], "pad": "' + b"0" * (srv.MAX_BODY * 4) + b'"}')
+            self.assertEqual(400, self.raw("POST", "/api/changes", bomb, headers)[0])
+            self.assertEqual(400, self.raw("POST", "/api/changes", b"not gzip", headers)[0])
+            fine = gzip.compress(json.dumps({"habits": [], "entries": []}).encode())
+            self.assertEqual(200, self.raw("POST", "/api/changes", fine, headers)[0])
+        finally:
+            srv.MAX_BODY = old
 
 
 if __name__ == "__main__":

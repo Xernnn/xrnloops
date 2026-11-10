@@ -29,16 +29,26 @@
         app:showAsAction="always"/>
 
     <group android:id="@+id/actionItems">
+        <!-- xrnloops: there only while sync is failing (XRNLOOPS.md). -->
+        <item
+            android:id="@+id/actionXrnSyncTrouble"
+            android:icon="@drawable/xrn_ic_cloud_off"
+            android:title="@string/xrnsync_trouble"
+            android:visible="false"
+            app:showAsAction="always"/>
+
         <item
             android:id="@+id/actionCreateHabit"
             android:enabled="true"
             android:icon="?iconAdd"
+            app:iconTint="?attr/contrast100"
             android:title="@string/add_habit"
             app:showAsAction="always"/>
 
         <item
             android:id="@+id/action_filter"
             android:icon="?iconFilter"
+            app:iconTint="?attr/contrast100"
             android:title="@string/filter"
             app:showAsAction="always">
             <menu>
@@ -92,16 +102,17 @@
             android:title="@string/night_mode"
             app:showAsAction="never"/>
 
+        <!-- xrnloops: reopen the welcome screen (XRNLOOPS.md). -->
+        <item
+            android:id="@+id/actionXrnWelcome"
+            android:orderInCategory="90"
+            android:title="@string/xrnwelcome_menu"
+            app:showAsAction="never"/>
+
         <item
             android:id="@+id/actionSettings"
             android:orderInCategory="100"
             android:title="@string/action_settings"
-            app:showAsAction="never"/>
-
-        <item
-            android:id="@+id/actionFAQ"
-            android:orderInCategory="100"
-            android:title="@string/help"
             app:showAsAction="never"/>
 
         <item

@@ -37,8 +37,8 @@ class AboutTest : BaseUserInterfaceTest() {
     fun shouldDisplayAboutScreen() {
         launchApp()
         clickMenu(ABOUT)
-        verifyDisplaysText("Loop Habit Tracker")
-        verifyDisplaysText("Rate this app on Google Play")
+        verifyDisplaysText("xrnloops")
+        verifyDisplaysText("Based on Loop Habit Tracker, GPLv3")
         verifyDisplaysText("Developers")
         verifyDisplaysText("Translators")
     }

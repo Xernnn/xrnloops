@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- xrnloops only (XRNLOOPS.md): what a habit does in an xrnrule block. English, not sent to
+     Loop's translators. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <!-- The sheet behind the lock on a habit's card: how each block stands. -->
+    <string name="xrnlink_sheet_subtitle">Unlocks in xrnrule</string>
+    <string name="xrnlink_open_in_xrnrule">Open in xrnrule</string>
+    <string name="xrnlink_locked">Locked · unlocks %1$s</string>
+    <string name="xrnlink_done_locked">Locked · this part is done, it needs more</string>
+    <string name="xrnlink_ready">Ready to open · %1$s</string>
+    <string name="xrnlink_open">Open until %1$s</string>
+    <!-- An unlock that counts use, not time: what's left of it. -->
+    <string name="xrnlink_left">Open · %1$s of use left</string>
+    <string name="xrnlink_open_now">Open</string>
+    <string name="xrnlink_minutes">%d min</string>
+    <string name="xrnlink_hours">%d h</string>
+    <string name="xrnlink_hours_minutes">%1$d h %2$d min</string>
+
+    <!-- The banner after a tick that did something in xrnrule. -->
+    <string name="xrnlink_banner_earned">Earned %1$s of %2$s</string>
+    <string name="xrnlink_banner_open_till">%1$s is open until %2$s</string>
+    <string name="xrnlink_banner_open_left">%1$s is open · %2$s of use left</string>
+    <string name="xrnlink_banner_open">%1$s is open</string>
+    <string name="xrnlink_banner_counted">Counted towards %1$s · it needs more</string>
+    <string name="xrnlink_banner_more">%1$s (+%2$d more)</string>
+    <string name="xrnlink_banner_action">Open</string>
+
+    <!-- Font Awesome glyphs, the set a day's check and cross come from. -->
+    <string name="xrnlink_glyph_locked" translatable="false">&#xf023;</string>
+    <string name="xrnlink_glyph_open" translatable="false">&#xf09c;</string>
+    <string name="xrnlink_glyph_ready" translatable="false">&#xf0e7;</string>
+</resources>

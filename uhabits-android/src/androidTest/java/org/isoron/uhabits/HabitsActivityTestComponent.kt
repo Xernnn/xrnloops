@@ -24,7 +24,6 @@ import dev.mokkery.mock
 import me.tatarka.inject.annotations.Component
 import me.tatarka.inject.annotations.Provides
 import org.isoron.uhabits.activities.HabitsDirFinder
-import org.isoron.uhabits.activities.habits.list.ListHabitsModule
 import org.isoron.uhabits.activities.habits.list.ListHabitsScreen
 import org.isoron.uhabits.activities.habits.list.views.CheckmarkButtonViewFactory
 import org.isoron.uhabits.activities.habits.list.views.CheckmarkPanelViewFactory
@@ -56,9 +55,6 @@ abstract class HabitsActivityTestComponent(
     open fun listHabitsBehavior(): ListHabitsBehavior = mock()
 
     open val HabitCardListAdapter.bindAdapter: ListHabitsMenuBehavior.Adapter
-        @Provides get() = this
-
-    open val ListHabitsModule.bindBugReporter: ListHabitsBehavior.BugReporter
         @Provides get() = this
 
     open val ListHabitsScreen.bindMenuScreen: ListHabitsMenuBehavior.Screen

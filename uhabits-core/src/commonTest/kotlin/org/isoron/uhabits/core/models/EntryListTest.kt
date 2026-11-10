@@ -32,6 +32,16 @@ import kotlin.test.assertEquals
 
 class EntryListTest {
     @Test
+    fun testAddAll() {
+        val entries = EntryList()
+        val today = LocalDate(2015, 1, 25)
+        entries.add(Entry(today, 10))
+        entries.addAll(listOf(Entry(today, 15), Entry(today.minus(1), 20)))
+        assertEquals(Entry(today, 15), entries.get(today))
+        assertEquals(Entry(today.minus(1), 20), entries.get(today.minus(1)))
+    }
+
+    @Test
     fun testEmptyList() {
         val entries = EntryList()
         val today = LocalDate(2015, 1, 25)

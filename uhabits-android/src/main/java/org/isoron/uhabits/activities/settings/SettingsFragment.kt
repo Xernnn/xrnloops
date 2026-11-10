@@ -40,7 +40,6 @@ import org.isoron.platform.time.DayOfWeek
 import org.isoron.platform.time.JavaLocalDateFormatter
 import org.isoron.uhabits.HabitsApplication
 import org.isoron.uhabits.R
-import org.isoron.uhabits.activities.habits.list.RESULT_BUG_REPORT
 import org.isoron.uhabits.activities.habits.list.RESULT_EXPORT_CSV
 import org.isoron.uhabits.activities.habits.list.RESULT_EXPORT_DB
 import org.isoron.uhabits.activities.habits.list.RESULT_IMPORT_DATA
@@ -51,9 +50,10 @@ import org.isoron.uhabits.notifications.AndroidNotificationTray.Companion.create
 import org.isoron.uhabits.notifications.RingtoneManager
 import org.isoron.uhabits.utils.StyledResources
 import org.isoron.uhabits.utils.applyBottomInset
-import org.isoron.uhabits.utils.startActivitySafely
 import org.isoron.uhabits.widgets.WidgetUpdater
+import org.isoron.uhabits.xrnlook.XrnSettingsCards
 import org.isoron.uhabits.xrnsync.XrnSyncPreferences
+import org.isoron.uhabits.xrntap.XrnTap
 import java.util.Locale
 
 class SettingsFragment : PreferenceFragmentCompat(), OnSharedPreferenceChangeListener {
@@ -95,8 +95,8 @@ class SettingsFragment : PreferenceFragmentCompat(), OnSharedPreferenceChangeLis
         setResultOnPreferenceClick("exportCSV", RESULT_EXPORT_CSV)
         setResultOnPreferenceClick("exportDB", RESULT_EXPORT_DB)
         setResultOnPreferenceClick("repairDB", RESULT_REPAIR_DB)
-        setResultOnPreferenceClick("bugReport", RESULT_BUG_REPORT)
         XrnSyncPreferences.attach(this)
+        XrnTap.attach(this)
     }
 
     override fun onCreatePreferences(bundle: Bundle?, s: String?) {
@@ -110,8 +110,9 @@ class SettingsFragment : PreferenceFragmentCompat(), OnSharedPreferenceChangeLis
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val sr = StyledResources(context!!)
-        view.setBackgroundColor(sr.getColor(R.attr.contrast0))
+        view.setBackgroundColor(sr.getColor(R.attr.windowBackgroundColor)) // xrnloops: cards on the page
         super.onViewCreated(view, savedInstanceState)
+        listView.addItemDecoration(XrnSettingsCards(requireContext())) // xrnloops (XRNLOOPS.md)
     }
 
     override fun onCreateRecyclerView(
@@ -136,11 +137,6 @@ class SettingsFragment : PreferenceFragmentCompat(), OnSharedPreferenceChangeLis
                 intent.putExtra(Settings.EXTRA_APP_PACKAGE, requireContext().packageName)
                 intent.putExtra(Settings.EXTRA_CHANNEL_ID, NotificationTray.REMINDERS_CHANNEL_ID)
                 startActivity(intent)
-                return true
-            }
-            "rateApp" -> {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.playStoreURL)))
-                activity?.startActivitySafely(intent)
                 return true
             }
             "publicBackupFolder" -> {

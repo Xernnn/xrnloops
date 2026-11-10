@@ -34,6 +34,8 @@ import org.isoron.uhabits.core.ui.screens.habits.list.ListHabitsMenuBehavior
 import org.isoron.uhabits.inject.ActivityContext
 import org.isoron.uhabits.inject.ActivityScope
 import org.isoron.uhabits.utils.StyledResources
+import org.isoron.uhabits.xrnsync.XrnSyncTrouble
+import org.isoron.uhabits.xrnwelcome.WelcomeActivity
 
 @Inject
 @ActivityScope
@@ -46,6 +48,7 @@ class ListHabitsMenu(
     val activity = context as AppCompatActivity
     private var menu: Menu? = null
     private var isSearchActive = false
+    private val syncTrouble = XrnSyncTrouble(activity) // xrnloops (XRNLOOPS.md)
 
     fun onCreate(inflater: MenuInflater, menu: Menu) {
         this.menu = menu
@@ -68,6 +71,7 @@ class ListHabitsMenu(
         } else {
             hideCompletedItem.title = activity.resources.getString(R.string.hide_completed)
         }
+        syncTrouble.bind(menu.findItem(R.id.actionXrnSyncTrouble), allowed = !isSearchActive) // xrnloops
     }
 
     private fun createSearchBar(menu: Menu) {
@@ -128,11 +132,6 @@ class ListHabitsMenu(
                 return true
             }
 
-            R.id.actionFAQ -> {
-                behavior.onViewFAQ()
-                return true
-            }
-
             R.id.actionAbout -> {
                 behavior.onViewAbout()
                 return true
@@ -140,6 +139,16 @@ class ListHabitsMenu(
 
             R.id.actionSettings -> {
                 behavior.onViewSettings()
+                return true
+            }
+
+            R.id.actionXrnWelcome -> {
+                WelcomeActivity.open(activity, fromMenu = true)
+                return true
+            }
+
+            R.id.actionXrnSyncTrouble -> {
+                syncTrouble.explain { behavior.onViewSettings() }
                 return true
             }
 

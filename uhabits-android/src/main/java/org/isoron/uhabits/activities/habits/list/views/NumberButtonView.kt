@@ -25,6 +25,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.text.TextPaint
+import android.view.MotionEvent
 import android.view.View
 import android.view.View.OnClickListener
 import android.view.View.OnLongClickListener
@@ -40,6 +41,7 @@ import org.isoron.uhabits.utils.dim
 import org.isoron.uhabits.utils.drawNotesIndicator
 import org.isoron.uhabits.utils.getFontAwesome
 import org.isoron.uhabits.utils.sres
+import org.isoron.uhabits.xrntap.NumberFlick
 import java.text.DecimalFormat
 
 private val BOLD_TYPEFACE = Typeface.create("sans-serif-condensed", Typeface.BOLD)
@@ -110,12 +112,21 @@ class NumberButtonView(
 
     var onEdit: () -> Unit = { }
 
+    /** xrnloops: a value picked in the flick menu, stored as Loop stores it (×1000). */
+    var onToggle: (Int, String) -> Unit = { _, _ -> }
+
     private var drawer: Drawer = Drawer(context)
+
+    // xrnloops: a short hold opens the flick menu (XRNLOOPS.md); a tap still opens the dialog.
+    // Touch goes through it; the listeners stay for accessibility services.
+    private val flick = NumberFlick.gesture(this)
 
     init {
         setOnClickListener(this)
         setOnLongClickListener(this)
     }
+
+    override fun onTouchEvent(event: MotionEvent) = flick.onTouchEvent(event)
 
     override fun onClick(v: View) {
         onEdit()

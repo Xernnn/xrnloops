@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Copyright (C) 2026 the xrnrule authors
+  ~
+  ~ This file is part of Loop Habit Tracker.
+  ~
+  ~ Loop Habit Tracker is free software: you can redistribute it and/or modify
+  ~ it under the terms of the GNU General Public License as published by the
+  ~ Free Software Foundation, either version 3 of the License, or (at your
+  ~ option) any later version.
+  ~
+  ~ Loop Habit Tracker is distributed in the hope that it will be useful, but
+  ~ WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+  ~ or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+  ~ more details.
+  ~
+  ~ You should have received a copy of the GNU General Public License along
+  ~ with this program. If not, see <http://www.gnu.org/licenses/>.
+  -->
+
+<!-- xrnloops only (XRNLOOPS.md): the xrn family look (xrnrule's dark palette, MiSans), used by
+     the welcome screen. -->
+<resources>
+    <color name="xrn_bg">#1F1F23</color>
+    <color name="xrn_surface">#2B2B30</color>
+    <color name="xrn_surface_high">#3A3A40</color>
+    <color name="xrn_surface_dialog">#313136</color>
+    <color name="xrn_outline">#37373C</color>
+    <color name="xrn_text">#F4F4F5</color>
+    <color name="xrn_muted">#AAAAAC</color>
+    <color name="xrn_green">#22C55E</color>
+    <color name="xrn_green_container">#1F3A2A</color>
+    <color name="xrn_on_green_container">#BBF7D0</color>
+    <color name="xrn_tile">#2B9348</color>
+    <color name="xrn_ink">#18181B</color>
+    <color name="xrn_error">#F04242</color>
+
+    <style name="XrnTheme" parent="Theme.MaterialComponents.NoActionBar">
+        <item name="colorPrimary">@color/xrn_green</item>
+        <item name="colorPrimaryVariant">@color/xrn_tile</item>
+        <item name="colorOnPrimary">@color/xrn_ink</item>
+        <item name="colorSecondary">@color/xrn_green</item>
+        <item name="colorOnSecondary">@color/xrn_ink</item>
+        <item name="colorSurface">@color/xrn_surface</item>
+        <item name="colorOnSurface">@color/xrn_text</item>
+        <item name="colorError">@color/xrn_error</item>
+        <item name="android:colorBackground">@color/xrn_bg</item>
+        <item name="android:windowBackground">@color/xrn_bg</item>
+        <item name="android:textColorPrimary">@color/xrn_text</item>
+        <item name="android:textColorSecondary">@color/xrn_muted</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="textInputStyle">@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox</item>
+        <item name="materialAlertDialogTheme">@style/XrnDialog</item>
+        <!-- Only android:fontFamily: AppCompat's own fontFamily in a theme beats every style's
+             android:fontFamily, so titles and buttons came out regular weight. -->
+        <item name="android:fontFamily">@font/xrn_misans_regular</item>
+    </style>
+
+    <style name="XrnDialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+        <item name="alertDialogStyle">@style/XrnDialog.Frame</item>
+        <item name="materialAlertDialogTitleTextStyle">@style/XrnDialog.Title</item>
+        <item name="buttonBarPositiveButtonStyle">@style/XrnDialog.Button</item>
+        <item name="buttonBarNegativeButtonStyle">@style/XrnDialog.Button</item>
+    </style>
+
+    <!-- Not colorSurface, so Material doesn't lighten it with its elevation overlay. -->
+    <style name="XrnDialog.Frame" parent="MaterialAlertDialog.MaterialComponents">
+        <item name="backgroundTint">@color/xrn_surface_dialog</item>
+        <item name="shapeAppearanceOverlay">@style/XrnDialog.Shape</item>
+    </style>
+
+    <style name="XrnDialog.Shape">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">24dp</item>
+    </style>
+
+    <style name="XrnDialog.Title" parent="MaterialAlertDialog.MaterialComponents.Title.Text">
+        <item name="android:fontFamily">@font/xrn_misans_bold</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:textColor">@color/xrn_text</item>
+    </style>
+
+    <style name="XrnDialog.Button" parent="Widget.MaterialComponents.Button.TextButton.Dialog">
+        <item name="android:fontFamily">@font/xrn_misans_semibold</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="XrnText">
+        <item name="android:fontFamily">@font/xrn_misans_regular</item>
+        <item name="android:textColor">@color/xrn_text</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:lineSpacingExtra">3sp</item>
+    </style>
+
+    <style name="XrnText.Muted">
+        <item name="android:textColor">@color/xrn_muted</item>
+        <item name="android:textSize">15sp</item>
+    </style>
+
+    <style name="XrnText.Small">
+        <item name="android:textColor">@color/xrn_muted</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+
+    <style name="XrnText.Label">
+        <item name="android:fontFamily">@font/xrn_misans_semibold</item>
+        <item name="android:textSize">16sp</item>
+    </style>
+
+    <style name="XrnText.Title">
+        <item name="android:fontFamily">@font/xrn_misans_bold</item>
+        <item name="android:textSize">30sp</item>
+        <item name="android:lineSpacingExtra">0sp</item>
+    </style>
+
+    <style name="XrnText.Eyebrow">
+        <item name="android:fontFamily">@font/xrn_misans_semibold</item>
+        <item name="android:textColor">@color/xrn_green</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:letterSpacing">0.12</item>
+        <item name="android:textAllCaps">true</item>
+    </style>
+
+    <style name="XrnCard">
+        <item name="android:background">@drawable/xrn_card</item>
+        <item name="android:padding">18dp</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+
+    <style name="XrnButton" parent="Widget.MaterialComponents.Button.UnelevatedButton">
+        <item name="android:fontFamily">@font/xrn_misans_semibold</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:minHeight">52dp</item>
+        <item name="android:paddingStart">24dp</item>
+        <item name="android:paddingEnd">24dp</item>
+        <item name="cornerRadius">26dp</item>
+        <item name="backgroundTint">@color/xrn_green</item>
+        <item name="android:textColor">@android:color/white</item>
+    </style>
+
+    <style name="XrnButton.Tonal">
+        <item name="android:minHeight">44dp</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:paddingStart">18dp</item>
+        <item name="android:paddingEnd">18dp</item>
+        <item name="cornerRadius">22dp</item>
+        <item name="backgroundTint">@color/xrn_green_container</item>
+        <item name="android:textColor">@color/xrn_on_green_container</item>
+    </style>
+
+    <style name="XrnButton.Text" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="android:fontFamily">@font/xrn_misans_semibold</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:minHeight">52dp</item>
+        <item name="android:textColor">@color/xrn_muted</item>
+        <item name="rippleColor">@color/xrn_surface_high</item>
+    </style>
+</resources>

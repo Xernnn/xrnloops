@@ -47,6 +47,7 @@ import org.isoron.uhabits.inject.ActivityContext
 import org.isoron.uhabits.utils.currentTheme
 import org.isoron.uhabits.utils.dp
 import org.isoron.uhabits.utils.sres
+import org.isoron.uhabits.xrnrule.XrnruleLinkBadge
 
 @Inject
 class HabitCardViewFactory(
@@ -127,6 +128,7 @@ class HabitCardView(
     private var numberPanel: NumberPanelView
     private var innerFrame: LinearLayout
     private var label: TextView
+    private var linkBadge: XrnruleLinkBadge
     private var scoreRing: RingView
 
     private var currentToggleTaskId = 0
@@ -150,6 +152,22 @@ class HabitCardView(
             if (SDK_INT >= Build.VERSION_CODES.Q) {
                 breakStrategy = BREAK_STRATEGY_BALANCED
             }
+        }
+
+        // xrnloops: right after the name, a lock when the habit unlocks something in xrnrule
+        // (XRNLOOPS.md). A row that wraps its content, with the weight on the name, inside a frame
+        // that takes the width: the name only gives way when the two don't fit.
+        linkBadge = XrnruleLinkBadge(context)
+        val nameLine = FrameLayout(context).apply {
+            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+            addView(
+                LinearLayout(context).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    layoutParams = FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.CENTER_VERTICAL)
+                    addView(label, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, 1f))
+                    addView(linkBadge)
+                }
+            )
         }
 
         checkmarkPanel = checkmarkPanelFactory.create().apply {
@@ -181,16 +199,21 @@ class HabitCardView(
                 val location = getAbsoluteButtonLocation(date)
                 habit?.let { behavior.onEdit(it, date, location.x, location.y) }
             }
+            // xrnloops: the number flick menu sets a value straight away (XRNLOOPS.md).
+            onToggle = { date, value, notes ->
+                triggerRipple(date)
+                val location = getAbsoluteButtonLocation(date)
+                habit?.let { behavior.onToggle(it, date, value, notes, location.x, location.y) }
+            }
         }
 
         innerFrame = LinearLayout(context).apply {
             gravity = Gravity.CENTER_VERTICAL
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
-            elevation = dp(1f)
 
             addView(scoreRing)
-            addView(label)
+            addView(nameLine)
             addView(checkmarkPanel)
             addView(numberPanel)
 
@@ -202,8 +225,8 @@ class HabitCardView(
 
         clipToPadding = false
         layoutParams = LayoutParams(MATCH_PARENT, WRAP_CONTENT)
-        val margin = dp(3f).toInt()
-        setPadding(margin, 0, margin, margin)
+        // xrnloops: flat rows, clear of the screen's edges (XRNLOOPS.md).
+        setPadding(dp(ROW_MARGIN_DP).toInt(), 0, dp(ROW_MARGIN_DP).toInt(), dp(ROW_GAP_DP).toInt())
         addView(innerFrame)
     }
 
@@ -276,6 +299,7 @@ class HabitCardView(
             text = h.name
             setTextColor(c)
         }
+        linkBadge.bind(h, c)
         scoreRing.apply {
             setColor(c)
         }
@@ -290,7 +314,9 @@ class HabitCardView(
             color = c
             units = h.unit
             targetType = h.targetType
-            threshold = h.targetValue
+            // xrnloops: the day's share, as HabitCardListView sets it; the flick's target key
+            // enters it, and an edit (this habit's model change) mustn't turn it into the whole.
+            threshold = h.targetValue / h.frequency.denominator
             visibility = when (h.isNumerical) {
                 true -> View.VISIBLE
                 false -> View.GONE
@@ -310,13 +336,17 @@ class HabitCardView(
 
     private fun updateBackground(isSelected: Boolean) {
         val background = when (isSelected) {
-            true -> R.drawable.selected_box
-            false -> R.drawable.ripple
+            true -> R.drawable.xrn_row_selected // xrnloops: rounded rows (XRNLOOPS.md)
+            false -> R.drawable.xrn_row
         }
         innerFrame.setBackgroundResource(background)
     }
 
     companion object {
+        /** Also where [HeaderView] starts counting its columns from, so the two line up. */
+        const val ROW_MARGIN_DP = 8f
+        private const val ROW_GAP_DP = 6f
+
         fun (() -> Unit).delay(delayInMillis: Long) {
             Handler(Looper.getMainLooper()).postDelayed(this, delayInMillis)
         }

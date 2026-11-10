@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2026 the xrnhabit authors
+ * Copyright (C) 2026 the xrnrule authors
  *
  * This file is part of Loop Habit Tracker.
  *
@@ -46,20 +46,46 @@ class XrnSyncSettings(context: Context) {
         override fun getString(key: String, defValue: String?): String? = prefs.getString(key, defValue)
     }
 
-    data class LastSync(val atMs: Long, val ok: Boolean, val message: String)
+    /**
+     * [failures] counts failed attempts in a row; [needsYou] marks a failure that won't fix
+     * itself (a wrong password, or the lockout that follows).
+     */
+    data class LastSync(
+        val atMs: Long,
+        val ok: Boolean,
+        val message: String,
+        val failures: Int = 0,
+        val needsYou: Boolean = false
+    )
 
     val lastSync: LastSync?
         get() {
             val at = prefs.getLong(KEY_LAST_AT, 0)
             if (at == 0L) return null
-            return LastSync(at, prefs.getBoolean(KEY_LAST_OK, false), prefs.getString(KEY_LAST_MESSAGE, "").orEmpty())
+            return LastSync(
+                at,
+                prefs.getBoolean(KEY_LAST_OK, false),
+                prefs.getString(KEY_LAST_MESSAGE, "").orEmpty(),
+                prefs.getInt(KEY_FAILURES, 0),
+                prefs.getBoolean(KEY_NEEDS_YOU, false)
+            )
         }
 
-    fun recordAttempt(ok: Boolean, message: String) {
+    /**
+     * Sync is in trouble worth showing ([XrnSyncTrouble]): one failure that needs the user, or
+     * two in a row of any kind. A single dropped connection isn't.
+     */
+    val isFailing: Boolean
+        get() = isConfigured && lastSync?.let { !it.ok && (it.needsYou || it.failures >= 2) } == true
+
+    fun recordAttempt(ok: Boolean, message: String, needsYou: Boolean = false) {
+        val failures = if (ok) 0 else prefs.getInt(KEY_FAILURES, 0) + 1
         prefs.edit {
             putLong(KEY_LAST_AT, System.currentTimeMillis())
             putBoolean(KEY_LAST_OK, ok)
             putString(KEY_LAST_MESSAGE, message)
+            putInt(KEY_FAILURES, failures)
+            putBoolean(KEY_NEEDS_YOU, needsYou)
         }
     }
 
@@ -72,5 +98,7 @@ class XrnSyncSettings(context: Context) {
         private const val KEY_LAST_AT = "last_at"
         private const val KEY_LAST_OK = "last_ok"
         private const val KEY_LAST_MESSAGE = "last_message"
+        private const val KEY_FAILURES = "failures"
+        private const val KEY_NEEDS_YOU = "needs_you"
     }
 }

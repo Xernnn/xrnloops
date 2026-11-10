@@ -70,7 +70,7 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
     ) {
         try {
             updateDependencies(context)
-            context.setTheme(R.style.WidgetTheme)
+            context.setTheme(R.style.XrnWidgetTheme) // xrnloops (XRNLOOPS.md)
             val widget = getWidgetFromId(context, widgetId)
             val dims = getDimensionsFromOptions(context, options)
             widget.setDimensions(dims)
@@ -101,7 +101,7 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
         widgetIds: IntArray
     ) {
         updateDependencies(context)
-        context.setTheme(R.style.WidgetTheme)
+        context.setTheme(R.style.XrnWidgetTheme) // xrnloops (XRNLOOPS.md)
         Thread {
             Looper.prepare()
             for (id in widgetIds) update(context, manager, id)

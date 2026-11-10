@@ -28,6 +28,7 @@ import android.text.Spanned
 import android.text.format.DateFormat
 import android.view.View
 import android.widget.ArrayAdapter
+import androidx.activity.OnBackPressedCallback
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -87,6 +88,9 @@ class EditHabitActivity : AppCompatActivity() {
     var reminderDays: WeekdayList = WeekdayList.EVERY_DAY
     var targetType = NumericalHabitType.AT_LEAST
 
+    // xrnloops: the form as it opened, so leaving can tell if anything would be lost (XRNLOOPS.md).
+    private lateinit var opened: List<Any>
+
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
 
@@ -122,6 +126,8 @@ class EditHabitActivity : AppCompatActivity() {
         } else {
             habitType = HabitType.fromInt(intent.getIntExtra("habitType", HabitType.YES_NO.value))
         }
+
+        opened = form()
 
         if (state != null) {
             habitId = state.getLong("habitId")
@@ -258,6 +264,39 @@ class EditHabitActivity : AppCompatActivity() {
         for (fragment in supportFragmentManager.fragments) {
             (fragment as DialogFragment).dismiss()
         }
+
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() = leave { finish() }
+            }
+        )
+    }
+
+    override fun onSupportNavigateUp(): Boolean {
+        leave { super.onSupportNavigateUp() }
+        return true
+    }
+
+    /** xrnloops: everything Save would write. */
+    private fun form(): List<Any> =
+        listOf(
+            binding.nameInput,
+            binding.questionInput,
+            binding.notesInput,
+            binding.unitInput,
+            binding.targetInput
+        ).map { it.text.trim().toString() } +
+            listOf(color.paletteIndex, freqNum, freqDen, reminderHour, reminderMin, reminderDays.toInteger(), targetType)
+
+    /** xrnloops: goes straight away if nothing changed, and otherwise asks first. */
+    private fun leave(go: () -> Unit) {
+        if (form() == opened) return go()
+        AlertDialog.Builder(this)
+            .setMessage(R.string.xrnform_discard_question)
+            .setPositiveButton(R.string.xrnform_keep_editing, null)
+            .setNegativeButton(R.string.xrnform_discard) { _, _ -> go() }
+            .show()
     }
 
     private fun save() {
@@ -355,10 +394,7 @@ class EditHabitActivity : AppCompatActivity() {
     private fun updateColors() {
         androidColor = themeSwitcher.currentTheme.color(color).toInt()
         binding.colorButton.backgroundTintList = ColorStateList.valueOf(androidColor)
-        if (!themeSwitcher.isNightMode) {
-            window.statusBarColor = androidColor
-            binding.toolbar.setBackgroundColor(androidColor)
-        }
+        // xrnloops: no coloured bars (XRNLOOPS.md); the colour shows on its button.
     }
 
     private fun getFormattedValidationError(@StringRes resId: Int): Spanned {

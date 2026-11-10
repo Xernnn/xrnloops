@@ -19,12 +19,14 @@
 
 <resources>
     <dimen name="baseSize">20dp</dimen>
-    <dimen name="checkmarkWidth">48dp</dimen>
+    <!-- xrnloops (XRNLOOPS.md): narrower days and a narrower minimum name, so a phone shows a
+         whole week (7 days from about 400dp wide; Loop: 48dp and 160dp, 5 days). -->
+    <dimen name="checkmarkWidth">38dp</dimen>
     <dimen name="checkmarkHeight">48dp</dimen>
     <dimen name="history_editor_max_height">350dp</dimen>
     <dimen name="regularTextSize">16sp</dimen>
     <dimen name="smallTextSize">14sp</dimen>
     <dimen name="smallerTextSize">12sp</dimen>
     <dimen name="tinyTextSize">10sp</dimen>
-    <dimen name="habitNameWidth">160dp</dimen>
+    <dimen name="habitNameWidth">140dp</dimen>
 </resources>

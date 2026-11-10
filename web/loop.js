@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2016-2025 Álinson Santos Xavier <git@axavier.org>
- * Copyright (C) 2026 the xrnhabit authors
+ * Copyright (C) 2026 the xrnrule authors
  *
  * This file is part of Loop Habit Tracker (the xrnloops fork).
  *
@@ -35,8 +35,22 @@ export function dayStr(n) {
   return new Date(n * DAY_MS).toISOString().slice(0, 10);
 }
 
+let dayStart = 0;
+
+/**
+ * The hour the phone's day starts: 3 with xrnloops' "Extend the day past midnight" on, else 0.
+ * Until then "today" is still the day before, as on the phone (the server passes it along).
+ */
+export function setDayStartHour(hour) {
+  dayStart = hour;
+}
+
+export function dayStartHour() {
+  return dayStart;
+}
+
 export function todayNum() {
-  const t = new Date();
+  const t = new Date(Date.now() - dayStart * 3600000);
   return Date.UTC(t.getFullYear(), t.getMonth(), t.getDate()) / DAY_MS;
 }
 
@@ -175,6 +189,20 @@ export function computeStreaks(habit, computed, from, to) {
   }
   streaks.push([begin, end]);
   return streaks;
+}
+
+/**
+ * A number habit's target for one day as an entry stores it (the amount ×1000), as the phone's
+ * dayTargetEntry has it: the least amount that meets an "at least" target, the most an "at most"
+ * one allows. The share rounded can miss: 5 a week is 0.714… a day, and 714 isn't done.
+ */
+export function dayTargetEntry(habit) {
+  const share = habit.data.targetValue / habit.data.freqDen;
+  if (!Number.isFinite(share) || share <= 0) return 0;
+  let entry = Math.round(share * 1000);
+  if (habit.data.targetType === AT_MOST) while (entry > 0 && entry / 1000 > share) entry--;
+  else while (entry / 1000 < share) entry++;
+  return entry;
 }
 
 /** Everything the screens show about one habit, computed the way Loop's Habit.recompute does. */

@@ -1,0 +1,57 @@
+# xrnloops: the checks that need no emulator, on every push (XRNLOOPS.md). Loop's own CI ran the
+# instrumented tests on a self-hosted machine and upstream has switched it off; ours run locally
+# (docs/TEST.md). GitHub-hosted runners cost this private repo minutes, so this stays small.
+name: Tests
+
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jvm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Unit tests, lint, and the instrumented tests still compile
+        run: >
+          ./gradlew --console=plain
+          :uhabits-core:jvmTest
+          :uhabits-android:testDebugUnitTest
+          :uhabits-android:ktlintCheck
+          :uhabits-android:compileDebugAndroidTestKotlin
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Sync server tests
+        run: |
+          pip install bcrypt
+          python3 -m unittest server/test_xrnloops_sync.py
+
+      - name: Keep the reports of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: reports
+          path: |
+            uhabits-core/build/reports/
+            uhabits-android/build/reports/

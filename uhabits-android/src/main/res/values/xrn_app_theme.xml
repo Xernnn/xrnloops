@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Copyright (C) 2026 the xrnrule authors
+  ~
+  ~ This file is part of Loop Habit Tracker.
+  ~
+  ~ Loop Habit Tracker is free software: you can redistribute it and/or modify
+  ~ it under the terms of the GNU General Public License as published by the
+  ~ Free Software Foundation, either version 3 of the License, or (at your
+  ~ option) any later version.
+  ~
+  ~ Loop Habit Tracker is distributed in the hope that it will be useful, but
+  ~ WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+  ~ or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+  ~ more details.
+  ~
+  ~ You should have received a copy of the GNU General Public License along
+  ~ with this program. If not, see <http://www.gnu.org/licenses/>.
+  -->
+
+<!--
+  xrnloops only (XRNLOOPS.md): the xrn family look for the whole app. Each theme extends Loop's
+  own and only overrides colours and fonts, so upstream's attributes keep their meaning:
+  contrast0 is the background, contrast100 the strongest text; cardBgColor fills list rows,
+  cards and widgets. Palettes are xrnrule's (dark: zinc + green 22C55E; light: F2F2F4 + green
+  16A34A). AndroidThemeSwitcher picks these instead of AppBaseTheme*; xrnlook/XrnThemes.kt has
+  the matching colours for the charts Loop draws itself.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- AppCompat paints a strip of its own behind the status bar while habits are selected. See
+         through it to the page, or the bar stops being seamless in that one mode. -->
+    <color name="abc_decor_view_status_guard">@android:color/transparent</color>
+    <color name="abc_decor_view_status_guard_light">@android:color/transparent</color>
+
+    <color name="xrn_light_bg">#F2F2F4</color>
+    <color name="xrn_light_surface">#FFFFFF</color>
+    <color name="xrn_light_surface_high">#EBEBEF</color>
+    <color name="xrn_light_outline">#E3E3E8</color>
+    <color name="xrn_light_line">#C9C9CF</color>
+    <color name="xrn_light_muted">#6B6B73</color>
+    <color name="xrn_light_strong">#3F3F46</color>
+    <color name="xrn_light_text">#1B1B1E</color>
+    <color name="xrn_light_green">#16A34A</color>
+    <color name="xrn_line">#4A4A50</color>
+    <color name="xrn_soft">#D4D4D8</color>
+    <string name="xrn_wordmark" translatable="false">xrnloops</string>
+
+    <!-- The hairline round anything on a card's surface: list rows, sheet rows, bar buttons. -->
+    <attr name="xrnRowEdge" format="color" />
+    <attr name="xrnBarTheme" format="reference" />
+
+    <style name="XrnAppTheme" parent="AppBaseTheme">
+        <item name="aboutScreenColor">@color/xrn_light_green</item>
+        <item name="colorAccent">@color/xrn_light_green</item>
+        <item name="colorSecondary">@color/xrn_light_green</item>
+        <item name="colorPrimary">@color/xrn_light_bg</item>
+        <item name="colorPrimaryDark">@color/xrn_light_bg</item>
+        <item name="useHabitColorAsPrimary">false</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="xrnBarTheme">@style/XrnBarLight</item>
+        <item name="alertDialogTheme">@style/XrnAlert</item>
+        <item name="android:alertDialogTheme">@style/XrnAlert</item>
+        <item name="android:itemBackground">@android:color/transparent</item>
+        <item name="popupMenuStyle">@style/XrnPopup</item>
+        <item name="actionOverflowMenuStyle">@style/XrnPopup.Overflow</item>
+        <item name="actionModeTheme">?attr/xrnBarTheme</item>
+        <item name="actionModeStyle">@style/XrnActionMode</item>
+        <item name="android:dialogTheme">@style/XrnPlainDialog</item>
+        <item name="actionModeBackground">@color/xrn_light_bg</item>
+        <item name="android:textColor">@color/xrn_light_text</item>
+        <item name="android:textColorAlertDialogListItem">@color/xrn_light_text</item>
+        <item name="cardBackground">@drawable/xrn_card_light</item>
+        <item name="cardBgColor">@color/xrn_light_surface</item>
+        <item name="xrnRowEdge">@color/xrn_light_outline</item>
+        <item name="headerBackgroundColor">@color/xrn_light_bg</item>
+        <item name="highlightedBackgroundColor">@color/xrn_light_surface_high</item>
+        <item name="contrast0">@color/xrn_light_surface</item>
+        <item name="contrast20">@color/xrn_light_outline</item>
+        <item name="contrast40">@color/xrn_light_line</item>
+        <item name="contrast60">@color/xrn_light_muted</item>
+        <item name="contrast80">@color/xrn_light_strong</item>
+        <item name="contrast100">@color/xrn_light_text</item>
+        <item name="windowBackgroundColor">@color/xrn_light_bg</item>
+        <item name="android:colorBackground">@color/xrn_light_bg</item>
+        <item name="android:windowBackground">@color/xrn_light_bg</item>
+        <item name="android:fontFamily">@font/xrn_misans</item>
+        <item name="toolbarStyle">@style/XrnToolbar</item>
+    </style>
+
+    <style name="XrnAppThemeDark" parent="AppBaseThemeDark">
+        <item name="aboutScreenColor">@color/xrn_green</item>
+        <item name="colorAccent">@color/xrn_green</item>
+        <item name="colorSecondary">@color/xrn_green</item>
+        <item name="colorPrimary">@color/xrn_bg</item>
+        <item name="colorPrimaryDark">@color/xrn_bg</item>
+        <item name="xrnBarTheme">@style/XrnBarDark</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="alertDialogTheme">@style/XrnAlert</item>
+        <item name="android:alertDialogTheme">@style/XrnAlert</item>
+        <item name="android:itemBackground">@android:color/transparent</item>
+        <item name="popupMenuStyle">@style/XrnPopup</item>
+        <item name="actionOverflowMenuStyle">@style/XrnPopup.Overflow</item>
+        <item name="actionModeTheme">?attr/xrnBarTheme</item>
+        <item name="actionModeStyle">@style/XrnActionMode</item>
+        <item name="android:dialogTheme">@style/XrnPlainDialog</item>
+        <item name="actionModeBackground">@color/xrn_bg</item>
+        <item name="android:textColor">@color/xrn_text</item>
+        <item name="android:textColorAlertDialogListItem">@color/xrn_text</item>
+        <item name="textColorAlertDialogListItem">@color/xrn_text</item>
+        <item name="cardBackground">@drawable/xrn_card_dark</item>
+        <item name="cardBgColor">@color/xrn_surface</item>
+        <item name="xrnRowEdge">@color/xrn_outline</item>
+        <item name="headerBackgroundColor">@color/xrn_bg</item>
+        <item name="highlightedBackgroundColor">@color/xrn_surface_high</item>
+        <item name="contrast0">@color/xrn_bg</item>
+        <item name="contrast20">@color/xrn_surface_high</item>
+        <item name="contrast40">@color/xrn_line</item>
+        <item name="contrast60">@color/xrn_muted</item>
+        <item name="contrast80">@color/xrn_soft</item>
+        <item name="contrast100">@color/xrn_text</item>
+        <item name="popupMenuBackground">@color/xrn_surface</item>
+        <item name="windowBackgroundColor">@color/xrn_bg</item>
+        <item name="android:colorBackground">@color/xrn_bg</item>
+        <item name="android:windowBackground">@color/xrn_bg</item>
+        <item name="android:fontFamily">@font/xrn_misans</item>
+        <item name="toolbarStyle">@style/XrnToolbar</item>
+    </style>
+
+    <!-- AMOLED: Loop's black, with the green accent and MiSans. -->
+    <style name="XrnAppThemeDark.PureBlack" parent="AppBaseThemeDark.PureBlack">
+        <item name="aboutScreenColor">@color/xrn_green</item>
+        <item name="colorAccent">@color/xrn_green</item>
+        <item name="colorSecondary">@color/xrn_green</item>
+        <item name="cardBackground">@drawable/xrn_card_black</item>
+        <item name="xrnRowEdge">@color/xrn_surface</item>
+        <item name="actionModeBackground">@android:color/black</item>
+        <item name="android:colorBackground">@android:color/black</item>
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:textColor">@color/xrn_text</item>
+        <item name="android:textColorAlertDialogListItem">@color/xrn_text</item>
+        <item name="textColorAlertDialogListItem">@color/xrn_text</item>
+        <item name="contrast60">@color/xrn_muted</item>
+        <item name="contrast80">@color/xrn_soft</item>
+        <item name="contrast100">@color/xrn_text</item>
+        <item name="xrnBarTheme">@style/XrnBarDark</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="alertDialogTheme">@style/XrnAlert</item>
+        <item name="android:alertDialogTheme">@style/XrnAlert</item>
+        <item name="android:itemBackground">@android:color/transparent</item>
+        <item name="popupMenuStyle">@style/XrnPopup</item>
+        <item name="actionOverflowMenuStyle">@style/XrnPopup.Overflow</item>
+        <item name="actionModeTheme">?attr/xrnBarTheme</item>
+        <item name="actionModeStyle">@style/XrnActionMode</item>
+        <item name="android:dialogTheme">@style/XrnPlainDialog</item>
+        <item name="android:fontFamily">@font/xrn_misans</item>
+        <item name="toolbarStyle">@style/XrnToolbar</item>
+    </style>
+
+    <!-- Home screen widgets: the zinc card instead of Loop's grey. -->
+    <style name="XrnWidgetTheme" parent="WidgetTheme">
+        <item name="cardBgColor">@color/xrn_surface</item>
+        <item name="android:fontFamily">@font/xrn_misans</item>
+    </style>
+
+    <!-- Our bottom sheets (xrnnote/NoteSheet.kt, xrnrule/XrnruleLinkSheet.kt), over the app's light,
+         dark or black theme. The handle needs a style of its own: only Material 3 themes set one. -->
+    <style name="XrnNoteSheet" parent="ThemeOverlay.MaterialComponents.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/XrnNoteSheet.Sheet</item>
+        <item name="bottomSheetDragHandleStyle">@style/XrnNoteSheet.Handle</item>
+        <item name="colorPrimary">?attr/colorAccent</item>
+        <item name="textInputStyle">@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+    </style>
+
+    <style name="XrnNoteSheet.Sheet" parent="Widget.MaterialComponents.BottomSheet.Modal">
+        <item name="backgroundTint">?attr/windowBackgroundColor</item>
+        <item name="shapeAppearanceOverlay">@style/XrnNoteSheet.Shape</item>
+        <!-- By default an expanded sheet loses its round corners, even one that isn't full height. -->
+        <item name="shouldRemoveExpandedCorners">false</item>
+    </style>
+
+    <style name="XrnNoteSheet.Handle" parent="Widget.Material3.BottomSheet.DragHandle">
+        <item name="tint">?attr/contrast40</item>
+    </style>
+
+    <style name="XrnNoteSheet.Shape" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">24dp</item>
+        <item name="cornerSizeTopRight">24dp</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style>
+
+    <!-- The bars: part of the page, as in xrnrule, never a block of colour. Loop's toolbars took a
+         fixed dark overlay, which only worked on its dark or coloured bars. -->
+    <!-- The selection bar is our bar too. Left alone, Material's overlay dims its back arrow and
+         overflow button to 60%, and its buttons stop short of lining up with the rows. -->
+    <style name="XrnActionMode" parent="Widget.MaterialComponents.ActionMode">
+        <item name="android:paddingEnd">4dp</item>
+    </style>
+
+    <style name="XrnBarDark" parent="ThemeOverlay.AppCompat.Dark.ActionBar">
+        <item name="android:textColorPrimary">@color/xrn_text</item>
+        <item name="android:textColorSecondary">@color/xrn_muted</item>
+        <item name="colorControlNormal">@color/xrn_text</item>
+        <item name="actionButtonStyle">@style/XrnBarButton</item>
+        <item name="actionOverflowButtonStyle">@style/XrnBarButton.Overflow</item>
+    </style>
+
+    <style name="XrnBarLight" parent="ThemeOverlay.AppCompat.ActionBar">
+        <item name="android:textColorPrimary">@color/xrn_light_text</item>
+        <item name="android:textColorSecondary">@color/xrn_light_muted</item>
+        <item name="colorControlNormal">@color/xrn_light_text</item>
+        <item name="actionButtonStyle">@style/XrnBarButton</item>
+        <item name="actionOverflowButtonStyle">@style/XrnBarButton.Overflow</item>
+    </style>
+
+    <!-- One width for all, set by minWidth: Add's icon is wider, and padding on top of it would space the rings unevenly. -->
+    <style name="XrnBarButton" parent="Widget.AppCompat.ActionButton">
+        <item name="android:background">@drawable/xrn_bar_button</item>
+        <item name="android:minWidth">46dp</item>
+        <item name="android:paddingStart">4dp</item>
+        <item name="android:paddingEnd">4dp</item>
+    </style>
+
+    <style name="XrnBarButton.Overflow" parent="Widget.AppCompat.ActionButton.Overflow">
+        <item name="android:background">@drawable/xrn_bar_button</item>
+        <item name="android:minWidth">46dp</item>
+        <item name="android:paddingStart">4dp</item>
+        <item name="android:paddingEnd">4dp</item>
+    </style>
+
+    <style name="XrnPopup" parent="Widget.AppCompat.PopupMenu">
+        <item name="android:popupBackground">@drawable/xrn_popup</item>
+    </style>
+
+    <style name="XrnPopup.Overflow" parent="Widget.AppCompat.PopupMenu.Overflow">
+        <item name="android:popupBackground">@drawable/xrn_popup</item>
+        <item name="android:dropDownHorizontalOffset">-4dp</item>
+    </style>
+
+    <style name="XrnBarSave" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="android:fontFamily">@font/xrn_misans_semibold</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textColor">?attr/contrast100</item>
+        <item name="rippleColor">?attr/contrast20</item>
+    </style>
+
+    <!-- Loop's dialogs, as cards: AppCompat's and the plain platform ones take different
+         attributes. Overlays, so the app's colours and fonts carry through. colorPrimary is the
+         page colour, which these would otherwise take for their buttons and fields. -->
+    <style name="XrnAlert" parent="ThemeOverlay.MaterialComponents.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/xrn_dialog</item>
+        <item name="colorPrimary">?attr/colorAccent</item>
+        <item name="buttonBarPositiveButtonStyle">@style/XrnAlert.Button</item>
+        <item name="buttonBarNegativeButtonStyle">@style/XrnAlert.Button</item>
+        <item name="buttonBarNeutralButtonStyle">@style/XrnAlert.Button</item>
+    </style>
+
+    <style name="XrnAlert.Button" parent="Widget.MaterialComponents.Button.TextButton.Dialog">
+        <item name="android:fontFamily">@font/xrn_misans_semibold</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textColor">?attr/colorAccent</item>
+    </style>
+
+    <!-- For the snooze picker: BaseDialog is AppCompat, which Material's overlay can't sit on. -->
+    <style name="XrnBaseAlert" parent="ThemeOverlay.AppCompat.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/xrn_dialog</item>
+    </style>
+
+    <style name="XrnPlainDialog" parent="ThemeOverlay.MaterialComponents.Dialog">
+        <item name="android:windowBackground">@drawable/xrn_dialog</item>
+        <item name="colorPrimary">?attr/colorAccent</item>
+    </style>
+
+    <style name="XrnToolbar" parent="Widget.AppCompat.Toolbar">
+        <item name="titleTextAppearance">@style/XrnToolbar.Title</item>
+        <item name="subtitleTextAppearance">@style/XrnToolbar.Subtitle</item>
+    </style>
+
+    <style name="XrnToolbar.Title" parent="TextAppearance.Widget.AppCompat.Toolbar.Title">
+        <item name="android:fontFamily">@font/xrn_misans</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">21sp</item>
+    </style>
+
+    <!-- The list's title is the app's name, set as xrnrule sets its own. -->
+    <style name="XrnToolbar.Wordmark" parent="TextAppearance.Widget.AppCompat.Toolbar.Title">
+        <item name="android:fontFamily">@font/xrn_geist_mono_bold</item>
+        <item name="android:textSize">22sp</item>
+    </style>
+
+    <style name="XrnToolbar.Subtitle" parent="TextAppearance.Widget.AppCompat.Toolbar.Subtitle">
+        <item name="android:fontFamily">@font/xrn_misans</item>
+    </style>
+</resources>

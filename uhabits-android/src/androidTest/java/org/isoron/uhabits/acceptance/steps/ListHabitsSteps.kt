@@ -38,7 +38,6 @@ object ListHabitsSteps {
     fun clickMenu(item: MenuItem?) {
         when (item) {
             MenuItem.ABOUT -> clickTextInsideOverflowMenu(R.string.about)
-            MenuItem.HELP -> clickTextInsideOverflowMenu(R.string.help)
             MenuItem.SETTINGS -> clickTextInsideOverflowMenu(R.string.settings)
             MenuItem.ADD -> clickViewWithId(R.id.actionCreateHabit)
             MenuItem.EDIT -> clickViewWithId(R.id.action_edit_habit)
@@ -98,7 +97,9 @@ object ListHabitsSteps {
                         val v = vg.getChildAt(i)
                         if (v is ViewGroup) stack.push(v)
                         if (cls.isInstance(v) && countRemaining > 0) {
-                            v.performLongClick()
+                            // xrnloops: touch opens the flick menu now and a long press the day's
+                            // sheet (XRNLOOPS.md); toggle as Loop's long press did.
+                            if (v is CheckmarkButtonView) v.performToggle() else v.performLongClick()
                             uiController.loopMainThreadUntilIdle()
                             countRemaining--
                         }
@@ -128,6 +129,6 @@ object ListHabitsSteps {
     }
 
     enum class MenuItem {
-        ABOUT, HELP, SETTINGS, EDIT, DELETE, ARCHIVE, TOGGLE_ARCHIVED, UNARCHIVE, TOGGLE_COMPLETED, ADD
+        ABOUT, SETTINGS, EDIT, DELETE, ARCHIVE, TOGGLE_ARCHIVED, UNARCHIVE, TOGGLE_COMPLETED, ADD
     }
 }

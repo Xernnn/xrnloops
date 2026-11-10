@@ -102,7 +102,8 @@ open class BaseUserInterfaceTest {
     }
 
     companion object {
-        private const val PKG = "org.isoron.uhabits"
+        // xrnloops: the app id under test (com.xern.xrnloops here), not the code's package (XRNLOOPS.md).
+        val PKG: String get() = InstrumentationRegistry.getInstrumentation().targetContext.packageName
         const val EMPTY_DESCRIPTION_HABIT_NAME = "Read books"
         lateinit var device: UiDevice
         fun startActivity(cls: Class<*>) {

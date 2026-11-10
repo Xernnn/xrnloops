@@ -1,4 +1,9 @@
 <!doctype html>
+<!--
+  Copyright (C) 2026 the xrnrule authors
+
+  This file is part of Loop Habit Tracker (the xrnloops fork). GPLv3 or later; see loop.js.
+-->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -7,11 +12,13 @@
   <script>if (!/\/$|\.\w+$/.test(location.pathname)) location.replace(location.pathname + "/" + location.search + location.hash)</script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#16171a" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f2f2f4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1f1f23" media="(prefers-color-scheme: dark)">
+  <!-- The theme picked in this browser's settings, before the page paints (app.js, applyTheme). -->
+  <script>try { var t = JSON.parse(localStorage.getItem("xrnloops.prefs") || "{}").theme; if (t === "light" || t === "dark" || t === "black") document.documentElement.dataset.theme = t } catch (e) {}</script>
   <title>xrnloops</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
   <script type="module" src="app.js"></script>
 </head>
