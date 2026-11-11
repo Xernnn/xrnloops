@@ -305,6 +305,23 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(1, checks("nobody:nope"))  # none: the answer came sooner, and said so
         self.assertIsNone(srv.check_login("Basic " + base64.b64encode(b"nobody:secret").decode()))
 
+    def test_a_request_with_no_password_isnt_held(self):
+        # The hold after a wrong password slows a guesser down. One that sent no password guessed
+        # nothing, and each held a thread for the hold all the same.
+        def timed(addr, **headers):
+            start = time.monotonic()
+            status = self.raw("GET", "/api/changes?since=0", headers={"X-Forwarded-For": addr, **headers})[0]
+            return status, time.monotonic() - start
+        srv.failures["203.0.113.61"] = [time.monotonic()] * srv.FAIL_LIMIT  # locked out
+        with unittest.mock.patch.object(srv, "FAIL_DELAY_S", 0.5):
+            for addr, status in (("203.0.113.60", 401), ("203.0.113.61", 429)):
+                got, took = timed(addr)
+                self.assertEqual(status, got)
+                self.assertLess(took, 0.4, addr)
+                got, took = timed(addr, Authorization=self.basic("nope"))
+                self.assertEqual(status, got)
+                self.assertGreaterEqual(took, 0.5, addr)
+
     def test_guesses_sent_at_once_still_stop_at_the_limit(self):
         def slow_wrong(header):  # bcrypt takes a while: every guess is in flight at once
             time.sleep(0.3)
