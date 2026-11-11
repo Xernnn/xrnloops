@@ -145,6 +145,10 @@ against the real server):
 
 - A pull comes in pages by `seq`, so an entry can arrive before its habit. It waits, and the
   saved cursor stays behind it, so a stop halfway doesn't lose it.
+- A habit that comes back after its deletion was agreed (an edit made offline in a browser,
+  after the habit was deleted elsewhere) has its days behind the cursor too, and the phone
+  dropped them with the habit: the feed is read again from the start. Until 2026-11-11 only a
+  deletion the server had refused did that, and such a habit came back with no history here.
 - The snapshot belongs to one server and account. Another one starts over as after a restore
   (below), not "you deleted everything". A habit the snapshot has and the database doesn't is a deletion only if
   it was deleted here: noted as it happens (`XrnSyncEdits`), or once in this process's database.
