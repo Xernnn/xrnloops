@@ -284,6 +284,15 @@ class HttpTest(unittest.TestCase):
         forwarded = {"X-Forwarded-For": "198.51.100.200, 203.0.113.20"}
         self.assertEqual(429, self.status_of("/api/changes?since=0", headers=forwarded))
 
+    def test_an_ipv6_guesser_is_its_64_not_each_address_in_it(self):
+        for i in range(srv.FAIL_LIMIT):  # a new address of its own /64 for every guess
+            guesser = {"X-Forwarded-For": f"2001:db8:1:2::{i + 1:x}"}
+            self.assertEqual(401, self.status_of("/api/changes?since=0", password="nope", headers=guesser))
+        self.assertEqual(429, self.status_of("/api/changes?since=0", headers={"X-Forwarded-For": "2001:db8:1:2:aaaa::1"}))
+        self.assertEqual(200, self.status_of("/api/changes?since=0", headers={"X-Forwarded-For": "2001:db8:1:3::1"}))
+        self.assertEqual("203.0.113.40", srv.guesser("::ffff:203.0.113.40"))
+        self.assertEqual("not an address", srv.guesser("not an address"))
+
     def test_guesses_sent_at_once_still_stop_at_the_limit(self):
         def slow_wrong(header):  # bcrypt takes a while: every guess is in flight at once
             time.sleep(0.3)

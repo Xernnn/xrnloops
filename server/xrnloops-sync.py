@@ -71,6 +71,7 @@ import base64
 import gzip
 import hashlib
 import hmac
+import ipaddress
 import json
 import math
 import mimetypes
@@ -145,8 +146,23 @@ def client_address(handler):
     peer = handler.client_address[0]
     forwarded = handler.headers.get("X-Forwarded-For")
     if forwarded and peer in ("127.0.0.1", "::1"):
-        return forwarded.split(",")[-1].strip()
-    return peer
+        return guesser(forwarded.split(",")[-1].strip())
+    return guesser(peer)
+
+
+def guesser(addr):
+    """Who wrong logins are counted for: an IPv4 address, or an IPv6 address's /64. An IPv6
+    line comes with at least a /64, so counted per address its owner had a new one for every
+    guess and never reached the limit."""
+    try:
+        ip = ipaddress.ip_address(addr)
+    except ValueError:
+        return addr
+    if ip.version == 4:
+        return addr
+    if ip.ipv4_mapped:
+        return str(ip.ipv4_mapped)
+    return f"{ipaddress.ip_address(int(ip) >> 64 << 64)}/64"
 
 
 def locked_out(addr):
