@@ -71,6 +71,7 @@ import base64
 import gzip
 import hashlib
 import hmac
+import ipaddress
 import json
 import math
 import mimetypes
@@ -145,8 +146,23 @@ def client_address(handler):
     peer = handler.client_address[0]
     forwarded = handler.headers.get("X-Forwarded-For")
     if forwarded and peer in ("127.0.0.1", "::1"):
-        return forwarded.split(",")[-1].strip()
-    return peer
+        return guesser(forwarded.split(",")[-1].strip())
+    return guesser(peer)
+
+
+def guesser(addr):
+    """Who wrong logins are counted for: an IPv4 address, or an IPv6 address's /64. An IPv6
+    line comes with at least a /64, so counted per address its owner had a new one for every
+    guess and never reached the limit."""
+    try:
+        ip = ipaddress.ip_address(addr)
+    except ValueError:
+        return addr
+    if ip.version == 4:
+        return addr
+    if ip.ipv4_mapped:
+        return str(ip.ipv4_mapped)
+    return f"{ipaddress.ip_address(int(ip) >> 64 << 64)}/64"
 
 
 def locked_out(addr):
@@ -194,12 +210,20 @@ def check_login(header):
     import bcrypt  # only needed once someone logs in, so the tests can run without it
 
     try:
+        checked, spare = False, None
         with open(args.users, encoding="utf-8") as f:
             for line in f:
                 name, _, hashed = line.strip().partition(":")
-                if name == user and hashed and bcrypt.checkpw(password.encode(), hashed.encode()):
-                    auth_cache[key] = (user, time.time() + AUTH_CACHE_S, mtime)
-                    return user
+                spare = hashed or spare
+                if name == user and hashed:
+                    checked = True
+                    if bcrypt.checkpw(password.encode(), hashed.encode()):
+                        auth_cache[key] = (user, time.time() + AUTH_CACHE_S, mtime)
+                        return user
+        if not checked and spare:
+            # A name that isn't there takes as long as a wrong password for one that is, or
+            # the time an answer takes says which names exist. The result is never used.
+            bcrypt.checkpw(password.encode(), spare.encode())
     except (OSError, ValueError):
         pass
     return None

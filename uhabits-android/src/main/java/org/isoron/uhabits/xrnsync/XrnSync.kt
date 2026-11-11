@@ -527,8 +527,8 @@ class XrnSync(
                 model.uuid = uuid
                 CreateHabitCommand(modelFactory, habitList, model).run()
                 seenHere += uuid
-                // Brought back after we deleted it: its older entries are behind our cursor.
-                if (uuid in snap.habits) round.refetchAll = true
+                // Brought back after it was deleted: its older entries are behind our cursor.
+                if (snap.hadDays(uuid)) round.refetchAll = true
                 round.listChanged = true
                 round.applied++
             } else if (data.copy(position = currentData!!.position) != currentData) {
@@ -915,6 +915,14 @@ internal class Snapshot(
         epoch = null
         resend = true
     }
+
+    /**
+     * Whether a habit the feed brings in, and the phone doesn't have, had days here once: it was
+     * deleted here and that isn't agreed yet, or its deletion was agreed, here or elsewhere, and
+     * its days went with it, off the phone and out of this snapshot. Either way the server still
+     * has them, behind the cursor, and only reading the feed from the start brings them back.
+     */
+    fun hadDays(uuid: String) = uuid in habits || uuid in tombstones
 
     /** The file as last read or written: most rounds change nothing, and then don't touch it. */
     private var onDisk: String? = null

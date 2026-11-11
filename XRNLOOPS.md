@@ -62,6 +62,7 @@ Cloned shallow from upstream `7e993e1` (2.3.1). To rebase onto a newer upstream,
 | A sync costs less (2026-11-06). Entries from the server go in with one transaction per habit (`EntryRepository.replaceAll`, `EntryList.addAll`), not two commits each, and a round that changed nothing leaves the snapshot file alone. Nothing inside that transaction takes another lock, so it can't deadlock with a thread waiting for the database while holding one | `xrnsync/XrnSync.kt`, `uhabits-core` `EntryRepository`, `EntryList`, `SQLiteEntryList` |
 | An import is no longer one long transaction (2026-11-10). Android lends its one connection to the thread that began a transaction until it ends, and the import took the habit list's and the repositories' locks as it went, which every other thread holds while it waits for that connection: sync applying the server's changes, a tick or a screen loading a habit's days during an import deadlocked with it and could freeze the app. Each importer writes a habit's days in one go (`EntryList.addAll`), so an import stays quick, and sync holds off while one runs. A new habit's id is read in its insert's transaction: `last_insert_rowid()` is the connection's, and a day inserted by another thread in between gave the habit that row's id | `tasks/ImportDataTask.kt`, `ImportDataTaskFactory.kt`; `uhabits-core` `io/*Importer.kt`, `database/HabitRepository.kt` (`ImportWhileWritingTest`, `NewHabitIdTest`, with `OneConnection`, a database that lends its connection as Android's does) |
 | The web app comes from the browser's cache when it can (2026-11-06): fonts are kept, everything else revalidates with an `ETag`, and woff2 isn't gzipped again on every request | `server/xrnloops-sync.py` |
+| One command updates the server and the web app together (2026-11-11): `server/deploy.sh` tests the server, moves `xrnloops-sync.py` and `web/` in whole, restarts the service and waits for `/health`; the data is left alone. The server had been updated by copying the `.py` alone, so on 11 Nov it was still serving the web app of 6 Nov, without the three fixes of 10 Nov | `server/deploy.sh` |
 
 ## The contract
 
@@ -110,7 +111,8 @@ web app's "today" and xrnrule's follow the phone's day. It serves `web/` at its 
 kept by the browser, anything else is asked after with its `ETag`, so a deploy shows at once and
 a repeat visit costs a few 304s instead of every file. The data is never cached. On the home server it runs at `<server>/xrnloops` (port 5234 behind Tailscale Funnel),
 with its own htpasswd file (`~/.config/xrn-sync/users`, shared with xrnrule-sync). Ten wrong
-passwords from one address within 15 minutes get 429 until they age out. A password counts as
+passwords from one address within 15 minutes get 429 until they age out (an IPv6 address counts
+as its /64, or its owner had a new one for every guess). A password counts as
 wrong until bcrypt has found it right, so guesses sent all at once can't get past the ten
 (until 2026-11-10 they were counted after the check, and every guess in flight got through).
 
@@ -144,6 +146,10 @@ against the real server):
 
 - A pull comes in pages by `seq`, so an entry can arrive before its habit. It waits, and the
   saved cursor stays behind it, so a stop halfway doesn't lose it.
+- A habit that comes back after its deletion was agreed (an edit made offline in a browser,
+  after the habit was deleted elsewhere) has its days behind the cursor too, and the phone
+  dropped them with the habit: the feed is read again from the start. Until 2026-11-11 only a
+  deletion the server had refused did that, and such a habit came back with no history here.
 - The snapshot belongs to one server and account. Another one starts over as after a restore
   (below), not "you deleted everything". A habit the snapshot has and the database doesn't is a deletion only if
   it was deleted here: noted as it happens (`XrnSyncEdits`), or once in this process's database.

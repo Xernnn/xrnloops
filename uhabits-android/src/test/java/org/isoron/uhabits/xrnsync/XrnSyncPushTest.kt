@@ -26,6 +26,7 @@ import org.isoron.uhabits.core.commands.EditHabitCommand
 import org.isoron.uhabits.core.models.Entry
 import org.isoron.uhabits.core.models.memory.MemoryModelFactory
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -90,6 +91,17 @@ class XrnSyncPushTest {
         assertEquals(listOf(BACKUP_MTIME), entries.map { it.mtime })
         assertEquals(listOf(BACKUP_MTIME), habits.map { it.mtime })
         assertTrue(BACKUP_MTIME < 7 * hour)
+    }
+
+    @Test
+    fun aHabitBroughtBackAfterItsDeletionWasAgreedHasDaysToFetchAgain() {
+        // Deleted on the web and taken off this phone, days and all. Then a browser that was
+        // offline sends an edit made after that, and the habit is back in the feed.
+        val agreed = snapshot(habits = emptyMap())
+        agreed.tombstones["h1"] = at8
+        assertTrue(agreed.hadDays("h1"))
+        assertTrue("deleted here, which the server refused", snapshot().hadDays("h1"))
+        assertFalse("new to this phone", agreed.hadDays("h9"))
     }
 
     @Test
