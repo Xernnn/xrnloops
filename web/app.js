@@ -446,22 +446,78 @@ async function flush() {
 
 window.addEventListener("online", flush);
 
-// Another tab's queue, so that this one's next save doesn't wipe it. Both tabs may send it, which
-// is harmless: the server settles a record it gets twice.
+/** Records of this tab's queue that another tab has had: gone from its queue, they were sent. */
+const seenElsewhere = new WeakSet();
+let queueOwner = load(KEY_QUEUE_OWNER, null);
+
+/**
+ * Another tab's queue, as it saved it, merged into this one's. Taken whole, as it was until
+ * 2026-11-11, it dropped a write this tab made at the moment the other made one, before either
+ * had heard of the other's: it was in neither queue any more and never went out. A record (a habit
+ * by uuid, an entry by habit and day) goes by its newer write. One the other queue doesn't have
+ * goes from here too if that tab has had it, and stays if it may not have seen it. Returns whether
+ * the other queue lacks one of this tab's, which this tab then saves again.
+ */
+function mergeQueue(theirs) {
+  let unseen = false;
+  const merge = (mine, other, key) => {
+    const there = new Map((other ?? []).map((r) => [key(r), r]));
+    const out = [];
+    for (const r of mine) {
+      const t = there.get(key(r));
+      there.delete(key(r));
+      if (!t) {
+        if (seenElsewhere.has(r)) continue;
+        unseen = true;
+        out.push(r);
+      } else if (t.mtime > r.mtime) {
+        seenElsewhere.add(t);
+        out.push(t);
+      } else {
+        if (t.mtime === r.mtime) seenElsewhere.add(r);
+        out.push(r);
+      }
+    }
+    for (const t of there.values()) {
+      seenElsewhere.add(t);
+      out.push(t);
+    }
+    return out;
+  };
+  state.pending = {
+    habits: merge(state.pending.habits, theirs.habits, (r) => r.uuid),
+    entries: merge(state.pending.entries, theirs.entries, (r) => `${r.habit} ${r.date}`),
+  };
+  return unseen;
+}
+
+// Both tabs may send a record, which is harmless: the server settles a record it gets twice.
 window.addEventListener("storage", (e) => {
-  if (e.key === KEY_PENDING) state.pending = load(KEY_PENDING, { habits: [], entries: [] });
+  if (e.key !== KEY_PENDING && e.key !== KEY_QUEUE_OWNER) return;
+  const owner = load(KEY_QUEUE_OWNER, null);
+  if (queueOwner != null && owner !== queueOwner) {
+    // Signed in as someone else there (claimQueue): what's queued here was the account before's.
+    state.pending = { habits: [], entries: [] };
+  } else if (e.key === KEY_PENDING && mergeQueue(load(KEY_PENDING, { habits: [], entries: [] }))) {
+    save(KEY_PENDING, state.pending);
+  }
+  queueOwner = owner;
+  updateSyncBadge();
 });
 
 /** What's still queued is one account's: it must not go into the next one's data. */
 function claimQueue(user) {
   const owner = load(KEY_QUEUE_OWNER, user);
   const queued = state.pending.habits.length + state.pending.entries.length;
+  // Named before the queue is emptied: another tab then knows the empty queue is for another
+  // account, and empties its own instead of saving back what it had for this one.
+  save(KEY_QUEUE_OWNER, user);
+  queueOwner = user;
   if (owner !== user && queued) {
     state.pending = { habits: [], entries: [] };
     save(KEY_PENDING, state.pending);
     toast(`${queued} unsent ${queued === 1 ? "change" : "changes"} from ${owner} dropped`);
   }
-  save(KEY_QUEUE_OWNER, user);
 }
 
 // ---- auth ----------------------------------------------------------------------------------

@@ -19,9 +19,14 @@ if ! (cd "$REPO" && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest server/test_xr
     echo "    python3 -m unittest server/test_xrnloops_sync.py" >&2
     exit 1
 fi
+if ! (cd "$REPO" && node --test web/test >/dev/null 2>&1); then
+    echo "The web app's tests failed, so nothing was changed. Run them for details:" >&2
+    echo "    node --test web/test" >&2
+    exit 1
+fi
 
 echo "Copying it to $HOST..."
-tar czf - -C "$HERE" xrnloops-sync.py -C "$REPO" web | ssh "$HOST" '
+tar czf - --exclude=web/test -C "$HERE" xrnloops-sync.py -C "$REPO" web | ssh "$HOST" '
     set -e
     if [ ! -d ~/xrnloops-sync/data ]; then
         echo "No ~/xrnloops-sync/data on this host: set the service up first (home-server README)." >&2

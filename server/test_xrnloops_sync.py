@@ -14,6 +14,7 @@ import gzip
 import hashlib
 import http.client
 import importlib.util
+import io
 import json
 import os
 import socket
@@ -305,6 +306,23 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(1, checks("nobody:nope"))  # none: the answer came sooner, and said so
         self.assertIsNone(srv.check_login("Basic " + base64.b64encode(b"nobody:secret").decode()))
 
+    def test_a_request_with_no_password_isnt_held(self):
+        # The hold after a wrong password slows a guesser down. One that sent no password guessed
+        # nothing, and each held a thread for the hold all the same.
+        def timed(addr, **headers):
+            start = time.monotonic()
+            status = self.raw("GET", "/api/changes?since=0", headers={"X-Forwarded-For": addr, **headers})[0]
+            return status, time.monotonic() - start
+        srv.failures["203.0.113.61"] = [time.monotonic()] * srv.FAIL_LIMIT  # locked out
+        with unittest.mock.patch.object(srv, "FAIL_DELAY_S", 0.5):
+            for addr, status in (("203.0.113.60", 401), ("203.0.113.61", 429)):
+                got, took = timed(addr)
+                self.assertEqual(status, got)
+                self.assertLess(took, 0.4, addr)
+                got, took = timed(addr, Authorization=self.basic("nope"))
+                self.assertEqual(status, got)
+                self.assertGreaterEqual(took, 0.5, addr)
+
     def test_guesses_sent_at_once_still_stop_at_the_limit(self):
         def slow_wrong(header):  # bcrypt takes a while: every guess is in flight at once
             time.sleep(0.3)
@@ -425,6 +443,43 @@ class HttpTest(unittest.TestCase):
             s.sendall(b"GARBAGE\r\n\r\n")
             self.assertIn(b"400", s.recv(200))
 
+    def test_a_connection_that_goes_quiet_is_let_go(self):
+        # With no timeout, a client that stopped half way through its request held a thread for good.
+        self.assertGreater(srv.Handler.timeout, srv.MAX_WAIT_S)  # and longer than any long poll
+        with unittest.mock.patch.object(srv.Handler, "timeout", 0.3):
+            with socket.create_connection(("127.0.0.1", self.httpd.server_address[1]), timeout=10) as s:
+                s.sendall(b"GET /api/changes?since=0 HTTP/1.1\r\nHost: x\r\n")  # and then nothing
+                start = time.monotonic()
+                self.assertEqual(b"", s.recv(100))
+                self.assertLess(time.monotonic() - start, 5)
+
+    def test_the_log_shows_a_callers_control_characters_escaped(self):
+        # The request line and X-Forwarded-For are the caller's. Written raw, an escape sequence
+        # rewrote the terminal, and a \r started a line of its own where xrnhub reads the log.
+        forged = b'2026-11-06_01:09:14.23919 198.51.100.66 "POST /api/changes HTTP/1.1" 200 -'
+        with unittest.mock.patch("sys.stderr", new_callable=io.StringIO) as log:
+            for raw in (b"GET /a\x1b[2Jb HTTP/1.1\r\nX-Forwarded-For: 203.0.113.70\x1b]0;hi\x07\r\n\r\n",
+                        b"GET /a\r" + forged + b" HTTP/1.1\r\n\r\n"):
+                with socket.create_connection(("127.0.0.1", self.httpd.server_address[1]), timeout=10) as s:
+                    s.sendall(raw)
+                    while s.recv(4096):
+                        pass
+        text = log.getvalue()
+        self.assertIn("203.0.113.70\\x1b]0;hi\\x07", text)
+        self.assertIn("/a\\x1b[2Jb", text)
+        self.assertIn("/a\\x0d2026-11-06", text)
+        self.assertEqual([], [c for c in text if c != "\n" and (ord(c) < 0x20 or 0x7F <= ord(c) < 0xA0)])
+
+    def test_no_answer_names_the_python_version(self):
+        # The Server header said "<name>/1 Python/3.x.y" on every answer, error pages included.
+        for method in ("GET", "PATCH"):  # PATCH: http.server's own 501 page
+            conn = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1], timeout=10)
+            conn.request(method, "/health")
+            res = conn.getresponse()
+            res.read()
+            conn.close()
+            self.assertNotIn("Python", res.getheader("Server"), method)
+
     def raw(self, method, path, body=b"", headers=None):
         conn = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1], timeout=10)
         conn.request(method, path, body=body, headers=headers or {})
@@ -456,6 +511,32 @@ class HttpTest(unittest.TestCase):
         status, res = self.raw("DELETE", "/api/session", headers=web)
         self.assertEqual(200, status)
         self.assertIn("Max-Age=0", res.getheader("Set-Cookie"))
+
+    def test_a_page_on_another_site_cant_write_with_the_browsers_password(self):
+        # A browser sends the password it was once given with a form another site posts here,
+        # and a text/plain form body can be JSON.
+        forged = json.dumps({"habits": [{"uuid": "forged", "mtime": 1, "data": {"name": "Junk"}}]}).encode()
+        def post(path, body, headers):
+            headers = {"Authorization": self.basic(), "Content-Type": "text/plain", **headers}
+            return self.raw("POST", path, body, headers)[0]
+        for elsewhere in ({"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.example"},
+                          {"Sec-Fetch-Site": "same-site", "Origin": "https://other.homeserver.example"},
+                          {"Origin": "https://evil.example"}):  # a browser from before Sec-Fetch-Site
+            self.assertEqual(403, post("/api/changes", forged, elsewhere), elsewhere)
+            self.assertEqual(403, post("/api/session", b"", elsewhere), elsewhere)
+        self.assertNotIn("forged", self.request("/api/changes?since=0")[1])
+        # Reads, this host's own pages (behind the proxy too), the extensions and the apps still do.
+        self.assertEqual(200, self.raw("GET", "/api/changes?since=0", headers={
+            "Authorization": self.basic(), "Sec-Fetch-Site": "cross-site"})[0])
+        empty = json.dumps({"entries": []}).encode()
+        for ours in ({"Sec-Fetch-Site": "same-origin", "Origin": "https://homeserver.example"},
+                     {"Origin": f"http://127.0.0.1:{self.httpd.server_address[1]}"},
+                     {"Origin": "https://HomeServer.example", "X-Forwarded-Host": "homeserver.example:443"},
+                     {"Sec-Fetch-Site": "cross-site", "Origin": "chrome-extension://abcdefghijklmnop"},
+                     {"Sec-Fetch-Site": "cross-site", "Origin": "moz-extension://8c2f5e7a-0000-4000-8000-000000000000"},
+                     {"Sec-Fetch-Site": "none"},
+                     {}):
+            self.assertEqual(200, post("/api/changes", empty, ours), ours)
 
     def test_pages_cannot_be_framed_or_sniffed(self):
         _, res = self.raw("GET", "/")

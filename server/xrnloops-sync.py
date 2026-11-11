@@ -165,6 +165,30 @@ def guesser(addr):
     return f"{ipaddress.ip_address(int(ip) >> 64 << 64)}/64"
 
 
+def from_another_site(headers):
+    """Whether a request came from another site's page. A browser that was once given the password
+    in its own sign-in box sends it again with a form any site posts here, and a text/plain form
+    body can be JSON. The browser says where the page was in Sec-Fetch-Site; one too old for that
+    still sends Origin with a POST, held against this host's name (or the proxy's X-Forwarded-Host).
+    The apps and curl send neither. The extensions' pages are another origin, and may write."""
+    origin = (headers.get("Origin") or "").strip().lower()
+    if origin.startswith(("chrome-extension://", "moz-extension://")):
+        return False
+    site = (headers.get("Sec-Fetch-Site") or "").strip().lower()
+    if site:
+        return site in ("cross-site", "same-site")
+    scheme, _, host = origin.partition("://")
+    if scheme not in ("http", "https"):
+        return False  # no Origin, or "null"
+    ours = [headers.get("Host") or "", *(headers.get("X-Forwarded-Host") or "").split(",")]
+    return host_key(host) not in {host_key(h) for h in ours if h.strip()}
+
+
+def host_key(host):
+    """A host as Origin and Host both write it: lower case, without the default port."""
+    return host.strip().lower().removesuffix(":443").removesuffix(":80")
+
+
 def locked_out(addr):
     """Whether this address has used up its wrong logins for now."""
     now = time.monotonic()
@@ -577,13 +601,30 @@ def store_for(user):
 
 # ---- HTTP ----------------------------------------------------------------------------------
 
+# The request line and X-Forwarded-For come from the caller. Written to the log as they are, a
+# control character in them could rewrite the terminal the log is read in, or (a \r) start a line
+# of its own for xrnhub's log reader. Escaped as http.server's own log_message, replaced here, does.
+LOG_ESCAPES = str.maketrans({**{c: f"\\x{c:02x}" for c in (*range(0x20), *range(0x7F, 0xA0))}, "\\": "\\\\"})
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "xrnloops-sync/1"
+    sys_version = ""  # the Server header named the Python version too
+    timeout = 120  # seconds of silence before a connection is dropped, so a stalled client can't hold a thread
 
     def log_message(self, fmt, *a):
         headers = getattr(self, "headers", None)  # none yet on a request line that didn't parse
         who = headers.get("X-Forwarded-For", self.client_address[0]) if headers else "-"
-        sys.stderr.write(f"{who} {fmt % a}\n")
+        sys.stderr.write(f"{who} {fmt % a}".translate(LOG_ESCAPES) + "\n")
+
+    def parse_request(self):
+        if not super().parse_request():
+            return False
+        # Before the login, which a page elsewhere can have the browser pass for it.
+        if self.command not in ("GET", "HEAD", "OPTIONS") and from_another_site(self.headers):
+            self.send(403, "refused: sent from another site's page")
+            return False
+        return True
 
     def route(self):
         path, _, query = self.path.partition("?")
@@ -624,12 +665,14 @@ class Handler(BaseHTTPRequestHandler):
         addr = client_address(self)
         password = self.headers.get("Authorization")
         if not (reserve_guess(addr) if password else not locked_out(addr)):
-            time.sleep(FAIL_DELAY_S)
+            if password:
+                time.sleep(FAIL_DELAY_S)
             self.send(429, "too many wrong passwords; try again later", headers={"Retry-After": str(FAIL_WINDOW_S)})
             return None
         user = check_login(password)
         if not user:
-            time.sleep(FAIL_DELAY_S)
+            if password:  # a request with none guessed nothing, and needn't hold a thread for it
+                time.sleep(FAIL_DELAY_S)
             # The web app logs in with its own form: a challenge would pop the browser's dialog.
             challenge = {} if self.headers.get("X-Xrn-Client") else {"WWW-Authenticate": 'Basic realm="xrnloops"'}
             self.send(401, "login required", headers=challenge)
