@@ -425,6 +425,16 @@ class HttpTest(unittest.TestCase):
             s.sendall(b"GARBAGE\r\n\r\n")
             self.assertIn(b"400", s.recv(200))
 
+    def test_a_connection_that_goes_quiet_is_let_go(self):
+        # With no timeout, a client that stopped half way through its request held a thread for good.
+        self.assertGreater(srv.Handler.timeout, srv.MAX_WAIT_S)  # and longer than any long poll
+        with unittest.mock.patch.object(srv.Handler, "timeout", 0.3):
+            with socket.create_connection(("127.0.0.1", self.httpd.server_address[1]), timeout=10) as s:
+                s.sendall(b"GET /api/changes?since=0 HTTP/1.1\r\nHost: x\r\n")  # and then nothing
+                start = time.monotonic()
+                self.assertEqual(b"", s.recv(100))
+                self.assertLess(time.monotonic() - start, 5)
+
     def raw(self, method, path, body=b"", headers=None):
         conn = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1], timeout=10)
         conn.request(method, path, body=body, headers=headers or {})

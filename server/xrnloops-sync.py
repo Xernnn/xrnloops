@@ -603,6 +603,7 @@ def store_for(user):
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "xrnloops-sync/1"
+    timeout = 120  # seconds of silence before a connection is dropped, so a stalled client can't hold a thread
 
     def log_message(self, fmt, *a):
         headers = getattr(self, "headers", None)  # none yet on a request line that didn't parse
