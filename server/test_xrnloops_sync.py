@@ -457,6 +457,32 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(200, status)
         self.assertIn("Max-Age=0", res.getheader("Set-Cookie"))
 
+    def test_a_page_on_another_site_cant_write_with_the_browsers_password(self):
+        # A browser sends the password it was once given with a form another site posts here,
+        # and a text/plain form body can be JSON.
+        forged = json.dumps({"habits": [{"uuid": "forged", "mtime": 1, "data": {"name": "Junk"}}]}).encode()
+        def post(path, body, headers):
+            headers = {"Authorization": self.basic(), "Content-Type": "text/plain", **headers}
+            return self.raw("POST", path, body, headers)[0]
+        for elsewhere in ({"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.example"},
+                          {"Sec-Fetch-Site": "same-site", "Origin": "https://other.homeserver.example"},
+                          {"Origin": "https://evil.example"}):  # a browser from before Sec-Fetch-Site
+            self.assertEqual(403, post("/api/changes", forged, elsewhere), elsewhere)
+            self.assertEqual(403, post("/api/session", b"", elsewhere), elsewhere)
+        self.assertNotIn("forged", self.request("/api/changes?since=0")[1])
+        # Reads, this host's own pages (behind the proxy too), the extensions and the apps still do.
+        self.assertEqual(200, self.raw("GET", "/api/changes?since=0", headers={
+            "Authorization": self.basic(), "Sec-Fetch-Site": "cross-site"})[0])
+        empty = json.dumps({"entries": []}).encode()
+        for ours in ({"Sec-Fetch-Site": "same-origin", "Origin": "https://homeserver.example"},
+                     {"Origin": f"http://127.0.0.1:{self.httpd.server_address[1]}"},
+                     {"Origin": "https://HomeServer.example", "X-Forwarded-Host": "homeserver.example:443"},
+                     {"Sec-Fetch-Site": "cross-site", "Origin": "chrome-extension://abcdefghijklmnop"},
+                     {"Sec-Fetch-Site": "cross-site", "Origin": "moz-extension://8c2f5e7a-0000-4000-8000-000000000000"},
+                     {"Sec-Fetch-Site": "none"},
+                     {}):
+            self.assertEqual(200, post("/api/changes", empty, ours), ours)
+
     def test_pages_cannot_be_framed_or_sniffed(self):
         _, res = self.raw("GET", "/")
         self.assertEqual("DENY", res.getheader("X-Frame-Options"))
