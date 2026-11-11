@@ -293,6 +293,18 @@ class HttpTest(unittest.TestCase):
         self.assertEqual("203.0.113.40", srv.guesser("::ffff:203.0.113.40"))
         self.assertEqual("not an address", srv.guesser("not an address"))
 
+    def test_a_name_that_isnt_there_costs_a_check_like_one_that_is(self):
+        import bcrypt
+
+        def checks(login):
+            header = "Basic " + base64.b64encode(login.encode()).decode()
+            with unittest.mock.patch.object(bcrypt, "checkpw", wraps=bcrypt.checkpw) as checkpw:
+                self.assertIsNone(srv.check_login(header))
+            return checkpw.call_count
+        self.assertEqual(1, checks("sonn:nope"))
+        self.assertEqual(1, checks("nobody:nope"))  # none: the answer came sooner, and said so
+        self.assertIsNone(srv.check_login("Basic " + base64.b64encode(b"nobody:secret").decode()))
+
     def test_guesses_sent_at_once_still_stop_at_the_limit(self):
         def slow_wrong(header):  # bcrypt takes a while: every guess is in flight at once
             time.sleep(0.3)
