@@ -46,7 +46,6 @@ import org.isoron.uhabits.core.commands.CommandRunner
 import org.isoron.uhabits.core.commands.CreateHabitCommand
 import org.isoron.uhabits.core.commands.EditHabitCommand
 import org.isoron.uhabits.core.models.Frequency
-import org.isoron.uhabits.core.models.Habit
 import org.isoron.uhabits.core.models.HabitType
 import org.isoron.uhabits.core.models.MAX_STEP
 import org.isoron.uhabits.core.models.MIN_STEP
@@ -126,7 +125,6 @@ class EditHabitActivity : AppCompatActivity() {
             }
             binding.nameInput.setText(habit.name)
             binding.questionInput.setText(habit.question)
-            binding.notesInput.setText(habit.description)
             binding.unitInput.setText(habit.unit)
             binding.targetInput.setText(habit.targetValue.toString())
             binding.stepInput.setText(showStep(habit.step))
@@ -292,7 +290,6 @@ class EditHabitActivity : AppCompatActivity() {
         listOf(
             binding.nameInput,
             binding.questionInput,
-            binding.notesInput,
             binding.unitInput,
             binding.targetInput,
             binding.stepInput
@@ -311,32 +308,21 @@ class EditHabitActivity : AppCompatActivity() {
 
     private fun save() {
         val component = (application as HabitsApplication).component
-        val habit = component.modelFactory.buildHabit()
-
-        var original: Habit? = null
-        if (habitId >= 0) {
-            original = component.habitList.getById(habitId)!!
-            habit.copyFrom(original)
-        }
-
-        habit.name = binding.nameInput.text.trim().toString()
-        habit.question = binding.questionInput.text.trim().toString()
-        habit.description = binding.notesInput.text.trim().toString()
-        habit.color = color
-        if (reminderHour >= 0) {
-            habit.reminder = Reminder(reminderHour, reminderMin, reminderDays)
-        } else {
-            habit.reminder = null
-        }
-
-        habit.frequency = Frequency(freqNum, freqDen)
-        if (habitType == HabitType.NUMERICAL) {
-            habit.targetValue = binding.targetInput.text.toString().toDouble()
-            habit.targetType = targetType
-            habit.unit = binding.unitInput.text.trim().toString()
-            habit.step = typedStep()!! // validate() checked it
-        }
-        habit.type = habitType
+        // xrnloops: the habit as stored now, so its notes (no box since 2026-11-15) go along (HabitForm).
+        val stored = if (habitId >= 0) component.habitList.getById(habitId)!! else null
+        val numerical = habitType == HabitType.NUMERICAL
+        val habit = HabitForm(
+            type = habitType,
+            name = binding.nameInput.text.trim().toString(),
+            question = binding.questionInput.text.trim().toString(),
+            color = color,
+            frequency = Frequency(freqNum, freqDen),
+            reminder = if (reminderHour >= 0) Reminder(reminderHour, reminderMin, reminderDays) else null,
+            targetValue = if (numerical) binding.targetInput.text.toString().toDouble() else 0.0,
+            targetType = targetType,
+            unit = binding.unitInput.text.trim().toString(),
+            step = if (numerical) typedStep()!! else 1.0 // validate() checked it
+        ).habit(component.modelFactory, stored)
 
         val command = if (habitId >= 0) {
             EditHabitCommand(

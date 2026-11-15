@@ -68,10 +68,6 @@ object EditHabitSteps {
         typeTextWithId(R.id.questionInput, name)
     }
 
-    fun typeDescription(description: String) {
-        typeTextWithId(R.id.notesInput, description)
-    }
-
     fun setReminder() {
         Espresso.onView(ViewMatchers.withId(R.id.reminderTimePicker)).perform(ViewActions.click())
         Espresso.onView(ViewMatchers.withId(R.id.done_button)).perform(ViewActions.click())

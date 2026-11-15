@@ -47,10 +47,7 @@
                 android:id="@+id/subtitleCard"
                 style="@style/ShowHabit.Subtitle" />
 
-            <org.isoron.uhabits.activities.habits.show.views.NotesCardView
-                android:id="@+id/notesCard"
-                style="@style/Card"
-                android:gravity="center" />
+            <!-- xrnloops: no Notes card since 2026-11-15 (XRNLOOPS.md). -->
 
             <org.isoron.uhabits.activities.habits.show.views.OverviewCardView
                 android:id="@+id/overviewCard"

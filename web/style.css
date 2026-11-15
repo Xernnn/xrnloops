@@ -373,11 +373,10 @@ input[type="checkbox"]:disabled { opacity: 0.5; cursor: default; }
 .form legend { float: left; width: 100%; font-size: 14px; font-weight: 700; color: var(--muted); padding: 0; margin-bottom: 2px; }
 .field { display: grid; gap: 6px; font-size: 14px; }
 .field > span { font-size: 13px; color: var(--muted); }
-input[type="text"], input[type="number"], input[type="password"], select, textarea {
+input[type="text"], input[type="number"], input[type="password"], select {
   width: 100%; border: 0; background: var(--surface-2); border-radius: 12px; padding: 10px 13px; color: var(--text);
 }
-textarea { min-height: 76px; resize: vertical; }
-input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
 .inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .inline input[type="number"] { width: 96px; }
 .inline select { width: auto; }

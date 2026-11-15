@@ -37,7 +37,6 @@ import org.isoron.uhabits.acceptance.steps.CommonSteps.verifyShowsScreen
 import org.isoron.uhabits.acceptance.steps.EditHabitSteps.clickSave
 import org.isoron.uhabits.acceptance.steps.EditHabitSteps.pickColor
 import org.isoron.uhabits.acceptance.steps.EditHabitSteps.pickFrequency
-import org.isoron.uhabits.acceptance.steps.EditHabitSteps.typeDescription
 import org.isoron.uhabits.acceptance.steps.EditHabitSteps.typeName
 import org.isoron.uhabits.acceptance.steps.EditHabitSteps.typeQuestion
 import org.isoron.uhabits.acceptance.steps.ListHabitsSteps.MenuItem.ADD
@@ -78,20 +77,10 @@ class HabitsTest : BaseUserInterfaceTest() {
         verifyDoesNotDisplayText("Half typed")
     }
 
+    // xrnloops: the form has no Notes box since 2026-11-15, so no test types in one (XRNLOOPS.md).
     @Test
     @Throws(Exception::class)
     fun shouldCreateHabit() {
-        shouldCreateHabit("this is a test description")
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun shouldCreateHabitBlankDescription() {
-        shouldCreateHabit("")
-    }
-
-    @Throws(Exception::class)
-    private fun shouldCreateHabit(description: String) {
         launchApp()
         verifyShowsScreen(LIST_HABITS)
         clickMenu(ADD)
@@ -101,7 +90,6 @@ class HabitsTest : BaseUserInterfaceTest() {
         val testName = "Hello world"
         typeName(testName)
         typeQuestion("Did you say hello to the world today?")
-        typeDescription(description)
         pickFrequency()
         pickColor(5)
         clickSave()
@@ -133,17 +121,6 @@ class HabitsTest : BaseUserInterfaceTest() {
     @Test
     @Throws(Exception::class)
     fun shouldEditHabit() {
-        shouldEditHabit("this is a test description")
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun shouldEditHabitBlankDescription() {
-        shouldEditHabit("")
-    }
-
-    @Throws(Exception::class)
-    private fun shouldEditHabit(description: String) {
         launchApp()
         verifyShowsScreen(LIST_HABITS)
         longClickText("Track time")
@@ -151,7 +128,6 @@ class HabitsTest : BaseUserInterfaceTest() {
         verifyShowsScreen(EDIT_HABIT)
         typeName("Take a walk")
         typeQuestion("Did you take a walk today?")
-        typeDescription(description)
         clickSave()
         verifyShowsScreen(LIST_HABITS)
         verifyDisplaysTextInSequence("Wake up early", "Take a walk", "Meditate")
