@@ -24,6 +24,7 @@ import dev.mokkery.answering.returns
 import dev.mokkery.every
 import dev.mokkery.matcher.any
 import dev.mokkery.mock
+import org.isoron.platform.time.DayOfWeek
 import org.isoron.platform.time.LocalDate
 import org.isoron.platform.time.getToday
 import org.isoron.uhabits.core.BaseUnitTest
@@ -32,9 +33,11 @@ import org.isoron.uhabits.core.models.Habit
 import org.isoron.uhabits.core.preferences.Preferences
 import org.isoron.uhabits.core.ui.callbacks.CheckMarkDialogCallback
 import org.isoron.uhabits.core.ui.callbacks.NumberPickerCallback
+import org.isoron.uhabits.core.ui.views.LightTheme
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class HistoryCardPresenterTest : BaseUnitTest() {
     private val prefs: Preferences = mock()
@@ -55,12 +58,12 @@ class HistoryCardPresenterTest : BaseUnitTest() {
 
     private fun presenter(habit: Habit) = HistoryCardPresenter(commandRunner, habit, habitList, prefs, screen)
 
-    private fun openNoteSheet(date: LocalDate): CheckMarkDialogCallback {
+    private fun openDaySheet(date: LocalDate): CheckMarkDialogCallback {
         var callback: CheckMarkDialogCallback? = null
         every {
-            screen.showCheckmarkPopup(any(), any(), any(), any(), any(), any())
+            screen.showCheckmarkPopup(any(), any(), any(), any(), any())
         } calls { args ->
-            callback = args.arg<CheckMarkDialogCallback>(5)
+            callback = args.arg<CheckMarkDialogCallback>(4)
             Unit
         }
         presenter(yesNo).onDateShortPress(date)
@@ -70,51 +73,49 @@ class HistoryCardPresenterTest : BaseUnitTest() {
     private fun openNumberSheet(date: LocalDate): NumberPickerCallback {
         var callback: NumberPickerCallback? = null
         every {
-            screen.showNumberPopup(any(), any(), any(), any(), any())
+            screen.showNumberPopup(any(), any(), any(), any())
         } calls { args ->
-            callback = args.arg<NumberPickerCallback>(4)
+            callback = args.arg<NumberPickerCallback>(3)
             Unit
         }
         presenter(number).onDateShortPress(date)
         return callback!!
     }
 
-    private fun syncChanges(habit: Habit, date: LocalDate, value: Int) {
-        habit.originalEntries.add(Entry(date, value))
+    private fun syncChanges(habit: Habit, date: LocalDate, value: Int, notes: String = "") {
+        habit.originalEntries.add(Entry(date, value, notes))
         habit.recompute()
     }
 
+    // xrnloops: the sheet has no note since 2026-11-15; what it writes keeps the day's, even one
+    // sync wrote while it was open (XRNLOOPS.md).
     @Test
-    fun testANoteAloneKeepsWhatSyncChanged() {
+    fun testAPickedValueKeepsTheDaysNote() {
         val today = getToday()
-        val shown = yesNo.computedEntries.get(today).value
-        val sheet = openNoteSheet(today)
-        syncChanges(yesNo, today, Entry.SKIP)
-        sheet.onNotesSaved(shown, "written meanwhile")
-        val entry = yesNo.computedEntries.get(today)
-        assertEquals(Entry.SKIP, entry.value)
-        assertEquals("written meanwhile", entry.notes)
+        syncChanges(yesNo, today, Entry.YES_MANUAL, "first")
+        val sheet = openDaySheet(today)
+        syncChanges(yesNo, today, Entry.SKIP, "written meanwhile")
+        sheet.onValuePicked(Entry.NO)
+        assertEquals(Entry(today, Entry.NO, "written meanwhile"), yesNo.originalEntries.get(today))
     }
 
     @Test
     fun testAPickedValueStillWins() {
         val today = getToday()
-        val sheet = openNoteSheet(today)
+        val sheet = openDaySheet(today)
         syncChanges(yesNo, today, Entry.SKIP)
-        sheet.onNotesSaved(Entry.NO, "")
+        sheet.onValuePicked(Entry.NO)
         assertEquals(Entry.NO, yesNo.computedEntries.get(today).value)
     }
 
     @Test
-    fun testANumberNoteAloneKeepsWhatSyncChanged() {
+    fun testANumberKeepsTheDaysNote() {
         val today = getToday()
-        val shown = number.computedEntries.get(today).value / 1000.0
+        syncChanges(number, today, 3000, "first")
         val sheet = openNumberSheet(today)
-        syncChanges(number, today, 7000)
-        sheet.onNumberPicked(shown, "written meanwhile")
-        val entry = number.computedEntries.get(today)
-        assertEquals(7000, entry.value)
-        assertEquals("written meanwhile", entry.notes)
+        syncChanges(number, today, 7000, "written meanwhile")
+        sheet.onNumberPicked(8.5)
+        assertEquals(Entry(today, 8500, "written meanwhile"), number.originalEntries.get(today))
     }
 
     @Test
@@ -123,7 +124,25 @@ class HistoryCardPresenterTest : BaseUnitTest() {
         val shown = number.computedEntries.get(today).value / 1000.0
         val sheet = openNumberSheet(today)
         syncChanges(number, today, 7000)
-        sheet.onNumberPicked(shown + 1.5, "")
+        sheet.onNumberPicked(shown + 1.5)
         assertEquals(((shown + 1.5) * 1000).toInt(), number.computedEntries.get(today).value)
+    }
+
+    @Test
+    fun testATapThatTogglesKeepsTheDaysNote() {
+        every { prefs.isShortToggleEnabled } returns true
+        every { prefs.isSkipEnabled } returns false
+        every { prefs.areQuestionMarksEnabled } returns false
+        val today = getToday()
+        syncChanges(yesNo, today, Entry.YES_MANUAL, "kept")
+        presenter(yesNo).onDateShortPress(today)
+        assertEquals(Entry(today, Entry.NO, "kept"), yesNo.originalEntries.get(today))
+    }
+
+    @Test
+    fun testTheCalendarShowsNoDotForANote() {
+        syncChanges(yesNo, getToday(), Entry.YES_MANUAL, "kept")
+        val state = HistoryCardPresenter.buildState(yesNo, DayOfWeek.SUNDAY, LightTheme())
+        assertTrue(state.notesIndicators.none { it })
     }
 }

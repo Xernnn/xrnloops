@@ -72,12 +72,6 @@ class NumberPanelView(
             setupButtons()
         }
 
-    var notes = arrayOf<String>()
-        set(values) {
-            field = values
-            setupButtons()
-        }
-
     var onEdit: (LocalDate) -> Unit = { _ -> }
         set(value) {
             field = value
@@ -85,7 +79,7 @@ class NumberPanelView(
         }
 
     // xrnloops: a value picked in the flick menu (XRNLOOPS.md).
-    var onToggle: (LocalDate, Int, String) -> Unit = { _, _, _ -> }
+    var onToggle: (LocalDate, Int) -> Unit = { _, _ -> }
         set(value) {
             field = value
             setupButtons()
@@ -103,16 +97,12 @@ class NumberPanelView(
                 index + dataOffset < values.size -> values[index + dataOffset]
                 else -> 0.0
             }
-            button.notes = when {
-                index + dataOffset < notes.size -> notes[index + dataOffset]
-                else -> ""
-            }
             button.color = color
             button.targetType = targetType
             button.threshold = threshold
             button.units = units
             button.onEdit = { onEdit(date) }
-            button.onToggle = { value, notes -> onToggle(date, value, notes) } // xrnloops
+            button.onToggle = { value -> onToggle(date, value) } // xrnloops
         }
     }
 }

@@ -38,7 +38,6 @@ import org.isoron.uhabits.core.preferences.Preferences
 import org.isoron.uhabits.inject.ActivityContext
 import org.isoron.uhabits.utils.InterfaceUtils.getDimension
 import org.isoron.uhabits.utils.dim
-import org.isoron.uhabits.utils.drawNotesIndicator
 import org.isoron.uhabits.utils.getFontAwesome
 import org.isoron.uhabits.utils.sres
 import org.isoron.uhabits.xrntap.NumberFlick
@@ -104,16 +103,10 @@ class NumberButtonView(
             field = value
             invalidate()
         }
-    var notes = ""
-        set(value) {
-            field = value
-            invalidate()
-        }
-
     var onEdit: () -> Unit = { }
 
     /** xrnloops: a value picked in the flick menu, stored as Loop stores it (×1000). */
-    var onToggle: (Int, String) -> Unit = { _, _ -> }
+    var onToggle: (Int) -> Unit = { _ -> }
 
     private var drawer: Drawer = Drawer(context)
 
@@ -155,8 +148,6 @@ class NumberButtonView(
 
         private val lowContrast: Int
         private val mediumContrast: Int
-
-        private val pNotesIndicator = Paint()
 
         private val paint = TextPaint().apply {
             typeface = getFontAwesome()
@@ -246,14 +237,7 @@ class NumberButtonView(
                 rect.offset(0f, 1.3f * em)
                 canvas.drawText(trimmedUnits, rect.centerX(), rect.centerY(), pUnit)
             }
-
-            drawNotesIndicator(
-                pNotesIndicator = pNotesIndicator,
-                canvas = canvas,
-                color = color,
-                size = em,
-                notes = notes
-            )
+            // xrnloops: no dot for a day's note, which nothing shows since 2026-11-15.
         }
     }
 }

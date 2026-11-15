@@ -33,9 +33,9 @@ import org.isoron.uhabits.xrnlook.XrnFonts
 
 /**
  * The flick menu on a number habit's day, laid out like the yes/no one ([CheckmarkFlick]): up
- * the target ("8"), down 0, left – (skip), right Loop's number dialog for any other amount and
- * the note, and letting go in the middle clears the day to ?. A tap still opens the dialog, as
- * in Loop. Keys whose amount meets the target wear the habit's colour.
+ * the target ("8"), down 0, left – (skip), right the day's sheet for any other amount, and
+ * letting go in the middle clears the day to ?. A tap still opens the sheet, as Loop's dialog
+ * opened. Keys whose amount meets the target wear the habit's colour.
  */
 object NumberFlick {
 
@@ -67,7 +67,7 @@ object NumberFlick {
 
     private fun set(button: NumberButtonView, stored: Int) = with(button) {
         value = stored / 1000.0
-        onToggle(stored, notes)
+        onToggle(stored)
         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         Unit
     }

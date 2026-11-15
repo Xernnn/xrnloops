@@ -50,4 +50,21 @@ class CreateRepetitionCommandTest : BaseUnitTest() {
         entry = entries.get(today)
         assertEquals(100, entry.value.toLong())
     }
+
+    // xrnloops: nothing in the app writes a note since 2026-11-15, and a new value keeps the
+    // day's (XRNLOOPS.md): the one it has when the command runs, not when it was made.
+    @Test
+    fun testANewValueKeepsTheDaysNote() {
+        val write = CreateRepetitionCommand(habitList, habit, today, Entry.NO)
+        habit.originalEntries.add(Entry(today, Entry.YES_MANUAL, "written by sync meanwhile"))
+        write.run()
+        assertEquals(Entry(today, Entry.NO, "written by sync meanwhile"), habit.originalEntries.get(today))
+    }
+
+    @Test
+    fun testANoteGivenStillGoesIn() {
+        habit.originalEntries.add(Entry(today, Entry.YES_MANUAL, "old"))
+        CreateRepetitionCommand(habitList, habit, today, Entry.NO, "").run()
+        assertEquals("", habit.originalEntries.get(today).notes)
+    }
 }

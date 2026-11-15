@@ -117,13 +117,6 @@ class HabitCardView(
             numberPanel.threshold = value
         }
 
-    var notes
-        get() = checkmarkPanel.notes
-        set(values) {
-            checkmarkPanel.notes = values
-            numberPanel.notes = values
-        }
-
     var checkmarkPanel: CheckmarkPanelView
     private var numberPanel: NumberPanelView
     private var innerFrame: LinearLayout
@@ -171,7 +164,7 @@ class HabitCardView(
         }
 
         checkmarkPanel = checkmarkPanelFactory.create().apply {
-            onToggle = { date, value, notes ->
+            onToggle = { date, value ->
                 triggerRipple(date)
                 val location = getAbsoluteButtonLocation(date)
                 habit?.let {
@@ -179,7 +172,6 @@ class HabitCardView(
                         it,
                         date,
                         value,
-                        notes,
                         location.x,
                         location.y
                     )
@@ -200,10 +192,10 @@ class HabitCardView(
                 habit?.let { behavior.onEdit(it, date, location.x, location.y) }
             }
             // xrnloops: the number flick menu sets a value straight away (XRNLOOPS.md).
-            onToggle = { date, value, notes ->
+            onToggle = { date, value ->
                 triggerRipple(date)
                 val location = getAbsoluteButtonLocation(date)
-                habit?.let { behavior.onToggle(it, date, value, notes, location.x, location.y) }
+                habit?.let { behavior.onToggle(it, date, value, location.x, location.y) }
             }
         }
 

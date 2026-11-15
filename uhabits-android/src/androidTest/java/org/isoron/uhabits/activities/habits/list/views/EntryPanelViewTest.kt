@@ -77,7 +77,7 @@ class EntryPanelViewTest : BaseViewTest() {
     @Test
     fun testToggle() {
         val dates = mutableListOf<LocalDate>()
-        view.onToggle = { t, _, _ -> dates.add(t) }
+        view.onToggle = { t, _ -> dates.add(t) }
         // xrnloops: a tap toggles (when set to), a long press opens the day's sheet (XRNLOOPS.md).
         prefs.isShortToggleEnabled = true
         view.buttons[0].performClick()
@@ -90,7 +90,7 @@ class EntryPanelViewTest : BaseViewTest() {
     fun testToggle_withOffset() {
         val dates = mutableListOf<LocalDate>()
         view.dataOffset = 3
-        view.onToggle = { t, _, _ -> dates += t }
+        view.onToggle = { t, _ -> dates += t }
         prefs.isShortToggleEnabled = true // xrnloops, as above
         view.buttons[0].performClick()
         view.buttons[2].performClick()

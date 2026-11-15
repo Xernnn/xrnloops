@@ -18,18 +18,14 @@
  */
 package org.isoron.uhabits.core.ui.callbacks
 
+// xrnloops: a value only. The day's sheet has no note since 2026-11-15 (XRNLOOPS.md); what it
+// writes keeps the note the day has (CreateRepetitionCommand).
 fun interface NumberPickerCallback {
-    fun onNumberPicked(
-        newValue: Double,
-        notes: String
-    )
+    fun onNumberPicked(newValue: Double)
     fun onNumberPickerDismissed() {}
 }
 
 fun interface CheckMarkDialogCallback {
-    fun onNotesSaved(
-        value: Int,
-        notes: String
-    )
-    fun onNotesDismissed() {}
+    fun onValuePicked(value: Int)
+    fun onDismissed() {}
 }

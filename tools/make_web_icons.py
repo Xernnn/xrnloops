@@ -42,7 +42,7 @@ for name, cp in [("check", 0xF00C), ("times", 0xF00D), ("minus", 0xF068), ("ques
 
 ANDROID = "{http://schemas.android.com/apk/res/android}"
 icons = {}
-for name in ["lock", "lock_open", "note", "dialpad", "cloud_off", "open_in_new"]:
+for name in ["lock", "lock_open", "dialpad", "cloud_off", "open_in_new"]:
     root = ET.parse(f"{repo}/uhabits-android/src/main/res/drawable/xrn_ic_{name}.xml").getroot()
     paths = [p.get(ANDROID + "pathData") for p in root.iter("path")]
     icons[name.replace("_", "")] = " ".join(paths)

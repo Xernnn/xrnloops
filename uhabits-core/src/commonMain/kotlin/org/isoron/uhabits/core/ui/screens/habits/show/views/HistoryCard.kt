@@ -90,26 +90,17 @@ class HistoryCardPresenter(
         }
     }
 
+    // xrnloops: the day's sheet sets a value only, and every write here keeps the note the day
+    // has (CreateRepetitionCommand, XRNLOOPS.md).
     private fun showCheckmarkPopup(date: LocalDate) {
         val entry = habit.computedEntries.get(date)
         screen.showCheckmarkPopup(
             entry.value,
-            entry.notes,
             habit.color,
-            habit.name, // xrnloops: the note screen names the habit and the day (XRNLOOPS.md)
+            habit.name, // xrnloops: the sheet names the habit and the day (XRNLOOPS.md)
             date
-        ) { newValue, newNotes ->
-            // xrnloops: a note on its own keeps the day as it is now; sync may have changed it
-            val value = if (newValue == entry.value) habit.computedEntries.get(date).value else newValue
-            commandRunner.run(
-                CreateRepetitionCommand(
-                    habitList,
-                    habit,
-                    date,
-                    value,
-                    newNotes
-                )
-            )
+        ) { newValue ->
+            commandRunner.run(CreateRepetitionCommand(habitList, habit, date, newValue))
         }
     }
 
@@ -125,35 +116,20 @@ class HistoryCardPresenter(
                 habitList,
                 habit,
                 date,
-                nextValue,
-                entry.notes
+                nextValue
             )
         )
     }
 
     private fun showNumberPopup(date: LocalDate) {
         val entry = habit.computedEntries.get(date)
-        val oldValue = entry.value
         screen.showNumberPopup(
-            value = oldValue / 1000.0,
-            notes = entry.notes,
+            value = entry.value / 1000.0,
             habit = habit,
             date = date
-        ) { newValue: Double, newNotes: String ->
-            // xrnloops: a note on its own keeps the day as it is now; sync may have changed it
-            val thousands = when (newValue) {
-                oldValue / 1000.0 -> habit.computedEntries.get(date).value
-                else -> (newValue * 1000).roundToInt()
-            }
-            commandRunner.run(
-                CreateRepetitionCommand(
-                    habitList,
-                    habit,
-                    date,
-                    thousands,
-                    newNotes
-                )
-            )
+        ) { newValue: Double ->
+            val thousands = (newValue * 1000).roundToInt()
+            commandRunner.run(CreateRepetitionCommand(habitList, habit, date, thousands))
         }
     }
 
@@ -190,12 +166,8 @@ class HistoryCardPresenter(
                     }
                 }
             }
-            val notesIndicators = entries.map {
-                when (it.notes) {
-                    "" -> false
-                    else -> true
-                }
-            }
+            // xrnloops: no dot for a day's note, which nothing shows since 2026-11-15 (XRNLOOPS.md).
+            val notesIndicators = emptyList<Boolean>()
 
             return HistoryCardState(
                 color = habit.color,
@@ -214,14 +186,12 @@ class HistoryCardPresenter(
         fun showFeedback()
         fun showNumberPopup(
             value: Double,
-            notes: String,
             habit: Habit, // xrnloops
             date: LocalDate, // xrnloops
             callback: NumberPickerCallback
         )
         fun showCheckmarkPopup(
             selectedValue: Int,
-            notes: String,
             color: PaletteColor,
             habitName: String, // xrnloops
             date: LocalDate, // xrnloops

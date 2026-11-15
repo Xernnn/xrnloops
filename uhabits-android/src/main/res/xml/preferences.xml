@@ -25,7 +25,7 @@
             android:title="@string/interface_preferences">
 
         <!-- xrnloops (XRNLOOPS.md): what a tap does, in place of Loop's "Toggle with short press"
-             switch (pref_short_toggle), which xrntap/XrnTap.kt keeps in step. -->
+             switch (pref_short_toggle), which xrntap/XrnTap.kt keeps on. -->
         <ListPreference
                 android:dialogTitle="@string/xrntap_title"
                 android:entries="@array/xrntap_entries"

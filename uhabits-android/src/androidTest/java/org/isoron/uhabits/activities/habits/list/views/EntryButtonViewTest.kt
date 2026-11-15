@@ -44,7 +44,7 @@ class EntryButtonViewTest : BaseViewTest() {
         view = component.getEntryButtonViewFactory().create().apply {
             value = Entry.NO
             color = PaletteUtils.getAndroidTestColor(5)
-            onToggle = { _, _ -> toggled = true }
+            onToggle = { _ -> toggled = true }
             onEdit = { edited = true }
         }
         measureView(view, dpToPixels(48), dpToPixels(48))
@@ -68,11 +68,13 @@ class EntryButtonViewTest : BaseViewTest() {
         assertRendersUnchecked()
     }
 
+    // xrnloops: a tap ticks or cycles, as "Tap on a day" says (XrnTap); the choice that opened
+    // the day's note went on 2026-11-15, and Loop's switch alone no longer opens anything.
     @Test
     fun testClick_withShortToggleDisabled() {
         prefs.isShortToggleEnabled = false
         view.performClick()
-        assertTrue(!toggled and edited)
+        assertTrue(toggled and !edited)
     }
 
     @Test

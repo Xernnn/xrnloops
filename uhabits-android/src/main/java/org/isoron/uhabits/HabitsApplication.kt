@@ -34,6 +34,7 @@ import org.isoron.uhabits.xrnrule.TodayRefresher
 import org.isoron.uhabits.xrnrule.XrnruleLinks
 import org.isoron.uhabits.xrnrule.XrnruleNotifier
 import org.isoron.uhabits.xrnsync.XrnSync
+import org.isoron.uhabits.xrntap.XrnTap
 import java.io.File
 
 /**
@@ -93,6 +94,7 @@ class HabitsApplication : Application() {
         XrnruleLinks(context).start(this)
         xrnruleNotifier.startListening()
         registerActivityLifecycleCallbacks(TodayRefresher(component.midnightTimer))
+        XrnTap.action(context) // settles "Tap on a day" before the habit page's calendar reads it
         XrnSync(context, habitList, component.modelFactory, component.commandRunner, component.preferences, notificationTray).start(this)
         ready = true
 

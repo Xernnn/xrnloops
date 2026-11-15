@@ -67,22 +67,23 @@ import java.util.TimeZone
 import kotlin.math.roundToInt
 
 /**
- * A habit's day: its value and its note, in a sheet from the bottom. Replaces Loop's checkmark
- * popup and number box everywhere they showed (the list, the habit page's calendar, a reminder's
- * edit). A number day gets the amount and quick keys in place of the four value buttons; both
- * work in entry values, where an amount is stored ×1000, and the web app's sheet has the same keys.
+ * A habit's day, in a sheet from the bottom. Replaces Loop's checkmark popup and number box
+ * everywhere they showed (the list, the habit page's calendar, a reminder's edit). A yes/no day
+ * gets Done, Not done, Skip and Clear; a number day the amount, quick keys and Save. Both work in
+ * entry values, where an amount is stored ×1000, and the web app's number sheet has the same keys.
  *
- * As in Loop's popups, picking a value saves it with the note as it stands. Closing the sheet any
- * other way keeps what was typed, a new amount or a changed note, so typing is never lost; only
- * Save or Clear empties a day, never a box left blank on the way out.
+ * Named for the day's note, which it had until 2026-11-15. It sets the value only: the day keeps
+ * its note ([org.isoron.uhabits.core.commands.CreateRepetitionCommand]). Picking a value saves
+ * it. Closing a number sheet any way but Save keeps an amount that was typed, so typing is never
+ * lost; only Save or Clear empties a day, never a box left blank on the way out, and an amount
+ * nobody changed writes nothing, so it can't put back one sync changed meanwhile.
  */
 class NoteSheet : BottomSheetDialogFragment() {
 
-    private var onSave: ((Int, String) -> Unit)? = null
+    private var onSave: ((Int) -> Unit)? = null
     private lateinit var view: XrnnoteSheetBinding
     private var saved = false
     private var originalValue = UNKNOWN
-    private var originalNote = ""
     private var originalAmount = ""
 
     override fun getTheme() = R.style.XrnNoteSheet
@@ -98,14 +99,11 @@ class NoteSheet : BottomSheetDialogFragment() {
         val args = requireArguments()
         val color = args.getInt(ARG_COLOR)
         originalValue = args.getInt(ARG_VALUE)
-        originalNote = args.getString(ARG_NOTE).orEmpty()
 
         view.title.text = args.getString(ARG_NAME).orEmpty()
         view.title.setTextColor(color)
         view.title.visibility = if (view.title.text.isBlank()) View.GONE else View.VISIBLE
         view.date.text = describe(LocalDate(args.getInt(ARG_DAYS)))
-        view.note.setText(originalNote)
-        view.noteLayout.setBoxStrokeColorStateList(ColorStateList.valueOf(color))
 
         val res = StyledResources(requireContext())
         val faint = res.getColor(R.attr.contrast60)
@@ -119,10 +117,7 @@ class NoteSheet : BottomSheetDialogFragment() {
         }
 
         view.save.setOnClickListener {
-            when {
-                isNumber -> save(amount())
-                note() != originalNote -> save(originalValue)
-            }
+            if (amountChanged()) amount()?.let(::save)
             dismiss()
         }
         // Edge to edge: keep the button above the navigation bar. The keyboard is the window's
@@ -144,14 +139,8 @@ class NoteSheet : BottomSheetDialogFragment() {
         val dialog = dialog as? BottomSheetDialog ?: return
         dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
         dialog.behavior.skipCollapsed = true
-        val focused = when {
-            requireArguments().getBoolean(ARG_FOCUS) -> view.note.requestFocus().also {
-                view.note.setSelection(view.note.length())
-            }
-            isNumber -> view.amount.requestFocus().also { view.amount.selectAll() }
-            else -> false
-        }
-        if (focused) {
+        if (isNumber && view.amount.requestFocus()) {
+            view.amount.selectAll()
             dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
         }
     }
@@ -159,22 +148,20 @@ class NoteSheet : BottomSheetDialogFragment() {
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
         if (saved || !::view.isInitialized) return
-        when {
-            amountTyped() -> save(amount())
-            note() != originalNote -> save(originalValue)
-        }
+        if (amountTyped()) amount()?.let(::save)
     }
 
-    private fun amountTyped(): Boolean {
-        val text = view.amount.text?.toString().orEmpty()
-        return isNumber && text.isNotEmpty() && text != originalAmount
-    }
+    private fun amountText() = view.amount.text?.toString().orEmpty()
 
-    private fun note() = view.note.text?.toString()?.trim().orEmpty()
+    /** Save: anything else in the box than it opened with, a blank box too (no amount). */
+    private fun amountChanged() = isNumber && amountText() != originalAmount
+
+    /** Leaving any other way: only an amount typed counts, never a box left blank. */
+    private fun amountTyped() = amountChanged() && amountText().isNotEmpty()
 
     private fun save(value: Int) {
         saved = true
-        onSave?.invoke(value, note())
+        onSave?.invoke(value)
     }
 
     /** The amount, its unit and the quick keys: the day's target, 0, skip and clear. */
@@ -183,9 +170,9 @@ class NoteSheet : BottomSheetDialogFragment() {
         val unit = args.getString(ARG_UNIT).orEmpty()
         val target = args.getInt(ARG_TARGET)
         view.amountRow.visibility = View.VISIBLE
+        view.save.visibility = View.VISIBLE
         view.amountLayout.setBoxStrokeColorStateList(ColorStateList.valueOf(color))
         view.unit.text = unit
-        view.note.minLines = 2
         // A skip or an empty day has no amount: blank, as on the web, so Save doesn't enter a 0.
         if (originalValue >= 0 && originalValue != SKIP) {
             view.amount.setText(AMOUNT.format(originalValue / 1000.0))
@@ -204,14 +191,17 @@ class NoteSheet : BottomSheetDialogFragment() {
         addKey(UNKNOWN, getString(R.string.xrnnote_clear), faint, color, 0f)
     }
 
-    /** What's in the box, in entry values. Nothing in it means no amount, not "undo the skip". */
-    private fun amount(): Int {
-        val text = view.amount.text?.toString().orEmpty()
+    /**
+     * What's in the box, in entry values, or null for what isn't a number (a lone separator).
+     * Nothing in it means no amount, not "undo the skip".
+     */
+    private fun amount(): Int? {
+        val text = amountText()
         if (text.isEmpty()) return if (originalValue == SKIP) SKIP else UNKNOWN
         return try {
             (NumberFormat.getInstance().parse(text)!!.toDouble() * 1000).roundToInt()
         } catch (e: ParseException) {
-            originalValue
+            null
         }
     }
 
@@ -353,8 +343,6 @@ class NoteSheet : BottomSheetDialogFragment() {
         private const val ARG_DAYS = "days"
         private const val ARG_COLOR = "color"
         private const val ARG_VALUE = "value"
-        private const val ARG_NOTE = "note"
-        private const val ARG_FOCUS = "focus"
         private const val ARG_NUMBER = "number"
         private const val ARG_UNIT = "unit"
         private const val ARG_TARGET = "target" // the day's target as an entry stores it (×1000)
@@ -362,23 +350,14 @@ class NoteSheet : BottomSheetDialogFragment() {
         // Three places, as an amount is kept to the thousandth: fewer would change it on Save.
         private val AMOUNT get() = DecimalFormat("#.###")
 
-        /** Set by the flick menu's note key: the next sheet opens with the keyboard up. */
-        @Volatile
-        private var focusNext = false
-
-        fun focusNoteNextTime() {
-            focusNext = true
-        }
-
         fun show(
             activity: FragmentActivity,
             habitName: String,
             date: LocalDate,
             color: Int,
             value: Int,
-            note: String,
-            onSave: (Int, String) -> Unit
-        ) = open(activity, habitName, date, color, value, note, Bundle.EMPTY, onSave)
+            onSave: (Int) -> Unit
+        ) = open(activity, habitName, date, color, value, Bundle.EMPTY, onSave)
 
         private fun open(
             activity: FragmentActivity,
@@ -386,9 +365,8 @@ class NoteSheet : BottomSheetDialogFragment() {
             date: LocalDate,
             color: Int,
             value: Int,
-            note: String,
             extras: Bundle,
-            onSave: (Int, String) -> Unit
+            onSave: (Int) -> Unit
         ) {
             val sheet = NoteSheet()
             sheet.onSave = onSave
@@ -397,11 +375,8 @@ class NoteSheet : BottomSheetDialogFragment() {
                 putInt(ARG_DAYS, date.daysSince2000)
                 putInt(ARG_COLOR, color)
                 putInt(ARG_VALUE, value)
-                putString(ARG_NOTE, note)
-                putBoolean(ARG_FOCUS, focusNext)
                 putAll(extras)
             }
-            focusNext = false
             sheet.dismissCurrentAndShow(activity.supportFragmentManager, "xrnNoteSheet")
         }
 
@@ -412,19 +387,15 @@ class NoteSheet : BottomSheetDialogFragment() {
             date: LocalDate,
             color: Int,
             value: Double,
-            note: String,
-            onSave: (Double, String) -> Unit
+            onSave: (Double) -> Unit
         ) {
-            val stored = (value * 1000).roundToInt()
             val extras = Bundle().apply {
                 putBoolean(ARG_NUMBER, true)
                 putString(ARG_UNIT, habit.unit)
                 // Rounded, the day's share could fall short of it: 5 a week is 0.714… a day.
                 putInt(ARG_TARGET, habit.dayTargetEntry())
             }
-            open(activity, habit.name, date, color, stored, note, extras) { v, n ->
-                onSave(if (v == stored) value else v / 1000.0, n)
-            }
+            open(activity, habit.name, date, color, (value * 1000).roundToInt(), extras) { onSave(it / 1000.0) }
         }
     }
 }
