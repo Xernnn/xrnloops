@@ -42,6 +42,7 @@ import org.isoron.uhabits.R
 import org.isoron.uhabits.activities.common.views.RingView
 import org.isoron.uhabits.core.models.Habit
 import org.isoron.uhabits.core.models.ModelObservable
+import org.isoron.uhabits.core.models.stepEntry
 import org.isoron.uhabits.core.ui.screens.habits.list.ListHabitsBehavior
 import org.isoron.uhabits.inject.ActivityContext
 import org.isoron.uhabits.utils.currentTheme
@@ -197,6 +198,11 @@ class HabitCardView(
                 val location = getAbsoluteButtonLocation(date)
                 habit?.let { behavior.onToggle(it, date, value, location.x, location.y) }
             }
+            onStep = { date, steps ->
+                triggerRipple(date)
+                val location = getAbsoluteButtonLocation(date)
+                habit?.let { behavior.onStep(it, date, steps, location.x, location.y) }
+            }
         }
 
         innerFrame = LinearLayout(context).apply {
@@ -306,9 +312,10 @@ class HabitCardView(
             color = c
             units = h.unit
             targetType = h.targetType
-            // xrnloops: the day's share, as HabitCardListView sets it; the flick's target key
-            // enters it, and an edit (this habit's model change) mustn't turn it into the whole.
+            // xrnloops: the day's share, as HabitCardListView sets it; the flick's keys are coloured
+            // by it, and an edit (this habit's model change) mustn't turn it into the whole.
             threshold = h.targetValue / h.frequency.denominator
+            step = h.stepEntry() // xrnloops: what the flick's + and − go by
             visibility = when (h.isNumerical) {
                 true -> View.VISIBLE
                 false -> View.GONE

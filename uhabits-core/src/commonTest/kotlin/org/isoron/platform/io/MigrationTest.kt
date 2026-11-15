@@ -8,7 +8,7 @@ class MigrationTest {
     @Test
     fun testMigrateFromScratch() = runTest {
         val db = TestDatabaseHelper.createEmptyDatabase()
-        assertEquals(25, db.getVersion())
+        assertEquals(26, db.getVersion()) // xrnloops: 26 adds the step (migrations/26.sql)
 
         db.run(
             """

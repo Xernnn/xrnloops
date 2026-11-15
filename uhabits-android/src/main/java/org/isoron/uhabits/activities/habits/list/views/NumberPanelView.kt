@@ -85,6 +85,19 @@ class NumberPanelView(
             setupButtons()
         }
 
+    // xrnloops: the flick's + and −, and the step they go by (an entry, ×1000).
+    var onStep: (LocalDate, Int) -> Unit = { _, _ -> }
+        set(value) {
+            field = value
+            setupButtons()
+        }
+
+    var step = 1000
+        set(value) {
+            field = value
+            setupButtons()
+        }
+
     override fun createButton() = buttonFactory.create()
 
     @Synchronized
@@ -103,6 +116,8 @@ class NumberPanelView(
             button.units = units
             button.onEdit = { onEdit(date) }
             button.onToggle = { value -> onToggle(date, value) } // xrnloops
+            button.onStep = { steps -> onStep(date, steps) } // xrnloops
+            button.step = step // xrnloops
         }
     }
 }

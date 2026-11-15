@@ -65,6 +65,25 @@ class HabitRepositoryTest {
         db.close()
     }
 
+    // xrnloops: the number flick's step is kept, and a habit made without one has 1.
+    @Test
+    fun testStep() = runTest {
+        val db = TestDatabaseHelper.createEmptyDatabase()
+        val repo = HabitRepository(db)
+
+        val data = HabitData(name = "Run", type = 1, step = 0.25, position = 0)
+        data.id = repo.insert(data)
+        repo.insert(HabitData(name = "Read", position = 1))
+        assertEquals(listOf(0.25, 1.0), repo.findAll().map { it.step })
+
+        data.step = 2.5
+        repo.update(data)
+        assertEquals(2.5, repo.findAll()[0].step)
+        assertEquals("Run", repo.findAll()[0].name)
+
+        db.close()
+    }
+
     @Test
     fun testDelete() = runTest {
         val db = TestDatabaseHelper.createEmptyDatabase()

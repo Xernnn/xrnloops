@@ -1022,7 +1022,7 @@ function listView() {
       h("div", { class: "foot" },
         h("span", { class: "keys" },
           h("span", {}, h("kbd", {}, touch ? "Tap" : "Click"), ` ${tapWords}`),
-          h("span", {}, h("kbd", {}, "Hold"), " and drag: up ✓ · down ✗ · left skip · let go in the middle for ?"),
+          h("span", {}, h("kbd", {}, "Hold"), " and drag: up ✓ or + · down ✗ or − · left skip · let go in the middle for ?"),
           !touch && h("span", {}, h("kbd", {}, "Right-click"), " keeps the keys open")),
         anyArchived && h("label", { class: "check" }, h("input", {
           type: "checkbox", checked: state.showArchived,
@@ -1160,23 +1160,36 @@ function checkChoices(habit, date) {
   };
 }
 
-/** The keys around a number day (NumberFlick): up the target, down 0, right any amount. */
+/**
+ * The keys around a number day (NumberFlick): up adds the habit's step, down takes one off (never
+ * below 0), left skip, right the day's sheet for any other amount. A key wears the habit's colour
+ * when what it gives meets the target. They go from the day as stored when one is picked.
+ */
 function numberChoices(habit, date) {
   const c = "var(--c)", faint = "var(--muted)";
-  const amount = (entry) => { // as Loop stores it, the amount ×1000
-    const x = entry / 1000;
+  const step = L.stepEntry(habit);
+  const shown = entriesOf(habit.uuid).get(date)?.value ?? L.UNKNOWN;
+  const stepKey = (steps) => {
+    const text = `${steps > 0 ? "+" : "\u2212"}${L.formatStep(step)}`;
     return {
-      text: L.formatNumber(x), tint: meets(habit, x) ? c : faint, label: `${L.formatNumber(x)} ${habit.data.unit}`.trim(),
-      run: () => setDay(habit, date, entry),
+      text, tint: meets(habit, L.steppedEntry(shown, step, steps) / 1000) ? c : faint,
+      label: `${steps > 0 ? "Add" : "Take off"} ${L.formatStep(step)} ${habit.data.unit}`.trim(),
+      run: () => stepDay(habit, date, steps),
     };
   };
   return {
     center: { glyph: "question", tint: faint, label: "Clear", run: () => setDay(habit, date, L.UNKNOWN) },
-    up: amount(L.dayTargetEntry(habit)),
+    up: stepKey(1),
     right: { icon: "dialpad", tint: faint, label: "Another amount", run: () => numberSheet(habit, date) },
-    down: amount(0),
+    down: stepKey(-1),
     left: { glyph: "minus", tint: c, label: "Skip", run: () => setDay(habit, date, L.SKIP) },
   };
+}
+
+/** + (1) or − (-1) on a number day, by the habit's step, from what the day holds now. */
+function stepDay(habit, date, steps) {
+  const now = entriesOf(habit.uuid).get(date)?.value ?? L.UNKNOWN;
+  setDay(habit, date, L.steppedEntry(now, L.stepEntry(habit), steps));
 }
 
 function direction(dx, dy) {
@@ -1280,7 +1293,8 @@ const KEY_OFFSET = { center: [0, 0], up: [0, -1], right: [1, 0], down: [0, 1], l
 function keyFace(choice) {
   if (choice.icon) return icon(choice.icon);
   if (choice.glyph) return mark(choice.glyph);
-  return h("span", { class: "glyph-text" + (choice.text.length > 3 ? " long" : "") }, choice.text);
+  const size = choice.text.length > 5 ? " longer" : choice.text.length > 3 ? " long" : "";
+  return h("span", { class: "glyph-text" + size }, choice.text);
 }
 
 /** The cross of keys, centred on the day and moved in from the window's edges. */
@@ -1727,7 +1741,7 @@ function frequencyKind(num, den) {
 function editView(habit, newType = L.YES_NO) {
   const data = habit ? { ...habit.data } : {
     name: "", question: "", description: "", color: 8, freqNum: 1, freqDen: 1, type: newType,
-    targetType: L.AT_LEAST, targetValue: 0, unit: "", archived: false, reminder: null,
+    targetType: L.AT_LEAST, targetValue: 0, unit: "", step: 1, archived: false, reminder: null,
     position: Math.max(-1, ...[...state.habits.values()].filter((x) => !x.deleted).map((x) => x.data.position)) + 1,
   };
   const numerical = data.type === L.NUMERICAL;
@@ -1740,7 +1754,7 @@ function editView(habit, newType = L.YES_NO) {
     palette().map((hex, i) => h("label", { style: { background: hex }, title: `Colour ${i + 1}` },
       h("input", { type: "radio", name: "color", value: i, checked: i === data.color }), h("i"))));
 
-  let freqFields;
+  let freqFields, stepField = null;
   if (numerical) {
     const pers = [[1, "per day"], [7, "per week"], [30, "per month"]];
     if (!pers.some(([v]) => v === data.freqDen)) pers.push([data.freqDen, `per ${data.freqDen} days`]); // the phone can set any
@@ -1753,6 +1767,12 @@ function editView(habit, newType = L.YES_NO) {
       h("input", { type: "number", name: "targetValue", step: "any", min: 0, value: data.targetValue, required: true }),
       h("input", { type: "text", name: "unit", value: data.unit, placeholder: "unit, e.g. km", style: { width: "140px" } }),
       per);
+    // What the list's flick adds with + and takes off with − (NumberFlick; the phone's form has it too).
+    stepField = h("label", { class: "field" }, h("span", {}, "Step for + and −"),
+      h("input", {
+        type: "number", name: "step", step: "any", min: L.MIN_STEP, max: L.MAX_STEP, required: true,
+        value: L.formatStep(L.stepEntry(habit ?? { data })), style: { width: "140px" },
+      }));
   } else {
     const kindSel = h("select", { name: "kind" }, YES_NO_FREQUENCIES.map(([v, t]) => h("option", { value: v, selected: v === kind }, t)));
     const n = h("input", { type: "number", name: "num", min: 1, max: 31, value: num });
@@ -1788,6 +1808,8 @@ function editView(habit, newType = L.YES_NO) {
         out.unit = String(f.get("unit")).trim();
         out.freqDen = Number(f.get("per"));
         out.freqNum = out.freqDen === data.freqDen ? data.freqNum : 1;
+        out.step = L.cleanStep(Number(f.get("step")));
+        if (out.step == null) return (error.textContent = `The step for + and − goes from ${L.MIN_STEP} to ${L.MAX_STEP}.`);
       } else {
         const k = String(f.get("kind"));
         const fn = Math.max(1, Number(f.get("num")) || 1), fd = Math.max(1, Number(f.get("den")) || 1);
@@ -1806,7 +1828,7 @@ function editView(habit, newType = L.YES_NO) {
     h("fieldset", {}, h("legend", {}, "The habit"),
       h("label", { class: "field" }, h("span", {}, "Name"), name),
       h("label", { class: "field" }, h("span", {}, "Question"), question)),
-    h("fieldset", {}, h("legend", {}, numerical ? "Target" : "How often"), freqFields),
+    h("fieldset", {}, h("legend", {}, numerical ? "Target" : "How often"), freqFields, stepField),
     h("fieldset", {}, h("legend", {}, "Colour"), swatches),
     h("fieldset", {}, h("legend", {}, "Notes"), description),
     error,

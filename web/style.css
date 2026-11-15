@@ -237,6 +237,7 @@ button.unlock:hover { opacity: 0.7; }
 .flick .key svg path { fill: currentColor; }
 .flick .key .glyph-text { font-weight: 700; font-size: 19px; }
 .flick .key .glyph-text.long { font-size: 15px; }
+.flick .key .glyph-text.longer { font-size: 12px; } /* "+0.001", "+100000": NumberFlick's 11sp */
 .flick .key .icon { width: 25px; height: 25px; }
 .flick .key.center { font-size: 18px; }
 

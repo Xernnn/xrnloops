@@ -209,6 +209,42 @@ export function dayTargetEntry(habit) {
   return entry;
 }
 
+// A number habit's step (uhabits-core models/Step.kt): what the flick adds with + and takes off
+// with −. The sums are in entries, the amount ×1000, so a step of 0.25 never drifts.
+
+export const MIN_STEP = 0.001, MAX_STEP = 100000;
+
+/** A step as the form saves it, to the thousandth, or null if it isn't one (cleanStep). */
+export function cleanStep(step) {
+  if (!Number.isFinite(step)) return null;
+  const entry = Math.round(step * 1000);
+  return entry < 1 || entry > MAX_STEP * 1000 ? null : entry / 1000;
+}
+
+/** The habit's step as an entry; one it doesn't have, or that is no use, is 1 (stepEntry). */
+export function stepEntry(habit) {
+  const step = habit.data.step;
+  if (typeof step !== "number" || !Number.isFinite(step) || step <= 0) return 1000;
+  return Math.min(Math.max(Math.round(step * 1000), 1), MAX_STEP * 1000);
+}
+
+/**
+ * The entry a number day holding `value` gets from `steps` steps of `step` (steppedEntry): an
+ * empty or skipped day counts as 0, nothing goes below 0 or past what an entry holds, and a sum
+ * that lands on 3, which is how Loop keeps a skip, moves one thousandth further.
+ */
+export function steppedEntry(value, step, steps) {
+  const from = value < 0 || value === SKIP ? 0 : value;
+  const to = Math.min(Math.max(from + step * steps, 0), MAX_ENTRY);
+  if (to !== SKIP) return to;
+  return steps > 0 ? SKIP + 1 : SKIP - 1;
+}
+
+/** A step (an entry) as its keys show it, to the thousandth: "1", "0.25", "1500" (stepLabel). */
+export function formatStep(step) {
+  return String(Math.round(step) / 1000);
+}
+
 /** Everything the screens show about one habit, computed the way Loop's Habit.recompute does. */
 export function summarize(habit, entries, today = todayNum()) {
   const computed = computeEntries(habit, entries);

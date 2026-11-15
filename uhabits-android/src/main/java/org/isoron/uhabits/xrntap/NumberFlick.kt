@@ -22,20 +22,26 @@ package org.isoron.uhabits.xrntap
 import android.view.HapticFeedbackConstants
 import org.isoron.uhabits.R
 import org.isoron.uhabits.activities.habits.list.views.NumberButtonView
-import org.isoron.uhabits.activities.habits.list.views.toShortString
 import org.isoron.uhabits.core.models.Entry.Companion.SKIP
 import org.isoron.uhabits.core.models.Entry.Companion.UNKNOWN
 import org.isoron.uhabits.core.models.NumericalHabitType.AT_LEAST
-import org.isoron.uhabits.core.models.dayTargetEntry
+import org.isoron.uhabits.core.models.steppedEntry
 import org.isoron.uhabits.utils.getFontAwesome
 import org.isoron.uhabits.utils.sres
 import org.isoron.uhabits.xrnlook.XrnFonts
+import java.text.DecimalFormat
+import kotlin.math.roundToInt
 
 /**
  * The flick menu on a number habit's day, laid out like the yes/no one ([CheckmarkFlick]): up
- * the target ("8"), down 0, left – (skip), right the day's sheet for any other amount, and
- * letting go in the middle clears the day to ?. A tap still opens the sheet, as Loop's dialog
- * opened. Keys whose amount meets the target wear the habit's colour.
+ * adds the habit's step ("+1", "+0.25"), down takes one off ("−1", never below 0), left – (skip),
+ * right the day's sheet for any other amount, and letting go in the middle clears the day to ?.
+ * A tap still opens the sheet, as Loop's dialog opened. A key whose result meets the target
+ * wears the habit's colour. The keys go from the day as it is stored when one is picked
+ * ([org.isoron.uhabits.core.ui.screens.habits.list.ListHabitsBehavior.onStep]); what they show
+ * comes from the day as the list draws it.
+ *
+ * Until 2026-11-15 up entered the day's target and down 0; the day's sheet still has both.
  */
 object NumberFlick {
 
@@ -45,25 +51,36 @@ object NumberFlick {
         val fa = getFontAwesome()
         val faint = sres.getColor(R.attr.contrast60)
         val bold = XrnFonts.bold(context)
-        fun meets(amount: Double) = if (targetType == AT_LEAST) amount >= threshold else amount <= threshold
-        fun amount(entry: Int): FlickChoice { // as Loop stores it, the amount ×1000
-            val label = (entry / 1000.0).toShortString()
+        val shown = (value * 1000).roundToInt() // as Loop stores it: ×1000, -1 empty, 3 a skip
+        fun meets(entry: Int) = if (targetType == AT_LEAST) entry / 1000.0 >= threshold else entry / 1000.0 <= threshold
+        fun stepKey(steps: Int): FlickChoice {
+            val label = (if (steps > 0) "+" else "\u2212") + stepLabel(step)
             return FlickChoice(
-                tint = if (meets(entry / 1000.0)) color else faint,
+                tint = if (meets(steppedEntry(shown, step, steps))) color else faint,
                 glyph = label,
                 typeface = bold,
-                glyphSp = if (label.length > 3) 14f else 18f
-            ) { set(this, entry) }
+                glyphSp = when {
+                    label.length <= 3 -> 18f
+                    label.length <= 5 -> 14f
+                    else -> 11f
+                }
+            ) {
+                this.value = steppedEntry(shown, step, steps) / 1000.0 // drawn at once; the list catches up
+                onStep(steps)
+                performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            }
         }
         FlickChoices(
             center = FlickChoice(faint, resources.getString(R.string.fa_question), fa, 17f) { set(this, UNKNOWN) },
-            // The share rounded could fall short of it (5 a week is 0.714… a day, and 714 isn't done).
-            up = amount(dayTargetEntry(threshold, targetType)),
+            up = stepKey(1),
             right = FlickChoice(tint = faint, icon = context.getDrawable(R.drawable.xrn_ic_dialpad)?.mutate()) { onEdit() },
-            down = amount(0),
+            down = stepKey(-1),
             left = FlickChoice(color, resources.getString(R.string.fa_skipped), fa) { set(this, SKIP) }
         )
     }
+
+    /** A step (an entry, ×1000) as its keys show it: to the thousandth, "1", "0.25", "1500". */
+    fun stepLabel(step: Int): String = DecimalFormat("#.###").format(step / 1000.0)
 
     private fun set(button: NumberButtonView, stored: Int) = with(button) {
         value = stored / 1000.0

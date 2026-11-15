@@ -241,6 +241,50 @@ class ListHabitsBehaviorTest : BaseUnitTest() {
         assertFalse(habit1.isCompletedToday())
     }
 
+    // xrnloops: the number flick's + and − go by the habit's step, from the day as stored when
+    // the key is picked, and keep its note (XRNLOOPS.md).
+    @Test
+    fun testOnStep_addsAndTakesOffTheStep() {
+        val today = getToday()
+        habit2.step = 0.25
+        habit2.originalEntries.add(Entry(today, 1000, "knee"))
+        behavior.onStep(habit2, today, 1, 0f, 0f)
+        assertEquals(Entry(today, 1250, "knee"), habit2.originalEntries.get(today))
+        behavior.onStep(habit2, today, -1, 0f, 0f)
+        behavior.onStep(habit2, today, -1, 0f, 0f)
+        assertEquals(Entry(today, 750, "knee"), habit2.originalEntries.get(today))
+    }
+
+    @Test
+    fun testOnStep_goesFromTheDayAsItIsNow() {
+        val yesterday = getToday().minus(1)
+        assertEquals(200, habit2.originalEntries.get(yesterday).value) // what the list showed
+        habit2.originalEntries.add(Entry(yesterday, 4000)) // sync, since
+        behavior.onStep(habit2, yesterday, 1, 0f, 0f)
+        assertEquals(5000, habit2.originalEntries.get(yesterday).value)
+    }
+
+    @Test
+    fun testOnStep_anEmptyDay() {
+        val day = getToday().minus(2) // nothing entered
+        assertEquals(Entry.UNKNOWN, habit2.originalEntries.get(day).value)
+        behavior.onStep(habit2, day, -1, 0f, 0f)
+        assertEquals(0, habit2.originalEntries.get(day).value)
+        habit2.originalEntries.add(Entry(day, Entry.UNKNOWN))
+        behavior.onStep(habit2, day, 1, 0f, 0f)
+        assertEquals(1000, habit2.originalEntries.get(day).value)
+    }
+
+    @Test
+    fun testOnStep_celebratesReachingTheTargetOnce() {
+        val today = getToday()
+        habit2.targetValue = 2.0
+        habit2.originalEntries.add(Entry(today, 1000))
+        behavior.onStep(habit2, today, 1, 0f, 0f) // 2: met
+        behavior.onStep(habit2, today, 1, 0f, 0f) // 3: still met
+        verify(exactly(1)) { screen.showConfetti(any(), any(), any()) }
+    }
+
     // xrnloops: a tap or a flick in the list keeps the day's note (XRNLOOPS.md).
     @Test
     fun testOnToggle_keepsTheDaysNote() {

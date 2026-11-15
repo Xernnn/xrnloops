@@ -24,6 +24,7 @@ import org.isoron.platform.time.LocalDate
 import org.isoron.platform.time.getToday
 import org.isoron.uhabits.core.commands.CommandRunner
 import org.isoron.uhabits.core.commands.CreateRepetitionCommand
+import org.isoron.uhabits.core.models.Entry.Companion.SKIP
 import org.isoron.uhabits.core.models.Entry.Companion.YES_MANUAL
 import org.isoron.uhabits.core.models.Habit
 import org.isoron.uhabits.core.models.HabitList
@@ -31,6 +32,8 @@ import org.isoron.uhabits.core.models.HabitType
 import org.isoron.uhabits.core.models.NumericalHabitType.AT_LEAST
 import org.isoron.uhabits.core.models.NumericalHabitType.AT_MOST
 import org.isoron.uhabits.core.models.PaletteColor
+import org.isoron.uhabits.core.models.stepEntry
+import org.isoron.uhabits.core.models.steppedEntry
 import org.isoron.uhabits.core.preferences.Preferences
 import org.isoron.uhabits.core.tasks.ExportCSVTask
 import org.isoron.uhabits.core.tasks.Task
@@ -130,6 +133,19 @@ open class ListHabitsBehavior(
             CreateRepetitionCommand(habitList, habit, date, value)
         )
         if (value == YES_MANUAL) screen.showConfetti(habit.color, x, y)
+    }
+
+    /**
+     * xrnloops: the number flick's + ([steps] 1) and − (-1), by the habit's step, on the day as
+     * stored now (XRNLOOPS.md, [steppedEntry]). Reaching the day's share of the target celebrates,
+     * once: not again for each step past it.
+     */
+    open fun onStep(habit: Habit, date: LocalDate, steps: Int, x: Float, y: Float) {
+        val before = habit.originalEntries.get(date).value
+        val after = steppedEntry(before, habit.stepEntry(), steps)
+        commandRunner.run(CreateRepetitionCommand(habitList, habit, date, after))
+        val metBefore = before >= 0 && before != SKIP && meetsDayTarget(habit, before / 1000.0)
+        if (!metBefore && meetsDayTarget(habit, after / 1000.0)) screen.showConfetti(habit.color, x, y)
     }
 
     enum class Message {

@@ -19,8 +19,14 @@
 package org.isoron.uhabits.core.io
 
 import kotlinx.coroutines.test.runTest
+import org.isoron.platform.io.format
+import org.isoron.platform.io.migrateTo
+import org.isoron.platform.io.setVersion
 import org.isoron.platform.time.LocalDate
 import org.isoron.uhabits.core.BaseUnitTest
+import org.isoron.uhabits.core.DATABASE_VERSION
+import org.isoron.uhabits.core.database.HabitData
+import org.isoron.uhabits.core.database.HabitRepository
 import org.isoron.uhabits.core.models.Entry
 import org.isoron.uhabits.core.models.Frequency
 import org.isoron.uhabits.core.models.Habit
@@ -108,6 +114,25 @@ class ImportTest : BaseUnitTest() {
         assertTrue(isChecked(habit, 2016, 3, 14))
         assertTrue(isChecked(habit, 2016, 3, 16))
         assertFalse(isChecked(habit, 2016, 3, 17))
+        assertEquals(1.0, habit.step) // xrnloops: a store Loop's backup has none
+    }
+
+    // xrnloops: a backup made here brings each habit's step back (migrations/26.sql).
+    @Test
+    fun testLoopDBKeepsTheStep() = runTest {
+        val file = fileOpener.openUserFile("test-step-backup.db")
+        if (file.exists()) file.delete() // left by a run that failed
+        val db = databaseOpener().open(file.pathString)
+        db.setVersion(8)
+        db.migrateTo(DATABASE_VERSION) { v ->
+            fileOpener.openResourceFile("migrations/${format("%02d.sql", v)}").lines().joinToString("\n")
+        }
+        HabitRepository(db).insert(HabitData(name = "Run", type = HabitType.NUMERICAL.value, step = 0.25, uuid = "f00d"))
+        db.close()
+        LoopDBImporter(habitList, modelFactory, databaseOpener(), commandRunner, StandardLogging(), fileOpener)
+            .importHabitsFromFile(file)
+        assertEquals(0.25, habitList.getByUUID("f00d")!!.step)
+        file.delete()
     }
 
     @Test

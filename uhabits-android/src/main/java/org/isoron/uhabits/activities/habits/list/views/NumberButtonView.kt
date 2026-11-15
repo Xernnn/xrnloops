@@ -103,10 +103,17 @@ class NumberButtonView(
             field = value
             invalidate()
         }
+
+    /** xrnloops: the habit's step, as an entry (×1000), for the flick's + and − keys. */
+    var step = 1000
+
     var onEdit: () -> Unit = { }
 
     /** xrnloops: a value picked in the flick menu, stored as Loop stores it (×1000). */
     var onToggle: (Int) -> Unit = { _ -> }
+
+    /** xrnloops: the flick's + (1) or − (-1): that many steps, on the day as it is stored. */
+    var onStep: (Int) -> Unit = { _ -> }
 
     private var drawer: Drawer = Drawer(context)
 
