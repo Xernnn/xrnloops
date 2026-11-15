@@ -39,7 +39,6 @@ import org.isoron.uhabits.core.models.Entry.Companion.YES_AUTO
 import org.isoron.uhabits.core.models.Entry.Companion.YES_MANUAL
 import org.isoron.uhabits.core.preferences.Preferences
 import org.isoron.uhabits.inject.ActivityContext
-import org.isoron.uhabits.utils.drawNotesIndicator
 import org.isoron.uhabits.utils.getFontAwesome
 import org.isoron.uhabits.utils.sp
 import org.isoron.uhabits.utils.sres
@@ -73,13 +72,8 @@ class CheckmarkButtonView(
             invalidate()
         }
 
-    var notes = ""
-        set(value) {
-            field = value
-            invalidate()
-        }
-
-    var onToggle: (Int, String) -> Unit = { _, _ -> }
+    // xrnloops: a value only; the day keeps its note (XRNLOOPS.md).
+    var onToggle: (Int) -> Unit = { _ -> }
 
     var onEdit: () -> Unit = { }
 
@@ -102,7 +96,7 @@ class CheckmarkButtonView(
             isSkipEnabled = preferences.isSkipEnabled,
             areQuestionMarksEnabled = preferences.areQuestionMarksEnabled
         )
-        onToggle(value, notes)
+        onToggle(value)
         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         invalidate()
     }
@@ -133,7 +127,6 @@ class CheckmarkButtonView(
         private val bgColor = sres.getColor(R.attr.cardBgColor)
         private val lowContrastColor = sres.getColor(R.attr.contrast40)
         private val mediumContrastColor = sres.getColor(R.attr.contrast60)
-        private val pNotesIndicator = Paint()
 
         private val paint = TextPaint().apply {
             typeface = getFontAwesome()
@@ -190,14 +183,7 @@ class CheckmarkButtonView(
                 paint.style = Paint.Style.FILL
                 canvas.drawText(label, rect.centerX(), rect.centerY(), paint)
             }
-
-            drawNotesIndicator(
-                pNotesIndicator = pNotesIndicator,
-                canvas = canvas,
-                color = color,
-                size = em,
-                notes = notes
-            )
+            // xrnloops: no dot for a day's note, which nothing shows since 2026-11-15.
         }
     }
 }

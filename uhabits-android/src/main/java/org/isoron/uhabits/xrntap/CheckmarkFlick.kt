@@ -28,13 +28,12 @@ import org.isoron.uhabits.core.models.Entry.Companion.UNKNOWN
 import org.isoron.uhabits.core.models.Entry.Companion.YES_MANUAL
 import org.isoron.uhabits.utils.getFontAwesome
 import org.isoron.uhabits.utils.sres
-import org.isoron.uhabits.xrnnote.NoteSheet
 
 /**
  * The habit list's yes/no days: what a tap does ([XrnTap]) and the flick menu a short hold opens.
- * Always in the same places, so a flick becomes a habit: up ✓, down ✗, left – (skip), right the
- * day's note ([org.isoron.uhabits.xrnnote.NoteSheet]), and letting go in the middle clears the
- * day back to ?. A hold let go in the middle at once is still a tap ([FlickGesture.QUICK_MS]).
+ * Always in the same places, so a flick becomes a habit: up ✓, down ✗, left – (skip), and
+ * letting go in the middle clears the day back to ?. Right has no key since the day's note went
+ * (2026-11-15). A hold let go in the middle at once is still a tap ([FlickGesture.QUICK_MS]).
  */
 object CheckmarkFlick {
 
@@ -42,7 +41,6 @@ object CheckmarkFlick {
         when (XrnTap.action(context)) {
             XrnTap.Action.CYCLE -> performToggle()
             XrnTap.Action.TICK -> set(this, XrnTap.tickValue(value, preferences.areQuestionMarksEnabled))
-            XrnTap.Action.MENU -> onEdit()
         }
     }
 
@@ -60,10 +58,6 @@ object CheckmarkFlick {
         FlickChoices(
             center = key(R.string.fa_question, faint, UNKNOWN, 17f),
             up = key(R.string.fa_check, color, YES_MANUAL),
-            right = FlickChoice(tint = faint, icon = context.getDrawable(R.drawable.xrn_ic_note)?.mutate()) {
-                NoteSheet.focusNoteNextTime()
-                onEdit()
-            },
             down = key(R.string.fa_times, faint, NO),
             left = key(R.string.fa_skipped, color, SKIP)
         )
@@ -72,7 +66,7 @@ object CheckmarkFlick {
     /** Like Loop's [CheckmarkButtonView.performToggle], to a value picked by hand. */
     private fun set(button: CheckmarkButtonView, newValue: Int) = with(button) {
         value = newValue
-        onToggle(newValue, notes)
+        onToggle(newValue)
         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         Unit
     }

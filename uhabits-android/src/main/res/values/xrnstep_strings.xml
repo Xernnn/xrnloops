@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- xrnloops (XRNLOOPS.md): a number habit's step, what the list's flick adds with + and takes off with −. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="xrnstep_label">Step for + and −</string>
+    <string name="xrnstep_hint" translatable="false">1</string>
+    <!-- %1$s and %2$s are the smallest and biggest step, 0.001 and 100000. -->
+    <string name="xrnstep_invalid">From %1$s to %2$s</string>
+</resources>

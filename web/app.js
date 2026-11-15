@@ -13,8 +13,9 @@
 //
 // A day works as on the phone (XRNLOOPS.md, "The web app"): a click does what "Tap on a day"
 // says; held for a moment, a cross of keys opens around it, and dragging towards one and letting
-// go picks it (up ✓, down ✗, left skip, right the note, the middle ?). A right-click opens the
-// same keys and leaves them open. After each name, a lock for what the habit unlocks in xrnrule,
+// go picks it (up ✓, down ✗, left skip, the middle ?). A right-click opens the same keys and
+// leaves them open. A day's note is kept as it is: nothing here shows or writes one since
+// 2026-11-15, and a write carries the stored one along (writeEntry). After each name, a lock for what the habit unlocks in xrnrule,
 // read from xrnrule-sync's shared state (`../xrnrule/state`, the same login).
 
 import * as L from "./loop.js";
@@ -27,9 +28,15 @@ const KEY_PENDING = "xrnloops.pending";
 const KEY_QUEUE_OWNER = "xrnloops.pendingOwner";
 const KEY_DAY_START = "xrnloops.dayStartHour";
 const KEY_PREFS = "xrnloops.prefs";
+const TAP_CHOICES = ["tick", "cycle"];
 
 /** This browser's settings: the phone's "Tap on a day" and "reverse order", and the theme. */
-const prefs = { tap: "menu", todayRight: true, theme: "system", ...load(KEY_PREFS, {}) };
+const prefs = { tap: "tick", todayRight: true, theme: "system", ...load(KEY_PREFS, {}) };
+// "menu" opened the day's note until 2026-11-15: that browser ticks now, as a new one does.
+if (!TAP_CHOICES.includes(prefs.tap)) {
+  prefs.tap = "tick";
+  save(KEY_PREFS, prefs);
+}
 
 const state = {
   signedIn: load(KEY_SIGNED_IN, false) === true,
@@ -125,7 +132,7 @@ function clock(ms) {
 /** An emoji-only name gets the phone's bigger glyphs. */
 const isEmojiName = (name) => !!name && !/[\p{L}\p{N}]/u.test(name);
 
-/** "Today · Wednesday 4 November", as the phone's note sheet says it. */
+/** "Today · Wednesday 4 November", as the phone's day sheet says it. */
 function describeDay(day) {
   const text = dateDay.format(L.dayDate(day));
   const today = L.todayNum();
@@ -368,8 +375,13 @@ function nextMtime(previous) {
   return Math.max(Date.now(), (previous ?? 0) + 1);
 }
 
-function writeEntry(uuid, date, value, notes = "") {
+/**
+ * A new value for a day. It keeps the day's note as stored now, which may have come from the
+ * server since a sheet opened: nothing here writes a note since 2026-11-15, nor blanks one.
+ */
+function writeEntry(uuid, date, value) {
   const old = entriesOf(uuid).get(date);
+  const notes = old?.notes ?? "";
   const rec = { habit: uuid, date, value, notes, mtime: nextMtime(old?.mtime) };
   entriesOf(uuid).set(date, { value, notes, mtime: rec.mtime });
   summaries.delete(uuid);
@@ -997,7 +1009,7 @@ function listView() {
       h("p", {}, state.habits.size ? "Every habit is archived." : "No habits yet. Make one here or in xrnloops on the phone."),
       h("a", { class: "btn primary", href: "#/new" }, "New habit"));
 
-  const tapWords = { tick: "ticks it", cycle: "cycles ✓ ✗ ?", menu: "opens the day" }[prefs.tap];
+  const tapWords = { tick: "ticks it", cycle: "cycles ✓ ✗ ?" }[prefs.tap];
   const touch = matchMedia("(pointer: coarse)").matches;
   return h("div", {},
     topBar("Habits",
@@ -1010,7 +1022,7 @@ function listView() {
       h("div", { class: "foot" },
         h("span", { class: "keys" },
           h("span", {}, h("kbd", {}, touch ? "Tap" : "Click"), ` ${tapWords}`),
-          h("span", {}, h("kbd", {}, "Hold"), " and drag: up ✓ · down ✗ · left skip · right note · let go in the middle for ?"),
+          h("span", {}, h("kbd", {}, "Hold"), " and drag: up ✓ or + · down ✗ or − · left skip · let go in the middle for ?"),
           !touch && h("span", {}, h("kbd", {}, "Right-click"), " keeps the keys open")),
         anyArchived && h("label", { class: "check" }, h("input", {
           type: "checkbox", checked: state.showArchived,
@@ -1046,7 +1058,7 @@ function settingsMenu(anchor) {
   };
   openPopover(anchor, [
     h("div", { class: "group" }, h("div", { class: "title" }, "Tap on a day"),
-      seg("tap", [["tick", "Ticks it"], ["cycle", "Cycles ✓ ✗ ?"], ["menu", "Opens the day"]])),
+      seg("tap", [["tick", "Ticks it"], ["cycle", "Cycles ✓ ✗ ?"]])),
     h("div", { class: "group" }, h("div", { class: "title" }, "Today's column"),
       seg("todayRight", [[true, "On the right"], [false, "On the left"]])),
     h("div", { class: "group" }, h("div", { class: "title" }, "Theme"),
@@ -1105,12 +1117,11 @@ function dayContent(habit, day) {
 
 function dayCell(habit, day, gap) {
   const date = L.dayStr(day);
-  const entry = entriesOf(habit.uuid).get(date);
   const [cls, content] = dayContent(habit, day);
   const label = `${habit.data.name}, ${dateLong.format(L.dayDate(day))}`;
   const btn = h("button", {
-    type: "button", class: `cell ${cls}` + (gap ? " wk" : "") + (entry?.notes ? " noted" : ""),
-    title: entry?.notes ? `${label}\n${entry.notes}` : label, "aria-label": label, "data-key": `${habit.uuid}/${date}`,
+    type: "button", class: `cell ${cls}` + (gap ? " wk" : ""),
+    title: label, "aria-label": label, "data-key": `${habit.uuid}/${date}`,
   }, content);
   dayGesture(btn, habit, date);
   return btn;
@@ -1130,44 +1141,55 @@ let flick = null; // the open keys
 function tapDay(habit, date) {
   if (habit.data.type === L.NUMERICAL) return numberSheet(habit, date);
   const value = summary(habit).computed.get(L.dayNum(date)) ?? L.UNKNOWN;
-  if (prefs.tap === "tick") setDay(habit, date, value === L.YES_MANUAL ? L.UNKNOWN : L.YES_MANUAL);
-  else if (prefs.tap === "cycle") setDay(habit, date, L.nextToggleValue(value, false, true));
-  else daySheet(habit, date);
+  if (prefs.tap === "cycle") setDay(habit, date, L.nextToggleValue(value, false, true));
+  else setDay(habit, date, value === L.YES_MANUAL ? L.UNKNOWN : L.YES_MANUAL);
 }
 
 function setDay(habit, date, value) {
-  writeEntry(habit.uuid, date, value, entriesOf(habit.uuid).get(date)?.notes ?? "");
+  writeEntry(habit.uuid, date, value);
 }
 
-/** The keys around a yes/no day (CheckmarkFlick): up ✓, down ✗, left skip, right the note. */
+/** The keys around a yes/no day (CheckmarkFlick): up ✓, down ✗, left skip, nothing right. */
 function checkChoices(habit, date) {
   const c = "var(--c)", faint = "var(--muted)";
   return {
     center: { glyph: "question", tint: faint, label: "Clear", run: () => setDay(habit, date, L.UNKNOWN) },
     up: { glyph: "check", tint: c, label: "Done", run: () => setDay(habit, date, L.YES_MANUAL) },
-    right: { icon: "note", tint: faint, label: "Note", run: () => daySheet(habit, date, { focusNote: true }) },
     down: { glyph: "times", tint: faint, label: "Not done", run: () => setDay(habit, date, L.NO) },
     left: { glyph: "minus", tint: c, label: "Skip", run: () => setDay(habit, date, L.SKIP) },
   };
 }
 
-/** The keys around a number day (NumberFlick): up the target, down 0, right any amount. */
+/**
+ * The keys around a number day (NumberFlick): up adds the habit's step, down takes one off (never
+ * below 0), left skip, right the day's sheet for any other amount. A key wears the habit's colour
+ * when what it gives meets the target. They go from the day as stored when one is picked.
+ */
 function numberChoices(habit, date) {
   const c = "var(--c)", faint = "var(--muted)";
-  const amount = (entry) => { // as Loop stores it, the amount ×1000
-    const x = entry / 1000;
+  const step = L.stepEntry(habit);
+  const shown = entriesOf(habit.uuid).get(date)?.value ?? L.UNKNOWN;
+  const stepKey = (steps) => {
+    const text = `${steps > 0 ? "+" : "\u2212"}${L.formatStep(step)}`;
     return {
-      text: L.formatNumber(x), tint: meets(habit, x) ? c : faint, label: `${L.formatNumber(x)} ${habit.data.unit}`.trim(),
-      run: () => setDay(habit, date, entry),
+      text, tint: meets(habit, L.steppedEntry(shown, step, steps) / 1000) ? c : faint,
+      label: `${steps > 0 ? "Add" : "Take off"} ${L.formatStep(step)} ${habit.data.unit}`.trim(),
+      run: () => stepDay(habit, date, steps),
     };
   };
   return {
     center: { glyph: "question", tint: faint, label: "Clear", run: () => setDay(habit, date, L.UNKNOWN) },
-    up: amount(L.dayTargetEntry(habit)),
+    up: stepKey(1),
     right: { icon: "dialpad", tint: faint, label: "Another amount", run: () => numberSheet(habit, date) },
-    down: amount(0),
+    down: stepKey(-1),
     left: { glyph: "minus", tint: c, label: "Skip", run: () => setDay(habit, date, L.SKIP) },
   };
+}
+
+/** + (1) or − (-1) on a number day, by the habit's step, from what the day holds now. */
+function stepDay(habit, date, steps) {
+  const now = entriesOf(habit.uuid).get(date)?.value ?? L.UNKNOWN;
+  setDay(habit, date, L.steppedEntry(now, L.stepEntry(habit), steps));
 }
 
 function direction(dx, dy) {
@@ -1271,7 +1293,8 @@ const KEY_OFFSET = { center: [0, 0], up: [0, -1], right: [1, 0], down: [0, 1], l
 function keyFace(choice) {
   if (choice.icon) return icon(choice.icon);
   if (choice.glyph) return mark(choice.glyph);
-  return h("span", { class: "glyph-text" + (choice.text.length > 3 ? " long" : "") }, choice.text);
+  const size = choice.text.length > 5 ? " longer" : choice.text.length > 3 ? " long" : "";
+  return h("span", { class: "glyph-text" + size }, choice.text);
 }
 
 /** The cross of keys, centred on the day and moved in from the window's edges. */
@@ -1351,7 +1374,7 @@ document.addEventListener("keydown", (e) => {
   else closePopover();
 });
 
-// ---- sheets: a day's value and note, and amounts (xrnnote/NoteSheet.kt) ---------------------
+// ---- the sheet: a number day's amount (xrnnote/NoteSheet.kt) --------------------------------
 
 let sheet = null;
 
@@ -1370,7 +1393,7 @@ function openSheet(habit, children) {
   return sheet;
 }
 
-/** Closing a sheet any way but its buttons keeps a changed note, as on the phone. */
+/** Closing a sheet any way but its buttons runs its onClose: an amount typed is kept, as on the phone. */
 function closeSheet() {
   if (!sheet) return;
   const closing = sheet;
@@ -1387,71 +1410,24 @@ function sheetHead(habit, date) {
 }
 
 /**
- * A yes/no day: Done, Not done, Skip and Clear, and its note. Picking a value saves it with the
- * note as it stands; Save keeps the value and saves the note.
+ * A number day: any amount (Loop's number dialog on the phone). The day's sheet for a yes/no day
+ * went with its note on 2026-11-15: the flick keys have its four values, here and on the calendar.
  */
-function daySheet(habit, date, { focusNote = false } = {}) {
-  const entry = entriesOf(habit.uuid).get(date);
-  const original = entry?.value ?? L.UNKNOWN;
-  const originalNote = entry?.notes ?? "";
-  const note = h("textarea", { value: originalNote, placeholder: "Note for this day", rows: 3 });
-  const keepNote = () => {
-    // The day as it is now: it may have been ticked elsewhere while this sheet was open.
-    const value = entriesOf(habit.uuid).get(date)?.value ?? original;
-    if (note.value.trim() !== originalNote) writeEntry(habit.uuid, date, value, note.value.trim());
-  };
-  const finish = (value) => {
-    current.onClose = null;
-    closeSheet();
-    if (value == null) keepNote();
-    else writeEntry(habit.uuid, date, value, note.value.trim());
-  };
-  const values = [
-    [L.YES_MANUAL, "check", "Done", "var(--c)"],
-    [L.NO, "times", "Not done", "var(--muted)"],
-    [L.SKIP, "minus", "Skip", "var(--c)"],
-    [L.UNKNOWN, "question", "Clear", "var(--muted)"],
-  ].map(([value, glyph, label, tint]) => h("button", {
-    type: "button", class: "value" + (value === original ? " on" : ""), style: { "--tint": tint },
-    onclick: () => finish(value),
-  }, mark(glyph), h("span", {}, label)));
-  const current = openSheet(habit, [
-    sheetHead(habit, date),
-    h("div", { class: "values" }, values),
-    note,
-    h("div", { class: "actions" }, h("button", { class: "btn primary big", type: "button", onclick: () => finish(null) }, "Save")),
-  ]);
-  current.onClose = keepNote;
-  if (focusNote) {
-    note.focus();
-    note.setSelectionRange(note.value.length, note.value.length);
-  } else {
-    (values.find((b) => b.classList.contains("on")) ?? values[0]).focus();
-  }
-}
-
-/** A number day: any amount, and the note (Loop's number dialog on the phone). */
 function numberSheet(habit, date) {
   const entry = entriesOf(habit.uuid).get(date);
   const value = entry?.value ?? L.UNKNOWN;
-  const originalNote = entry?.notes ?? "";
   const amount = h("input", {
     type: "number", step: "any", min: 0, inputMode: "decimal", placeholder: "0",
     value: value >= 0 && value !== L.SKIP ? value / 1000 : "",
   });
   const shownAmount = amount.value;
-  const note = h("textarea", { value: originalNote, placeholder: "Note for this day", rows: 2 });
   // The day as it is now: the phone may have entered an amount while this sheet was open, and
   // an amount nobody typed here mustn't be written back over it (as NoteSheet on the phone).
   const valueNow = () => entriesOf(habit.uuid).get(date)?.value ?? value;
-  const keepNote = () => {
-    if (note.value.trim() !== originalNote) writeEntry(habit.uuid, date, valueNow(), note.value.trim());
-  };
   const finish = (stored) => {
     current.onClose = null;
     closeSheet();
-    if (stored == null) keepNote();
-    else writeEntry(habit.uuid, date, stored, note.value.trim());
+    if (stored != null) writeEntry(habit.uuid, date, stored);
   };
   const target = L.dayTargetEntry(habit);
   const form = h("form", {
@@ -1470,14 +1446,12 @@ function numberSheet(habit, date) {
       h("button", { type: "button", class: "btn", onclick: () => finish(0) }, "0"),
       h("button", { type: "button", class: "btn", onclick: () => finish(L.SKIP) }, "Skip"),
       h("button", { type: "button", class: "btn ghost", onclick: () => finish(L.UNKNOWN) }, "Clear")),
-    note,
     h("div", { class: "actions" }, h("button", { class: "btn primary big", type: "submit" }, "Save")));
   const current = openSheet(habit, [sheetHead(habit, date), form]);
   // Closing any other way keeps what was typed. Only Save or Clear empties a day, not a blank box.
   current.onClose = () => {
     const typed = amount.value !== "" && amount.value !== shownAmount;
-    if (typed) writeEntry(habit.uuid, date, Math.round(Number(amount.value) * 1000), note.value.trim());
-    else keepNote();
+    if (typed) writeEntry(habit.uuid, date, Math.round(Number(amount.value) * 1000));
   };
   amount.focus();
   amount.select();
@@ -1590,8 +1564,7 @@ function habitView(habit) {
       scoreCard(habit, sm, today),
       historyCard(habit, sm, today),
       streaksCard(habit, sm),
-      frequencyCard(habit, sm, today),
-      notesCard(habit))));
+      frequencyCard(habit, sm, today))));
 }
 
 function scoreCard(habit, sm, today) {
@@ -1674,14 +1647,13 @@ function historyCard(habit, sm, today) {
         fill = c; opacity = 0.18;
       }
       const x = left + w * (cell + gap), y = top + d * (cell + gap);
-      const label = `${dateLong.format(L.dayDate(day))}${entry?.notes ? ` — ${entry.notes}` : ""}`;
+      const label = dateLong.format(L.dayDate(day));
       const rect = s("rect", {
         x, y, width: cell, height: cell, rx: 4, fill, "fill-opacity": opacity,
         stroke: day === today ? "var(--text)" : "none", "stroke-width": day === today ? 1.5 : 0,
       }, s("title", {}, label));
       dayGesture(rect, habit, date);
       parts.push(rect, s("text", { class: "dn", x: x + cell / 2, y: y + cell / 2 + 3, "text-anchor": "middle", fill: ink }, L.dayDate(day).getUTCDate()));
-      if (entry?.notes) parts.push(s("circle", { cx: x + cell - 3.5, cy: y + 3.5, r: 2, fill: ink, "pointer-events": "none" }));
     }
   }
   const dayLabels = ["Mon", "", "Wed", "", "Fri", "", "Sun"].map((t, d) => t && s("text", { x: 0, y: top + d * (cell + gap) + 13 }, t));
@@ -1749,15 +1721,6 @@ function frequencyCard(habit, sm, today) {
       dots));
 }
 
-function notesCard(habit) {
-  const notes = [...entriesOf(habit.uuid)].filter(([, e]) => e.notes).sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, 30);
-  if (!notes.length) return null;
-  return h("section", { class: "card wide" },
-    h("h2", {}, "Notes"),
-    h("div", { class: "notes" }, notes.map(([date, e]) =>
-      h("div", { class: "note" }, h("time", { datetime: date }, dateLong.format(L.dayDate(L.dayNum(date)))), h("div", { style: { whiteSpace: "pre-wrap" } }, e.notes)))));
-}
-
 // ---- editor --------------------------------------------------------------------------------
 
 const YES_NO_FREQUENCIES = [
@@ -1778,7 +1741,7 @@ function frequencyKind(num, den) {
 function editView(habit, newType = L.YES_NO) {
   const data = habit ? { ...habit.data } : {
     name: "", question: "", description: "", color: 8, freqNum: 1, freqDen: 1, type: newType,
-    targetType: L.AT_LEAST, targetValue: 0, unit: "", archived: false, reminder: null,
+    targetType: L.AT_LEAST, targetValue: 0, unit: "", step: 1, archived: false, reminder: null,
     position: Math.max(-1, ...[...state.habits.values()].filter((x) => !x.deleted).map((x) => x.data.position)) + 1,
   };
   const numerical = data.type === L.NUMERICAL;
@@ -1791,7 +1754,7 @@ function editView(habit, newType = L.YES_NO) {
     palette().map((hex, i) => h("label", { style: { background: hex }, title: `Colour ${i + 1}` },
       h("input", { type: "radio", name: "color", value: i, checked: i === data.color }), h("i"))));
 
-  let freqFields;
+  let freqFields, stepField = null;
   if (numerical) {
     const pers = [[1, "per day"], [7, "per week"], [30, "per month"]];
     if (!pers.some(([v]) => v === data.freqDen)) pers.push([data.freqDen, `per ${data.freqDen} days`]); // the phone can set any
@@ -1804,6 +1767,12 @@ function editView(habit, newType = L.YES_NO) {
       h("input", { type: "number", name: "targetValue", step: "any", min: 0, value: data.targetValue, required: true }),
       h("input", { type: "text", name: "unit", value: data.unit, placeholder: "unit, e.g. km", style: { width: "140px" } }),
       per);
+    // What the list's flick adds with + and takes off with − (NumberFlick; the phone's form has it too).
+    stepField = h("label", { class: "field" }, h("span", {}, "Step for + and −"),
+      h("input", {
+        type: "number", name: "step", step: "any", min: L.MIN_STEP, max: L.MAX_STEP, required: true,
+        value: L.formatStep(L.stepEntry(habit ?? { data })), style: { width: "140px" },
+      }));
   } else {
     const kindSel = h("select", { name: "kind" }, YES_NO_FREQUENCIES.map(([v, t]) => h("option", { value: v, selected: v === kind }, t)));
     const n = h("input", { type: "number", name: "num", min: 1, max: 31, value: num });
@@ -1839,6 +1808,8 @@ function editView(habit, newType = L.YES_NO) {
         out.unit = String(f.get("unit")).trim();
         out.freqDen = Number(f.get("per"));
         out.freqNum = out.freqDen === data.freqDen ? data.freqNum : 1;
+        out.step = L.cleanStep(Number(f.get("step")));
+        if (out.step == null) return (error.textContent = `The step for + and − goes from ${L.MIN_STEP} to ${L.MAX_STEP}.`);
       } else {
         const k = String(f.get("kind"));
         const fn = Math.max(1, Number(f.get("num")) || 1), fd = Math.max(1, Number(f.get("den")) || 1);
@@ -1857,7 +1828,7 @@ function editView(habit, newType = L.YES_NO) {
     h("fieldset", {}, h("legend", {}, "The habit"),
       h("label", { class: "field" }, h("span", {}, "Name"), name),
       h("label", { class: "field" }, h("span", {}, "Question"), question)),
-    h("fieldset", {}, h("legend", {}, numerical ? "Target" : "How often"), freqFields),
+    h("fieldset", {}, h("legend", {}, numerical ? "Target" : "How often"), freqFields, stepField),
     h("fieldset", {}, h("legend", {}, "Colour"), swatches),
     h("fieldset", {}, h("legend", {}, "Notes"), description),
     error,
@@ -2120,3 +2091,6 @@ async function boot() {
 }
 
 boot();
+
+// For web/test, which runs this file under node on stand-ins for a browser.
+export { checkChoices, ingest, numberChoices, prefs, state, tapDay };

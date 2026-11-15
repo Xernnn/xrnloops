@@ -23,9 +23,7 @@ import android.app.Activity
 import android.app.Dialog
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
 import android.graphics.PointF
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
@@ -194,20 +192,6 @@ fun View.dim(id: Int) = InterfaceUtils.getDimension(context, id)
 fun View.sp(value: Float) = InterfaceUtils.spToPixels(context, value)
 fun View.dp(value: Float) = InterfaceUtils.dpToPixels(context, value)
 fun View.str(id: Int) = resources.getString(id)
-
-fun View.drawNotesIndicator(
-    pNotesIndicator: Paint,
-    canvas: Canvas,
-    color: Int,
-    size: Float,
-    notes: String
-) {
-    if (notes.isBlank()) return
-
-    pNotesIndicator.color = color
-    val cy = 0.8f * size
-    canvas.drawCircle(width.toFloat() - cy, cy, 8f, pNotesIndicator)
-}
 
 val View.sres: StyledResources
     get() = StyledResources(context)

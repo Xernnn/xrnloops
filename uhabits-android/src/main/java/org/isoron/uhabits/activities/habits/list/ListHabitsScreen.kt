@@ -253,30 +253,26 @@ class ListHabitsScreen(
 
     override fun showNumberPopup(
         value: Double,
-        notes: String,
         habit: Habit,
         date: LocalDate,
         callback: NumberPickerCallback
     ) {
         // xrnloops: the same sheet as a yes/no day, in place of Loop's number box (XRNLOOPS.md)
         val color = rootView.value.currentTheme().color(habit.color).toInt()
-        NoteSheet.showNumber(activity, habit, date, color, value, notes) { v, n ->
-            callback.onNumberPicked(v, n)
-        }
+        NoteSheet.showNumber(activity, habit, date, color, value) { callback.onNumberPicked(it) }
     }
 
     override fun showCheckmarkPopup(
         selectedValue: Int,
-        notes: String,
         color: PaletteColor,
         habitName: String,
         date: LocalDate,
         callback: CheckMarkDialogCallback
     ) {
-        // xrnloops: our note sheet in place of Loop's popup (XRNLOOPS.md)
+        // xrnloops: the day's sheet in place of Loop's popup (XRNLOOPS.md)
         val theme = rootView.value.currentTheme()
-        NoteSheet.show(activity, habitName, date, theme.color(color).toInt(), selectedValue, notes) { v, n ->
-            callback.onNotesSaved(v, n)
+        NoteSheet.show(activity, habitName, date, theme.color(color).toInt(), selectedValue) {
+            callback.onValuePicked(it)
         }
     }
 

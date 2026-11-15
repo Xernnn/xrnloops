@@ -32,9 +32,10 @@ import org.isoron.uhabits.core.models.Entry.Companion.YES_MANUAL
  * "Toggle with short press" switch. A short hold opens the flick menu ([FlickGesture]) whatever
  * this says.
  *
- * Until it is picked, it follows Loop's switch, so nothing changes on its own. Picking it writes
- * that switch too, which the habit page's calendar still reads: a tap there toggles unless this is
- * [Action.MENU].
+ * Both choices act on the day, so Loop's switch, which the habit page's calendar still reads, is
+ * kept on: a tap there toggles, and a long press opens the day's sheet. A third choice opened the
+ * day's note until 2026-11-15; a phone that had it, or that never picked one, gets the default
+ * ([resolve]) the first time this is read, at the app's start, and it's saved as picked.
  */
 object XrnTap {
     const val KEY = "pref_xrn_tap"
@@ -45,17 +46,25 @@ object XrnTap {
         TICK("tick"),
 
         /** Loop's toggle: ✓ → (skip) → ✗ → (?) → ✓. */
-        CYCLE("cycle"),
-
-        /** The day's sheet ([org.isoron.uhabits.xrnnote.NoteSheet]): every value, and the note. */
-        MENU("menu")
+        CYCLE("cycle")
     }
+
+    /**
+     * The choice [stored] names. Anything else, none yet or "menu" (the day's note, gone since
+     * 2026-11-15), follows Loop's switch: on, its toggle; off, as "menu" left it, a tick.
+     */
+    fun resolve(stored: String?, loopShortToggle: Boolean): Action =
+        Action.values().firstOrNull { it.key == stored } ?: if (loopShortToggle) Action.CYCLE else Action.TICK
 
     fun action(context: Context): Action {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val stored = prefs.getString(KEY, null)
-        return Action.values().firstOrNull { it.key == stored }
-            ?: if (prefs.getBoolean(LOOP_SHORT_TOGGLE, false)) Action.CYCLE else Action.MENU
+        val loopSwitch = prefs.getBoolean(LOOP_SHORT_TOGGLE, false)
+        val action = resolve(stored, loopSwitch)
+        if (stored != action.key || !loopSwitch) {
+            prefs.edit().putString(KEY, action.key).putBoolean(LOOP_SHORT_TOGGLE, true).apply()
+        }
+        return action
     }
 
     /** [Action.TICK]: ✓, or back to an empty day from a ✓ (a ? with question marks on). */
@@ -64,16 +73,9 @@ object XrnTap {
         else -> YES_MANUAL
     }
 
-    /** From Loop's SettingsFragment: shows the current choice and keeps Loop's switch in step. */
+    /** From Loop's SettingsFragment: shows the current choice. */
     fun attach(fragment: PreferenceFragmentCompat) {
         val pref = fragment.findPreference(KEY) as? ListPreference ?: return
-        val context = fragment.requireContext()
-        pref.value = action(context).key
-        pref.setOnPreferenceChangeListener { _, value ->
-            PreferenceManager.getDefaultSharedPreferences(context).edit()
-                .putBoolean(LOOP_SHORT_TOGGLE, value != Action.MENU.key)
-                .apply()
-            true
-        }
+        pref.value = action(fragment.requireContext()).key
     }
 }

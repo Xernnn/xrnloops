@@ -152,6 +152,37 @@ class StoreTest(unittest.TestCase):
         result = self.store.apply({"habits": [{"uuid": "h1", "mtime": 3, "baseSeq": 0, "data": {"name": "Stale"}}]})
         self.assertEqual("Read more", result["rejected"]["habits"][0]["data"]["name"])
 
+    def test_a_habits_step_is_kept_and_an_older_client_cant_wipe_it(self):
+        # xrnloops' number flick goes by it (2026-11-15).
+        self.store.apply({"habits": [{"uuid": "h1", "mtime": 1, "data": {"name": "Run", "type": 1, "step": 0.25}}]})
+        self.assertEqual(0.25, self.store.changes(0)["habits"][0]["data"]["step"])
+        # xrnrule and an xrnloops from before don't know it: their edits keep it.
+        self.store.apply({"habits": [{"uuid": "h1", "mtime": 2, "data": {"name": "Run more", "icon": "run"}}]})
+        data = self.store.changes(0)["habits"][0]["data"]
+        self.assertEqual(("Run more", 0.25), (data["name"], data["step"]))
+        self.store.apply({"habits": [{"uuid": "h1", "mtime": 3, "data": {"step": 2}}]})
+        self.assertEqual(2.0, self.store.changes(0)["habits"][0]["data"]["step"])
+
+    def test_a_habit_written_without_a_step_has_one_of_1(self):
+        self.store.apply({"habits": [{"uuid": "h1", "mtime": 1, "data": {"name": "Read"}}]})
+        self.assertEqual(1.0, self.store.changes(0)["habits"][0]["data"]["step"])
+
+    def test_a_habit_stored_before_the_step_comes_back_as_it_was(self):
+        # Written by a server from before 2026-11-15: no step until it is next written.
+        old = {k: v for k, v in srv.clean_habit_data({"name": "Read"}).items() if k != "step"}
+        self.store.db.execute("INSERT INTO habits(uuid, data, mtime, deleted, seq) VALUES('h1', ?, 1, 0, ?)",
+                              (json.dumps(old, sort_keys=True), self.store._next_seq()))
+        self.store.db.commit()
+        self.assertNotIn("step", self.store.changes(0)["habits"][0]["data"])
+        self.store.apply({"habits": [{"uuid": "h1", "mtime": 2, "data": {"name": "Read a book"}}]})
+        self.assertEqual(1.0, self.store.changes(0)["habits"][0]["data"]["step"])
+
+    def test_a_step_that_isnt_more_than_0_is_refused(self):
+        for bad in (0, -1, "lots", float("nan"), float("inf")):
+            with self.assertRaises((ValueError, TypeError), msg=bad):
+                self.store.apply({"habits": [{"uuid": "h1", "mtime": 1, "data": {"step": bad}}]})
+        self.assertEqual([], self.store.changes(0)["habits"])
+
     def test_bad_base_seq_is_refused(self):
         with self.assertRaises(ValueError):
             self.store.apply({"entries": [{**self.entry(1, 1), "baseSeq": "3"}]})

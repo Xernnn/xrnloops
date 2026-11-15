@@ -48,10 +48,13 @@ import org.isoron.uhabits.core.commands.EditHabitCommand
 import org.isoron.uhabits.core.models.Frequency
 import org.isoron.uhabits.core.models.Habit
 import org.isoron.uhabits.core.models.HabitType
+import org.isoron.uhabits.core.models.MAX_STEP
+import org.isoron.uhabits.core.models.MIN_STEP
 import org.isoron.uhabits.core.models.NumericalHabitType
 import org.isoron.uhabits.core.models.PaletteColor
 import org.isoron.uhabits.core.models.Reminder
 import org.isoron.uhabits.core.models.WeekdayList
+import org.isoron.uhabits.core.models.cleanStep
 import org.isoron.uhabits.databinding.ActivityEditHabitBinding
 import org.isoron.uhabits.utils.applyBottomInset
 import org.isoron.uhabits.utils.applyRootViewInsets
@@ -59,6 +62,9 @@ import org.isoron.uhabits.utils.applyToolbarInsets
 import org.isoron.uhabits.utils.dismissCurrentAndShow
 import org.isoron.uhabits.utils.formatTime
 import org.isoron.uhabits.utils.toFormattedString
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
+import java.util.Locale
 
 fun formatFrequency(freqNum: Int, freqDen: Int, resources: Resources) = when {
     freqNum == 1 && (freqDen == 30 || freqDen == 31) -> resources.getString(R.string.every_month)
@@ -123,8 +129,10 @@ class EditHabitActivity : AppCompatActivity() {
             binding.notesInput.setText(habit.description)
             binding.unitInput.setText(habit.unit)
             binding.targetInput.setText(habit.targetValue.toString())
+            binding.stepInput.setText(showStep(habit.step))
         } else {
             habitType = HabitType.fromInt(intent.getIntExtra("habitType", HabitType.YES_NO.value))
+            binding.stepInput.setText(showStep(1.0))
         }
 
         opened = form()
@@ -147,6 +155,7 @@ class EditHabitActivity : AppCompatActivity() {
                 binding.unitOuterBox.visibility = View.GONE
                 binding.targetOuterBox.visibility = View.GONE
                 binding.targetTypeOuterBox.visibility = View.GONE
+                binding.stepOuterBox.visibility = View.GONE
             }
             HabitType.NUMERICAL -> {
                 binding.nameInput.hint = getString(R.string.measurable_short_example)
@@ -285,7 +294,8 @@ class EditHabitActivity : AppCompatActivity() {
             binding.questionInput,
             binding.notesInput,
             binding.unitInput,
-            binding.targetInput
+            binding.targetInput,
+            binding.stepInput
         ).map { it.text.trim().toString() } +
             listOf(color.paletteIndex, freqNum, freqDen, reminderHour, reminderMin, reminderDays.toInteger(), targetType)
 
@@ -324,6 +334,7 @@ class EditHabitActivity : AppCompatActivity() {
             habit.targetValue = binding.targetInput.text.toString().toDouble()
             habit.targetType = targetType
             habit.unit = binding.unitInput.text.trim().toString()
+            habit.step = typedStep()!! // validate() checked it
         }
         habit.type = habitType
 
@@ -355,9 +366,21 @@ class EditHabitActivity : AppCompatActivity() {
                 binding.targetInput.error = getString(R.string.validation_cannot_be_blank)
                 isValid = false
             }
+            if (typedStep() == null) {
+                binding.stepInput.error = getString(R.string.xrnstep_invalid, showStep(MIN_STEP), showStep(MAX_STEP))
+                isValid = false
+            }
         }
         return isValid
     }
+
+    /** xrnloops: the step box, to the thousandth (cleanStep), or null if it isn't a step. */
+    private fun typedStep(): Double? =
+        binding.stepInput.text.trim().toString().replace(',', '.').toDoubleOrNull()?.let(::cleanStep)
+
+    /** xrnloops: a step as the box shows it, with a point as targetInput has it: "1", "0.25". */
+    private fun showStep(step: Double): String =
+        DecimalFormat("#.###", DecimalFormatSymbols(Locale.US)).format(step)
 
     private fun populateReminder() {
         if (reminderHour < 0) {

@@ -789,7 +789,9 @@ data class HabitData(
     val unit: String,
     val archived: Boolean,
     val position: Int,
-    val reminder: ReminderData?
+    val reminder: ReminderData?,
+    /** The number flick's step (2026-11-15). A habit synced without one, by a client from before, has 1. */
+    val step: Double = 1.0
 ) {
     fun applyTo(habit: Habit) {
         habit.name = name
@@ -800,6 +802,7 @@ data class HabitData(
         habit.type = HabitType.fromInt(type)
         habit.targetType = NumericalHabitType.fromInt(targetType)
         habit.targetValue = targetValue
+        habit.step = step
         habit.unit = unit
         habit.isArchived = archived
         habit.reminder = reminder?.let { Reminder(it.hour, it.minute, WeekdayList(it.days)) }
@@ -815,6 +818,7 @@ data class HabitData(
         .put("type", type)
         .put("targetType", targetType)
         .put("targetValue", targetValue)
+        .put("step", step)
         .put("unit", unit)
         .put("archived", archived)
         .put("position", position)
@@ -838,7 +842,8 @@ data class HabitData(
             unit = h.unit,
             archived = h.isArchived,
             position = h.position,
-            reminder = h.reminder?.let { ReminderData(it.hour, it.minute, it.days.toInteger()) }
+            reminder = h.reminder?.let { ReminderData(it.hour, it.minute, it.days.toInteger()) },
+            step = h.step
         )
 
         fun fromJson(o: JSONObject): HabitData {
@@ -864,7 +869,9 @@ data class HabitData(
                 unit = o.optString("unit"),
                 archived = o.optBoolean("archived"),
                 position = o.optInt("position"),
-                reminder = r?.let { ReminderData(it.optInt("hour"), it.optInt("minute"), it.optInt("days")) }
+                reminder = r?.let { ReminderData(it.optInt("hour"), it.optInt("minute"), it.optInt("days")) },
+                // None (from an older client, or a server from before), or not a usable one: 1.
+                step = o.optDouble("step", 1.0).takeIf { it.isFinite() && it > 0 } ?: 1.0
             )
         }
     }
@@ -956,9 +963,12 @@ internal class Snapshot(
                 val json = JSONObject(text)
                 val habits = mutableMapOf<String, Stamped<HabitData>>()
                 val h = json.getJSONObject("habits")
+                var beforeStep = false
                 for (uuid in h.keys()) {
                     val o = h.getJSONObject(uuid)
-                    habits[uuid] = Stamped(HabitData.fromJson(o.getJSONObject("d")), o.getLong("m"))
+                    val d = o.getJSONObject("d")
+                    beforeStep = beforeStep || !d.has("step")
+                    habits[uuid] = Stamped(HabitData.fromJson(d), o.getLong("m"))
                 }
                 val entries = mutableMapOf<String, Stamped<EntryData>>()
                 val e = json.getJSONObject("entries")
@@ -969,7 +979,10 @@ internal class Snapshot(
                 val tombstones = mutableMapOf<String, Long>()
                 json.optJSONObject("tombstones")?.let { t -> for (uuid in t.keys()) tombstones[uuid] = t.getLong(uuid) }
                 Snapshot(
-                    json.getLong("seq"),
+                    // Saved by a version that didn't know the step (before 2026-11-15): a step set
+                    // in the web app since went by unseen, so the feed is read again from the start,
+                    // as after a lost habit. Saved again, every habit has one, so this is once.
+                    if (beforeStep) 0 else json.getLong("seq"),
                     json.getBoolean("initialized"),
                     habits,
                     entries,

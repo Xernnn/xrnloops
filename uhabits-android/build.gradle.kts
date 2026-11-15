@@ -60,8 +60,8 @@ android {
     }
 
     defaultConfig {
-        versionCode = 20301
-        versionName = "2.3.1"
+        versionCode = 20302
+        versionName = "2.3.2"
         minSdk = 28
         targetSdk = 36
         // xrnloops: its own app id so it installs next to the store Loop (XRNLOOPS.md).
@@ -162,4 +162,6 @@ dependencies {
     testImplementation(libs.junit.junit)
     // xrnloops: upstream's unit tests use kotlinx.coroutines.test but never declared it (XRNLOOPS.md).
     testImplementation(libs.kotlinx.coroutines.test)
+    // xrnloops: the real org.json, for the sync's records; android.jar's only throws in a unit test.
+    testImplementation(libs.json)
 }

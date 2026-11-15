@@ -20,4 +20,6 @@ package org.isoron.uhabits.core
 
 const val DATABASE_FILENAME = "uhabits.db"
 
-const val DATABASE_VERSION = 25
+// xrnloops: 26 adds the number flick's step (XRNLOOPS.md). A backup from here is version 26, which
+// the store Loop, at 25, won't import.
+const val DATABASE_VERSION = 26

@@ -24,6 +24,7 @@ import org.isoron.platform.time.LocalDate
 import org.isoron.platform.time.getToday
 import org.isoron.uhabits.core.commands.CommandRunner
 import org.isoron.uhabits.core.commands.CreateRepetitionCommand
+import org.isoron.uhabits.core.models.Entry.Companion.SKIP
 import org.isoron.uhabits.core.models.Entry.Companion.YES_MANUAL
 import org.isoron.uhabits.core.models.Habit
 import org.isoron.uhabits.core.models.HabitList
@@ -31,6 +32,8 @@ import org.isoron.uhabits.core.models.HabitType
 import org.isoron.uhabits.core.models.NumericalHabitType.AT_LEAST
 import org.isoron.uhabits.core.models.NumericalHabitType.AT_MOST
 import org.isoron.uhabits.core.models.PaletteColor
+import org.isoron.uhabits.core.models.stepEntry
+import org.isoron.uhabits.core.models.steppedEntry
 import org.isoron.uhabits.core.preferences.Preferences
 import org.isoron.uhabits.core.tasks.ExportCSVTask
 import org.isoron.uhabits.core.tasks.Task
@@ -52,42 +55,36 @@ open class ListHabitsBehavior(
         screen.showHabitScreen(h)
     }
 
+    // xrnloops: the day's sheet sets a value only (XRNLOOPS.md); the note the day has stays.
     open fun onEdit(habit: Habit, date: LocalDate, x: Float, y: Float) {
         val entry = habit.computedEntries.get(date)
         if (habit.type == HabitType.NUMERICAL) {
             val oldValue = entry.value.toDouble() / 1000
-            screen.showNumberPopup(oldValue, entry.notes, habit, date) { newValue: Double, newNotes: String ->
-                // xrnloops: a note on its own keeps the day as it is now; sync may have changed it
-                val value = when (newValue) {
-                    oldValue -> habit.computedEntries.get(date).value
-                    else -> (newValue * 1000).roundToInt()
+            screen.showNumberPopup(oldValue, habit, date) { newValue: Double ->
+                if (newValue != oldValue && meetsDayTarget(habit, newValue)) {
+                    screen.showConfetti(habit.color, x, y)
                 }
-                if (newValue != oldValue) {
-                    // xrnloops: the day's share of the target, as the list shows it
-                    val target = habit.targetValue / habit.frequency.denominator
-                    if (
-                        (habit.targetType == AT_LEAST && newValue >= target) ||
-                        (habit.targetType == AT_MOST && newValue <= target)
-                    ) {
-                        screen.showConfetti(habit.color, x, y)
-                    }
-                }
-                commandRunner.run(CreateRepetitionCommand(habitList, habit, date, value, newNotes))
+                val value = (newValue * 1000).roundToInt()
+                commandRunner.run(CreateRepetitionCommand(habitList, habit, date, value))
             }
         } else {
             screen.showCheckmarkPopup(
                 entry.value,
-                entry.notes,
                 habit.color,
-                habit.name, // xrnloops: the note screen names the habit and the day (XRNLOOPS.md)
+                habit.name, // xrnloops: the sheet names the habit and the day (XRNLOOPS.md)
                 date
-            ) { newValue: Int, newNotes: String ->
+            ) { newValue: Int ->
                 if (newValue != entry.value && newValue == YES_MANUAL) screen.showConfetti(habit.color, x, y)
-                // xrnloops: a note on its own keeps the day as it is now; sync may have changed it
-                val value = if (newValue == entry.value) habit.computedEntries.get(date).value else newValue
-                commandRunner.run(CreateRepetitionCommand(habitList, habit, date, value, newNotes))
+                commandRunner.run(CreateRepetitionCommand(habitList, habit, date, newValue))
             }
         }
+    }
+
+    /** xrnloops: the day's share of the target, as the list shows it. */
+    private fun meetsDayTarget(habit: Habit, amount: Double): Boolean {
+        val target = habit.targetValue / habit.frequency.denominator
+        return (habit.targetType == AT_LEAST && amount >= target) ||
+            (habit.targetType == AT_MOST && amount <= target)
     }
 
     open fun onExportCSV() {
@@ -130,11 +127,25 @@ open class ListHabitsBehavior(
         if (prefs.isFirstRun) onFirstRun()
     }
 
-    open fun onToggle(habit: Habit, date: LocalDate, value: Int, notes: String, x: Float, y: Float) {
+    // xrnloops: no note from the list either; the day keeps its own (XRNLOOPS.md).
+    open fun onToggle(habit: Habit, date: LocalDate, value: Int, x: Float, y: Float) {
         commandRunner.run(
-            CreateRepetitionCommand(habitList, habit, date, value, notes)
+            CreateRepetitionCommand(habitList, habit, date, value)
         )
         if (value == YES_MANUAL) screen.showConfetti(habit.color, x, y)
+    }
+
+    /**
+     * xrnloops: the number flick's + ([steps] 1) and − (-1), by the habit's step, on the day as
+     * stored now (XRNLOOPS.md, [steppedEntry]). Reaching the day's share of the target celebrates,
+     * once: not again for each step past it.
+     */
+    open fun onStep(habit: Habit, date: LocalDate, steps: Int, x: Float, y: Float) {
+        val before = habit.originalEntries.get(date).value
+        val after = steppedEntry(before, habit.stepEntry(), steps)
+        commandRunner.run(CreateRepetitionCommand(habitList, habit, date, after))
+        val metBefore = before >= 0 && before != SKIP && meetsDayTarget(habit, before / 1000.0)
+        if (!metBefore && meetsDayTarget(habit, after / 1000.0)) screen.showConfetti(habit.color, x, y)
     }
 
     enum class Message {
@@ -155,14 +166,12 @@ open class ListHabitsBehavior(
         fun showMessage(m: Message)
         fun showNumberPopup(
             value: Double,
-            notes: String,
             habit: Habit, // xrnloops
             date: LocalDate, // xrnloops
             callback: NumberPickerCallback
         )
         fun showCheckmarkPopup(
             selectedValue: Int,
-            notes: String,
             color: PaletteColor,
             habitName: String, // xrnloops
             date: LocalDate, // xrnloops

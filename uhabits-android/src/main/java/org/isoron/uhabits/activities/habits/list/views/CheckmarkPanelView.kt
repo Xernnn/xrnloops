@@ -54,13 +54,7 @@ class CheckmarkPanelView(
             setupButtons()
         }
 
-    var notes = arrayOf<String>()
-        set(values) {
-            field = values
-            setupButtons()
-        }
-
-    var onToggle: (LocalDate, Int, String) -> Unit = { _, _, _ -> }
+    var onToggle: (LocalDate, Int) -> Unit = { _, _ -> } // xrnloops: no note (XRNLOOPS.md)
         set(value) {
             field = value
             setupButtons()
@@ -84,12 +78,8 @@ class CheckmarkPanelView(
                 index + dataOffset < values.size -> values[index + dataOffset]
                 else -> UNKNOWN
             }
-            button.notes = when {
-                index + dataOffset < notes.size -> notes[index + dataOffset]
-                else -> ""
-            }
             button.color = color
-            button.onToggle = { value, notes -> onToggle(date, value, notes) }
+            button.onToggle = { value -> onToggle(date, value) }
             button.onEdit = { onEdit(date) }
         }
     }

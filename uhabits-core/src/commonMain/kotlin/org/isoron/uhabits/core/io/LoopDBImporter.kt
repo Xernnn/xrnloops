@@ -128,7 +128,7 @@ class LoopDBImporter(
         db.query(
             "SELECT id, name, description, question, freq_num, freq_den, color, " +
                 "position, reminder_hour, reminder_min, reminder_days, highlight, " +
-                "archived, type, target_value, target_type, unit, uuid " +
+                "archived, type, target_value, target_type, unit, uuid, step " +
                 "FROM Habits ORDER BY position"
         ) { stmt ->
             result.add(
@@ -150,7 +150,9 @@ class LoopDBImporter(
                     targetValue = stmt.getRealOrNull(14) ?: 0.0,
                     targetType = stmt.getIntOrNull(15) ?: 0,
                     unit = stmt.getTextOrNull(16) ?: "",
-                    uuid = stmt.getTextOrNull(17)
+                    uuid = stmt.getTextOrNull(17),
+                    // xrnloops: a store Loop's backup has none; migrations/26.sql made it 1
+                    step = stmt.getRealOrNull(18) ?: 1.0
                 )
             )
         }

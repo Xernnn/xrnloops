@@ -80,34 +80,34 @@ class ListHabitsBehaviorTest : BaseUnitTest() {
         val today = getToday()
         openNumberSheet(habit2, today)
         verify {
-            screen.showNumberPopup(0.1, "", habit2, today, any())
+            screen.showNumberPopup(0.1, habit2, today, any())
         }
-        capturedPicker!!.onNumberPicked(100.0, "")
+        capturedPicker!!.onNumberPicked(100.0)
         assertEquals(100000, habit2.computedEntries.get(today).value)
     }
 
     private fun openNumberSheet(habit: Habit, date: LocalDate): NumberPickerCallback {
         every {
-            screen.showNumberPopup(any(), any(), any(), any(), any())
+            screen.showNumberPopup(any(), any(), any(), any())
         } calls { args ->
-            capturedPicker = args.arg<NumberPickerCallback>(4)
+            capturedPicker = args.arg<NumberPickerCallback>(3)
             Unit
         }
         behavior.onEdit(habit, date, 0f, 0f)
         return capturedPicker!!
     }
 
+    // xrnloops: the sheet has no note since 2026-11-15, and an amount from it keeps the day's,
+    // even one sync wrote while the sheet was open (XRNLOOPS.md).
     @Test
-    fun testOnEdit_aNumberNoteAloneKeepsWhatSyncChanged() {
+    fun testOnEdit_aNumberKeepsTheDaysNote() {
         val today = getToday()
-        val shown = habit2.computedEntries.get(today).value / 1000.0
+        habit2.originalEntries.add(Entry(today, 3000, "first"))
         val sheet = openNumberSheet(habit2, today)
-        habit2.originalEntries.add(Entry(today, 5000))
+        habit2.originalEntries.add(Entry(today, 5000, "written meanwhile"))
         habit2.recompute()
-        sheet.onNumberPicked(shown, "written meanwhile")
-        val entry = habit2.computedEntries.get(today)
-        assertEquals(5000, entry.value)
-        assertEquals("written meanwhile", entry.notes)
+        sheet.onNumberPicked(7.0)
+        assertEquals(Entry(today, 7000, "written meanwhile"), habit2.originalEntries.get(today))
     }
 
     @Test
@@ -116,7 +116,7 @@ class ListHabitsBehaviorTest : BaseUnitTest() {
         val sheet = openNumberSheet(habit2, today)
         habit2.originalEntries.add(Entry(today, 5000))
         habit2.recompute()
-        sheet.onNumberPicked(7.0, "")
+        sheet.onNumberPicked(7.0)
         assertEquals(7000, habit2.computedEntries.get(today).value)
     }
 
@@ -126,48 +126,46 @@ class ListHabitsBehaviorTest : BaseUnitTest() {
         habit2.frequency = Frequency.WEEKLY
         habit2.targetValue = 70.0
         habit2.targetType = NumericalHabitType.AT_LEAST
-        openNumberSheet(habit2, today).onNumberPicked(9.0, "")
+        openNumberSheet(habit2, today).onNumberPicked(9.0)
         verify(exactly(0)) { screen.showConfetti(any(), any(), any()) }
-        openNumberSheet(habit2, today).onNumberPicked(10.0, "")
+        openNumberSheet(habit2, today).onNumberPicked(10.0)
         verify(exactly(1)) { screen.showConfetti(any(), any(), any()) }
     }
 
-    // xrnloops: sync can change a day while its note sheet is open (XRNLOOPS.md)
-    private fun openNoteSheet(date: LocalDate): CheckMarkDialogCallback {
+    // xrnloops: sync can change a day while its sheet is open (XRNLOOPS.md)
+    private fun openDaySheet(date: LocalDate): CheckMarkDialogCallback {
         var callback: CheckMarkDialogCallback? = null
         every {
-            screen.showCheckmarkPopup(any(), any(), any(), any(), any(), any())
+            screen.showCheckmarkPopup(any(), any(), any(), any(), any())
         } calls { args ->
-            callback = args.arg<CheckMarkDialogCallback>(5)
+            callback = args.arg<CheckMarkDialogCallback>(4)
             Unit
         }
         behavior.onEdit(habit1, date, 0f, 0f)
         return callback!!
     }
 
-    private fun syncChanges(date: LocalDate, value: Int) {
-        habit1.originalEntries.add(Entry(date, value))
+    private fun syncChanges(date: LocalDate, value: Int, notes: String = "") {
+        habit1.originalEntries.add(Entry(date, value, notes))
         habit1.recompute()
     }
 
     @Test
-    fun testOnEdit_aNoteAloneKeepsWhatSyncChanged() {
+    fun testOnEdit_aPickedValueKeepsTheDaysNote() {
         val today = getToday()
-        val shown = habit1.computedEntries.get(today).value
-        val sheet = openNoteSheet(today)
-        syncChanges(today, Entry.SKIP)
-        sheet.onNotesSaved(shown, "written meanwhile")
-        val entry = habit1.computedEntries.get(today)
-        assertEquals(Entry.SKIP, entry.value)
-        assertEquals("written meanwhile", entry.notes)
+        syncChanges(today, Entry.YES_MANUAL, "first")
+        val sheet = openDaySheet(today)
+        syncChanges(today, Entry.SKIP, "written meanwhile")
+        sheet.onValuePicked(Entry.NO)
+        assertEquals(Entry(today, Entry.NO, "written meanwhile"), habit1.originalEntries.get(today))
     }
 
     @Test
     fun testOnEdit_aPickedValueStillWins() {
         val today = getToday()
-        val sheet = openNoteSheet(today)
+        val sheet = openDaySheet(today)
         syncChanges(today, Entry.SKIP)
-        sheet.onNotesSaved(Entry.NO, "")
+        sheet.onValuePicked(Entry.NO)
         assertEquals(Entry.NO, habit1.computedEntries.get(today).value)
     }
 
@@ -237,10 +235,62 @@ class ListHabitsBehaviorTest : BaseUnitTest() {
             habit = habit1,
             date = getToday(),
             value = Entry.NO,
-            notes = "",
             x = 0f,
             y = 0f
         )
         assertFalse(habit1.isCompletedToday())
+    }
+
+    // xrnloops: the number flick's + and − go by the habit's step, from the day as stored when
+    // the key is picked, and keep its note (XRNLOOPS.md).
+    @Test
+    fun testOnStep_addsAndTakesOffTheStep() {
+        val today = getToday()
+        habit2.step = 0.25
+        habit2.originalEntries.add(Entry(today, 1000, "knee"))
+        behavior.onStep(habit2, today, 1, 0f, 0f)
+        assertEquals(Entry(today, 1250, "knee"), habit2.originalEntries.get(today))
+        behavior.onStep(habit2, today, -1, 0f, 0f)
+        behavior.onStep(habit2, today, -1, 0f, 0f)
+        assertEquals(Entry(today, 750, "knee"), habit2.originalEntries.get(today))
+    }
+
+    @Test
+    fun testOnStep_goesFromTheDayAsItIsNow() {
+        val yesterday = getToday().minus(1)
+        assertEquals(200, habit2.originalEntries.get(yesterday).value) // what the list showed
+        habit2.originalEntries.add(Entry(yesterday, 4000)) // sync, since
+        behavior.onStep(habit2, yesterday, 1, 0f, 0f)
+        assertEquals(5000, habit2.originalEntries.get(yesterday).value)
+    }
+
+    @Test
+    fun testOnStep_anEmptyDay() {
+        val day = getToday().minus(2) // nothing entered
+        assertEquals(Entry.UNKNOWN, habit2.originalEntries.get(day).value)
+        behavior.onStep(habit2, day, -1, 0f, 0f)
+        assertEquals(0, habit2.originalEntries.get(day).value)
+        habit2.originalEntries.add(Entry(day, Entry.UNKNOWN))
+        behavior.onStep(habit2, day, 1, 0f, 0f)
+        assertEquals(1000, habit2.originalEntries.get(day).value)
+    }
+
+    @Test
+    fun testOnStep_celebratesReachingTheTargetOnce() {
+        val today = getToday()
+        habit2.targetValue = 2.0
+        habit2.originalEntries.add(Entry(today, 1000))
+        behavior.onStep(habit2, today, 1, 0f, 0f) // 2: met
+        behavior.onStep(habit2, today, 1, 0f, 0f) // 3: still met
+        verify(exactly(1)) { screen.showConfetti(any(), any(), any()) }
+    }
+
+    // xrnloops: a tap or a flick in the list keeps the day's note (XRNLOOPS.md).
+    @Test
+    fun testOnToggle_keepsTheDaysNote() {
+        val today = getToday()
+        syncChanges(today, Entry.YES_MANUAL, "kept")
+        behavior.onToggle(habit1, today, Entry.SKIP, 0f, 0f)
+        assertEquals(Entry(today, Entry.SKIP, "kept"), habit1.originalEntries.get(today))
     }
 }

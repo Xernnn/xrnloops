@@ -225,6 +225,23 @@
                 </LinearLayout>
             </FrameLayout>
 
+            <!-- xrnloops (XRNLOOPS.md): what the list's flick adds with + and takes off with − -->
+            <FrameLayout
+                android:id="@+id/stepOuterBox"
+                style="@style/FormOuterBox">
+                <LinearLayout style="@style/FormInnerBox">
+                    <TextView
+                        style="@style/FormLabel"
+                        android:text="@string/xrnstep_label" />
+                    <EditText
+                        style="@style/FormInput"
+                        android:id="@+id/stepInput"
+                        android:maxLines="1"
+                        android:inputType="numberDecimal"
+                        android:hint="@string/xrnstep_hint"/>
+                </LinearLayout>
+            </FrameLayout>
+
 
             <!-- Reminder -->
             <FrameLayout style="@style/FormOuterBox">

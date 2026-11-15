@@ -3,15 +3,13 @@
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <string name="xrntap_title">Tap on a day</string>
     <!-- %s is the picked choice (ListPreference fills it in). -->
-    <string name="xrntap_summary">%s. Hold a day for a moment and slide: up ✓, down ✗, left – (skip), right for the note; let go in the middle for ?.</string>
+    <string name="xrntap_summary">%s. Hold a day for a moment and slide: up ✓, down ✗, left – (skip); let go in the middle for ?. On a number day, up and down add and take off its step.</string>
     <string-array name="xrntap_entries">
         <item>Ticks it ✓ (tap again to clear)</item>
         <item>Cycles ✓ ✗ ? (Loop\'s way)</item>
-        <item>Opens the day\'s note</item>
     </string-array>
     <string-array name="xrntap_values" translatable="false">
         <item>tick</item>
         <item>cycle</item>
-        <item>menu</item>
     </string-array>
 </resources>

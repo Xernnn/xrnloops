@@ -28,11 +28,16 @@ data class CreateRepetitionCommand(
     val habit: Habit,
     val date: LocalDate,
     val value: Int,
-    val notes: String
+    /**
+     * xrnloops: null keeps the note the day has when this runs (XRNLOOPS.md). Nothing in the app
+     * writes a note since 2026-11-15, but the notes are kept, in the database and in sync, and a
+     * new value mustn't blank one, even one sync brought in while a sheet was open.
+     */
+    val notes: String? = null
 ) : Command {
     override fun run() {
         val entries = habit.originalEntries
-        entries.add(Entry(date, value, notes))
+        entries.add(Entry(date, value, notes ?: entries.get(date).notes))
         habit.recompute()
         habitList.resort()
     }

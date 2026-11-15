@@ -52,18 +52,22 @@ xrnrule-sync shares (its status page is on the same host), so either sign-in wor
 new password ends every session; so does deleting session.key.
 
     habit:  {"uuid", "mtime", "deleted", "seq", "data": {"name", "question", "description",
-             "color", "freqNum", "freqDen", "type", "targetType", "targetValue", "unit",
+             "color", "freqNum", "freqDen", "type", "targetType", "targetValue", "step", "unit",
              "archived", "position", "reminder": null | {"hour", "minute", "days"},
              "icon", "timer"}}
     entry:  {"habit", "date": "YYYY-MM-DD", "value", "notes", "mtime", "seq"}
 
 `icon` and `timer` are xrnrule's: an icon name, and whether a numerical habit counts minutes
-with its focus timer. Writes may add "baseSeq" to any record (see above).
+with its focus timer. `step` (2026-11-15) is what xrnloops' number flick adds with + and takes
+off with −, in the habit's unit; more than 0, and 1 when a write never gave one. A habit stored
+before it comes back without it until it is next written, and clients read that as 1; a write
+that leaves it out (xrnrule, an older xrnloops) keeps the stored one, as for any field. Writes
+may add "baseSeq" to any record (see above).
 
 Entry values are Loop's: UNKNOWN=-1, NO=0, YES_AUTO=1, YES_MANUAL=2, SKIP=3; numerical habits
 store the amount x1000.
 
-    python3 xrnloops-sync.py --data ~/xrnloops-sync/data --users ~/.config/radicale/users \
+    python3 xrnloops-sync.py --data ~/xrnloops-sync/data --users ~/.config/xrn-sync/users \
         --web ~/xrnloops-sync/web
 """
 import argparse
@@ -342,7 +346,7 @@ CREATE INDEX IF NOT EXISTS entries_seq ON entries(seq);
 HABIT_FIELDS = {
     "name": "", "question": "", "description": "", "color": 8, "freqNum": 1, "freqDen": 1,
     "type": YES_NO, "targetType": AT_LEAST, "targetValue": 0.0, "unit": "", "archived": False,
-    "position": 0, "reminder": None, "icon": "", "timer": False,
+    "position": 0, "reminder": None, "icon": "", "timer": False, "step": 1.0,
 }
 
 
@@ -371,6 +375,8 @@ def clean_habit_data(data):
         out[key] = value
     if out["freqNum"] <= 0 or out["freqDen"] <= 0:
         raise ValueError("frequency must be positive")
+    if out["step"] <= 0:
+        raise ValueError("step must be more than 0")
     return out
 
 

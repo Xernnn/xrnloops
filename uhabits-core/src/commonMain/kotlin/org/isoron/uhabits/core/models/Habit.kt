@@ -35,6 +35,8 @@ data class Habit(
     var reminder: Reminder? = null,
     var targetType: NumericalHabitType = NumericalHabitType.AT_LEAST,
     var targetValue: Double = 0.0,
+    /** xrnloops: what the number flick's + and − add and take off, in [unit] ([stepEntry]). */
+    var step: Double = 1.0,
     var type: HabitType = HabitType.YES_NO,
     var unit: String = "",
     var uuid: String? = null,
@@ -122,6 +124,7 @@ data class Habit(
         this.reminder = other.reminder
         this.targetType = other.targetType
         this.targetValue = other.targetValue
+        this.step = other.step
         this.type = other.type
         this.unit = other.unit
         this.uuid = other.uuid
@@ -142,6 +145,7 @@ data class Habit(
         if (reminder != other.reminder) return false
         if (targetType != other.targetType) return false
         if (targetValue != other.targetValue) return false
+        if (step != other.step) return false
         if (type != other.type) return false
         if (unit != other.unit) return false
         if (uuid != other.uuid) return false
@@ -161,6 +165,7 @@ data class Habit(
         result = 31 * result + (reminder?.hashCode() ?: 0)
         result = 31 * result + targetType.value
         result = 31 * result + targetValue.hashCode()
+        result = 31 * result + step.hashCode()
         result = 31 * result + type.value
         result = 31 * result + unit.hashCode()
         result = 31 * result + (uuid?.hashCode() ?: 0)
