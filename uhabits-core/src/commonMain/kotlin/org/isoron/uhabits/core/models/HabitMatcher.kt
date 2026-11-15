@@ -32,10 +32,11 @@ data class HabitMatcher(
         if (!isEnteredAllowed && habit.isEnteredToday()) return false
         if (searchQuery.isNotEmpty()) {
             val q = searchQuery.trim()
+            // xrnloops: not the habit's notes, which nothing shows since 2026-11-15 (XRNLOOPS.md),
+            // so a habit isn't found by words you can't see on it.
             if (q.isNotEmpty() &&
                 !habit.name.contains(q, ignoreCase = true) &&
-                !habit.question.contains(q, ignoreCase = true) &&
-                !habit.description.contains(q, ignoreCase = true)
+                !habit.question.contains(q, ignoreCase = true)
             ) {
                 return false
             }

@@ -1532,8 +1532,7 @@ function habitView(habit) {
             habit.data.question && h("div", { class: "q" }, habit.data.question),
             h("div", { class: "chips" },
               h("span", { class: "chip" }, L.describeFrequency(habit)),
-              habit.data.archived && h("span", { class: "chip" }, "Archived")),
-            habit.data.description && h("p", { class: "muted small", style: { whiteSpace: "pre-wrap", marginBottom: 0 } }, habit.data.description)),
+              habit.data.archived && h("span", { class: "chip" }, "Archived"))),
           h("div", { class: "toolbar" },
             h("a", { class: "btn", href: `#/edit/${habit.uuid}` }, "Edit"),
             h("button", {
@@ -1738,6 +1737,42 @@ function frequencyKind(num, den) {
   return ["custom", num, den];
 }
 
+/**
+ * What the habit form saves: `data`, the habit as the form opened on it (or a new one's defaults),
+ * with what the form `f` (its FormData) holds, or a message saying what's wrong. The habit's own
+ * notes (`description`) have had no box since 2026-11-15 (XRNLOOPS.md), but they stay on the
+ * server and the phone, so the ones stored now go along, never blanked: as on the phone
+ * (EditHabitActivity), not the ones the form opened with, which the phone may have changed since.
+ */
+function formHabit(uuid, data, f) {
+  const numerical = data.type === L.NUMERICAL;
+  const out = {
+    ...data,
+    name: String(f.get("name")).trim(),
+    question: String(f.get("question")).trim(),
+    description: state.habits.get(uuid)?.data.description ?? data.description ?? "",
+    color: Number(f.get("color") ?? data.color),
+  };
+  if (numerical) {
+    out.targetType = Number(f.get("targetType"));
+    out.targetValue = Number(f.get("targetValue"));
+    out.unit = String(f.get("unit")).trim();
+    out.freqDen = Number(f.get("per"));
+    out.freqNum = out.freqDen === data.freqDen ? data.freqNum : 1;
+    out.step = L.cleanStep(Number(f.get("step")));
+    if (out.step == null) return `The step for + and − goes from ${L.MIN_STEP} to ${L.MAX_STEP}.`;
+  } else {
+    const k = String(f.get("kind"));
+    const fn = Math.max(1, Number(f.get("num")) || 1), fd = Math.max(1, Number(f.get("den")) || 1);
+    [out.freqNum, out.freqDen] = {
+      daily: [1, 1], weekly: [1, 7], monthly: [1, 30], perWeek: [Math.min(fn, 7), 7],
+      perMonth: [Math.min(fn, 30), 30], everyN: [1, fd], custom: [Math.min(fn, fd), fd],
+    }[k];
+  }
+  if (!out.name) return "Give the habit a name.";
+  return out;
+}
+
 function editView(habit, newType = L.YES_NO) {
   const data = habit ? { ...habit.data } : {
     name: "", question: "", description: "", color: 8, freqNum: 1, freqDen: 1, type: newType,
@@ -1749,7 +1784,6 @@ function editView(habit, newType = L.YES_NO) {
 
   const name = h("input", { type: "text", name: "name", value: data.name, required: true, maxLength: 120, placeholder: numerical ? "e.g. 🏃 or Run" : "e.g. 🧘 or Meditate" });
   const question = h("input", { type: "text", name: "question", value: data.question, placeholder: numerical ? "e.g. How many km did you run today?" : "e.g. Did you meditate today?" });
-  const description = h("textarea", { name: "description", value: data.description, placeholder: "Notes about this habit (optional)" });
   const swatches = h("div", { class: "swatches", role: "radiogroup", "aria-label": "Colour" },
     palette().map((hex, i) => h("label", { style: { background: hex }, title: `Colour ${i + 1}` },
       h("input", { type: "radio", name: "color", value: i, checked: i === data.color }), h("i"))));
@@ -1794,31 +1828,8 @@ function editView(habit, newType = L.YES_NO) {
     class: "form",
     onsubmit: (e) => {
       e.preventDefault();
-      const f = new FormData(form);
-      const out = {
-        ...data,
-        name: String(f.get("name")).trim(),
-        question: String(f.get("question")).trim(),
-        description: String(f.get("description")).trim(),
-        color: Number(f.get("color") ?? data.color),
-      };
-      if (numerical) {
-        out.targetType = Number(f.get("targetType"));
-        out.targetValue = Number(f.get("targetValue"));
-        out.unit = String(f.get("unit")).trim();
-        out.freqDen = Number(f.get("per"));
-        out.freqNum = out.freqDen === data.freqDen ? data.freqNum : 1;
-        out.step = L.cleanStep(Number(f.get("step")));
-        if (out.step == null) return (error.textContent = `The step for + and − goes from ${L.MIN_STEP} to ${L.MAX_STEP}.`);
-      } else {
-        const k = String(f.get("kind"));
-        const fn = Math.max(1, Number(f.get("num")) || 1), fd = Math.max(1, Number(f.get("den")) || 1);
-        [out.freqNum, out.freqDen] = {
-          daily: [1, 1], weekly: [1, 7], monthly: [1, 30], perWeek: [Math.min(fn, 7), 7],
-          perMonth: [Math.min(fn, 30), 30], everyN: [1, fd], custom: [Math.min(fn, fd), fd],
-        }[k];
-      }
-      if (!out.name) return (error.textContent = "Give the habit a name.");
+      const out = formHabit(habit?.uuid, data, new FormData(form));
+      if (typeof out === "string") return (error.textContent = out);
       const uuid = habit?.uuid ?? crypto.randomUUID().replaceAll("-", "");
       formChanged = null;
       writeHabit(uuid, out);
@@ -1830,7 +1841,6 @@ function editView(habit, newType = L.YES_NO) {
       h("label", { class: "field" }, h("span", {}, "Question"), question)),
     h("fieldset", {}, h("legend", {}, numerical ? "Target" : "How often"), freqFields, stepField),
     h("fieldset", {}, h("legend", {}, "Colour"), swatches),
-    h("fieldset", {}, h("legend", {}, "Notes"), description),
     error,
     h("div", { class: "inline" },
       h("button", { class: "btn primary big", type: "submit" }, habit ? "Save" : "Create habit"),
@@ -2093,4 +2103,4 @@ async function boot() {
 boot();
 
 // For web/test, which runs this file under node on stand-ins for a browser.
-export { checkChoices, ingest, numberChoices, prefs, state, tapDay };
+export { checkChoices, formHabit, ingest, numberChoices, prefs, state, tapDay };

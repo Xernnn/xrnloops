@@ -53,8 +53,9 @@ class HabitMatcherTest : BaseUnitTest() {
         // Match by question only
         assertMatches(habits, "run", listOf(running, run10k))
 
-        // Match by description only
-        assertMatches(habits, "jog", listOf(running))
+        // xrnloops: not by the habit's notes, which nothing shows since 2026-11-15 (XRNLOOPS.md)
+        assertMatches(habits, "jog", emptyList())
+        assertMatches(habits, "mindfulness", emptyList())
 
         // Case-insensitive
         assertMatches(habits, "YOGA", listOf(yogaPractice, exercise))

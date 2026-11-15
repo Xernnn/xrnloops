@@ -266,21 +266,7 @@
                 </LinearLayout>
             </FrameLayout>
 
-
-            <!-- Notes -->
-            <FrameLayout style="@style/FormOuterBox">
-                <LinearLayout style="@style/FormInnerBox">
-                    <TextView
-                        style="@style/FormLabel"
-                        android:text="@string/notes" />
-
-                    <EditText
-                        android:id="@+id/notesInput"
-                        style="@style/FormInput"
-                        android:inputType="textCapSentences|textMultiLine"
-                        android:hint="@string/example_notes" />
-                </LinearLayout>
-            </FrameLayout>
+            <!-- xrnloops: no Notes box since 2026-11-15; Save keeps the habit's (HabitForm). -->
         </LinearLayout>
     </ScrollView>
 
