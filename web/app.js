@@ -1437,7 +1437,7 @@ function numberSheet(habit, date) {
       if (amount.value === shownAmount) return finish(null);
       // An empty box means no amount, not "undo the skip".
       const empty = valueNow() === L.SKIP ? L.SKIP : L.UNKNOWN;
-      finish(amount.value === "" ? empty : Math.round(Number(amount.value) * 1000));
+      finish(amount.value === "" ? empty : L.typedEntry(amount.value));
     },
   },
     h("div", { class: "amount-row" }, amount, habit.data.unit && h("span", {}, habit.data.unit)),
@@ -1450,8 +1450,8 @@ function numberSheet(habit, date) {
   const current = openSheet(habit, [sheetHead(habit, date), form]);
   // Closing any other way keeps what was typed. Only Save or Clear empties a day, not a blank box.
   current.onClose = () => {
-    const typed = amount.value !== "" && amount.value !== shownAmount;
-    if (typed) writeEntry(habit.uuid, date, Math.round(Number(amount.value) * 1000));
+    const typed = amount.value !== "" && amount.value !== shownAmount ? L.typedEntry(amount.value) : null;
+    if (typed != null) writeEntry(habit.uuid, date, typed);
   };
   amount.focus();
   amount.select();
@@ -2103,4 +2103,4 @@ async function boot() {
 boot();
 
 // For web/test, which runs this file under node on stand-ins for a browser.
-export { checkChoices, formHabit, ingest, numberChoices, prefs, state, tapDay };
+export { checkChoices, formHabit, ingest, numberChoices, numberSheet, prefs, state, tapDay };
