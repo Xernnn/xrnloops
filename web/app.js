@@ -1738,19 +1738,32 @@ function frequencyKind(num, den) {
 }
 
 /**
- * What the habit form saves: `data`, the habit as the form opened on it (or a new one's defaults),
- * with what the form `f` (its FormData) holds, or a message saying what's wrong. The habit's own
- * notes (`description`) have had no box since 2026-11-15 (XRNLOOPS.md), but they stay on the
- * server and the phone, so the ones stored now go along, never blanked: as on the phone
- * (EditHabitActivity), not the ones the form opened with, which the phone may have changed since.
+ * What the habit form saves, or a message saying what's wrong: the habit as stored when Save is
+ * pressed, with each field the form `f` (its FormData) changed from `data`, the habit as the form
+ * opened on it (or a new one's defaults). Everything else is as stored then, not as the form
+ * opened: the phone or xrnrule may have changed the reminder, archived it, reordered the list or
+ * set its icon or timer meanwhile, or renamed it while only its colour was changed here. The
+ * habit's own notes (`description`) have had no box since 2026-11-15 (XRNLOOPS.md), so they go
+ * along as stored too, never blanked, as on the phone (EditHabitActivity).
  */
 function formHabit(uuid, data, f) {
+  const edited = editedHabit(data, f);
+  if (typeof edited === "string") return edited;
+  const out = { ...(state.habits.get(uuid)?.data ?? data) };
+  const changed = Object.keys(edited).filter((k) => JSON.stringify(edited[k]) !== JSON.stringify(data[k]));
+  // How often is one setting: half of it from here and half from elsewhere would be neither's.
+  if (changed.includes("freqNum") || changed.includes("freqDen")) changed.push("freqNum", "freqDen");
+  for (const k of changed) out[k] = edited[k];
+  return out;
+}
+
+/** `data` with what the form `f` holds, or a message saying what's wrong (formHabit). */
+function editedHabit(data, f) {
   const numerical = data.type === L.NUMERICAL;
   const out = {
     ...data,
     name: String(f.get("name")).trim(),
     question: String(f.get("question")).trim(),
-    description: state.habits.get(uuid)?.data.description ?? data.description ?? "",
     color: Number(f.get("color") ?? data.color),
   };
   if (numerical) {
