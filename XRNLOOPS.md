@@ -115,9 +115,14 @@ kept by the browser, anything else is asked after with its `ETag`, so a deploy s
 a repeat visit costs a few 304s instead of every file. The data is never cached. On the home server it runs at `<server>/xrnloops` (port 5234 behind Tailscale Funnel),
 with its own htpasswd file (`~/.config/xrn-sync/users`, shared with xrnrule-sync). Ten wrong
 passwords from one address within 15 minutes get 429 until they age out (an IPv6 address counts
-as its /64, or its owner had a new one for every guess). A password counts as
-wrong until bcrypt has found it right, so guesses sent all at once can't get past the ten
-(until 2026-11-10 they were counted after the check, and every guess in flight got through).
+as its /64, or its owner had a new one for every guess). A password being checked holds one of
+the ten places until bcrypt has settled it, so guesses sent all at once can't get past the ten
+(until 2026-11-10 they were counted after the check, and every guess in flight got through); one
+that finds no place left waits for the checks in flight rather than getting 429. A right login
+clears only the mistakes made under its own name from its address, and a password the server
+already found right (its auth cache, which the phone hits on every sync) clears nothing, as a
+cookie never did (until 2026-11-18 any right login wiped the address's count, so a guesser behind
+the phone's address never ran out).
 
 The phone sends its password (Basic auth) with every request. The web app trades it once for a
 cookie (`POST /api/session`; `DELETE` signs out) and keeps nothing but a "signed in" hint in

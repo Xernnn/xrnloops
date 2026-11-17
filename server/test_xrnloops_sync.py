@@ -344,7 +344,7 @@ class HttpTest(unittest.TestCase):
             start = time.monotonic()
             status = self.raw("GET", "/api/changes?since=0", headers={"X-Forwarded-For": addr, **headers})[0]
             return status, time.monotonic() - start
-        srv.failures["203.0.113.61"] = [time.monotonic()] * srv.FAIL_LIMIT  # locked out
+        srv.failures["203.0.113.61"] = [(time.monotonic(), "sonn")] * srv.FAIL_LIMIT  # locked out
         with unittest.mock.patch.object(srv, "FAIL_DELAY_S", 0.5):
             for addr, status in (("203.0.113.60", 401), ("203.0.113.61", 429)):
                 got, took = timed(addr)
@@ -369,6 +369,58 @@ class HttpTest(unittest.TestCase):
                 statuses = list(pool.map(guess, range(n)))
         self.assertEqual(limit, statuses.count(401))
         self.assertEqual(n - limit, statuses.count(429))
+
+    def guess_as(self, name, password, addr):
+        login = base64.b64encode(f"{name}:{password}".encode()).decode()
+        return self.raw("GET", "/api/changes?since=0", headers={"Authorization": f"Basic {login}", "X-Forwarded-For": addr})[0]
+
+    def test_a_right_login_clears_only_its_own_users_mistakes(self):
+        # A login for one account wiped the whole address's count: guesses at another name from
+        # the same address started over with every login of the first.
+        addr = "203.0.113.80"
+        for _ in range(5):
+            self.assertEqual(401, self.guess_as("admin", "nope", addr))
+        for _ in range(4):
+            self.assertEqual(401, self.guess_as("sonn", "nope", addr))
+        srv.auth_cache.clear()
+        self.assertEqual(200, self.guess_as("sonn", "secret", addr))  # sonn's four go, admin's five stay
+        for _ in range(srv.FAIL_LIMIT - 5):
+            self.assertEqual(401, self.guess_as("admin", "nope", addr))
+        self.assertEqual(429, self.guess_as("admin", "nope", addr))
+
+    def test_a_device_sending_the_password_it_had_clears_nothing(self):
+        # The phone sends its password with every request. Behind the same address as a guesser
+        # (home Wi-Fi, a carrier's shared address) it cleared the guesser's count with every
+        # sync, so the guesses never ran out. A password already found right (the auth cache) is
+        # a session, not a login.
+        addr = "203.0.113.81"
+        self.assertEqual(200, self.guess_as("sonn", "secret", addr))  # the phone, signed in
+        for _ in range(srv.FAIL_LIMIT - 1):
+            self.assertEqual(401, self.guess_as("sonn", "nope", addr))
+            self.assertEqual(200, self.guess_as("sonn", "secret", addr))  # it syncs on
+        self.assertEqual(401, self.guess_as("sonn", "nope", addr))
+        self.assertEqual(429, self.guess_as("sonn", "nope", addr))
+
+    def test_a_login_in_flight_is_not_a_wrong_guess(self):
+        # Counted as wrong before it was checked, a right login being checked took a place: two
+        # clients signing in at once, at an address with a few mistakes behind it, got a 429,
+        # which the phone takes for a lockout that needs the user.
+        addr = "203.0.113.82"
+        real = srv.check_login
+        def slow(header):
+            time.sleep(0.3)
+            return real(header)
+        with unittest.mock.patch.object(srv, "FAIL_LIMIT", 3):
+            self.assertEqual(401, self.guess_as("sonn", "nope", addr))
+            self.assertEqual(401, self.guess_as("sonn", "nope", addr))  # one place left
+            srv.auth_cache.clear()
+            start = threading.Barrier(2)
+            def login(_):
+                start.wait()
+                return self.guess_as("sonn", "secret", addr)
+            with unittest.mock.patch.object(srv, "check_login", slow):
+                with concurrent.futures.ThreadPoolExecutor(2) as pool:
+                    self.assertEqual([200, 200], list(pool.map(login, range(2))))
 
     def test_numbers_that_arent(self):
         self.assertEqual(400, self.status_of("/api/changes?since=0&wait=nan"))
