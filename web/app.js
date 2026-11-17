@@ -937,6 +937,7 @@ function syncTrouble(anchor) {
 // ---- login ---------------------------------------------------------------------------------
 
 function loginView() {
+  const known = load(KEY_QUEUE_OWNER, null); // the account this browser last signed in with
   const form = h("form", {
     class: "card",
     onsubmit: (e) => {
@@ -947,8 +948,10 @@ function loginView() {
       signIn(String(data.get("user")).trim(), String(data.get("password")));
     },
   },
-    h("label", { class: "field" }, h("span", {}, "User"), h("input", { type: "text", name: "user", value: "sonn", autocomplete: "username", required: true })),
-    h("label", { class: "field" }, h("span", {}, "Password"), h("input", { type: "password", name: "password", autocomplete: "current-password", required: true, autofocus: true })),
+    // Named only if this browser signed in before: the page is public, and named here, anyone
+    // could read the account name that guesses are made at.
+    h("label", { class: "field" }, h("span", {}, "User"), h("input", { type: "text", name: "user", value: known ?? "", autocomplete: "username", required: true, autofocus: !known })),
+    h("label", { class: "field" }, h("span", {}, "Password"), h("input", { type: "password", name: "password", autocomplete: "current-password", required: true, autofocus: !!known })),
     state.loginError && h("div", { class: "error" }, state.loginError),
   );
   const button = h("button", { class: "btn primary big", type: "submit" }, "Sign in");
@@ -2116,4 +2119,4 @@ async function boot() {
 boot();
 
 // For web/test, which runs this file under node on stand-ins for a browser.
-export { checkChoices, formHabit, ingest, numberChoices, numberSheet, prefs, state, tapDay };
+export { checkChoices, formHabit, ingest, loginView, numberChoices, numberSheet, prefs, state, tapDay };

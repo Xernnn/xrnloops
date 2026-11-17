@@ -4,33 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DAY, openApp, store } from "./app.mjs";
-
-// Enough of the DOM for the sheet to be opened, typed into, saved and closed.
-class FakeNode extends EventTarget {
-  constructor(tag) {
-    super();
-    this.tagName = tag;
-    this.children = [];
-    this.dataset = {};
-    this.style = { setProperty() {} };
-    this.text = "";
-    made.push(this);
-  }
-  get value() { return this.text; }
-  set value(v) { this.text = String(v); }
-  setAttribute(k, v) { this[k] = v; }
-  append(...children) { this.children.push(...children); }
-  remove() {}
-  focus() {}
-  select() {}
-}
-const made = [];
-globalThis.Node = FakeNode;
-globalThis.SVGElement = class {};
-document.createElement = (tag) => new FakeNode(tag);
-document.createElementNS = (_, tag) => new FakeNode(tag);
-document.body = new FakeNode("body");
-document.removeEventListener = () => {};
+import { fresh } from "./dom.mjs";
 
 const open = () => openApp(
   [{ uuid: "run", data: { name: "Run", type: 1, targetType: 0, targetValue: 5, unit: "km", freqNum: 1, freqDen: 1 } }],
@@ -39,13 +13,12 @@ const open = () => openApp(
 
 /** Opens the day's sheet and types `text` into its amount. */
 function typeInto(app, habit, text) {
-  made.length = 0;
+  const find = fresh();
   app.numberSheet(habit, DAY);
-  const input = made.find((n) => n.tagName === "input");
-  input.value = text;
+  find("input").value = text;
   return {
-    save: () => made.find((n) => n.tagName === "form").dispatchEvent(new Event("submit", { cancelable: true })),
-    dismiss: () => made.find((n) => n.tagName === "div" && n.class === "scrim").dispatchEvent(new Event("pointerdown")),
+    save: () => find("form").dispatchEvent(new Event("submit", { cancelable: true })),
+    dismiss: () => find("div", (n) => n.class === "scrim").dispatchEvent(new Event("pointerdown")),
   };
 }
 
