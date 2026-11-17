@@ -551,15 +551,17 @@ async function session(basic) {
 async function signIn(user, password) {
   try {
     await session("Basic " + btoa(unescape(encodeURIComponent(`${user}:${password}`))));
-    claimQueue(user);
-    await start();
-    state.loginError = "";
   } catch (e) {
     state.signedIn = false;
     save(KEY_SIGNED_IN, null);
     state.loginError = e instanceof AuthError ? WRONG_LOGIN : e instanceof LockedOutError ? e.message : `Can't reach the server (${e.message}).`;
-    render();
+    return render();
   }
+  // Signed in: a server that can't be reached now is waited for, not a reason to forget the
+  // session, which made the next visit ask for the password again.
+  claimQueue(user);
+  state.loginError = "";
+  await startOrWait();
 }
 
 function signOut(message = "") {
@@ -579,6 +581,26 @@ async function start() {
   live(gen);
   watchLinks(gen);
   flush();
+}
+
+/**
+ * start(), and while the server can't be reached, again with live()'s backoff (5 s doubling to a
+ * minute), on a page that says so; Try again cuts the wait short. A page opened while the server
+ * restarted stayed there until it was reloaded by hand.
+ */
+async function startOrWait() {
+  for (let failures = 0; state.signedIn; failures = Math.min(failures + 1, 4)) {
+    try {
+      return await start();
+    } catch (e) {
+      if (e instanceof AuthError) return signOut("You were signed out. Sign in again.");
+      document.getElementById("app").replaceChildren(h("div", { class: "wrap login" },
+        h("div", { class: "brand" }, h("img", { src: "icon.svg", alt: "" }), h("span", { class: "wordmark" }, "xrnloops")),
+        h("p", {}, `Can't reach the server (${e instanceof TypeError ? "no answer" : e.message}).`),
+        h("button", { class: "btn primary big", onclick: () => [...sleepers].forEach((wake) => wake()) }, "Try again")));
+      await nap(Math.min(5000 * 2 ** failures, 60000));
+    }
+  }
 }
 
 // ---- what each habit unlocks (xrnrule's shared state) -----------------------------------------
@@ -2104,19 +2126,10 @@ async function boot() {
     }
   }
   if (!state.signedIn) return render();
-  start().catch((e) => {
-    if (e instanceof AuthError) signOut("You were signed out. Sign in again.");
-    else {
-      state.loginError = "";
-      document.getElementById("app").replaceChildren(h("div", { class: "wrap login" },
-        h("div", { class: "brand" }, h("img", { src: "icon.svg", alt: "" }), h("span", { class: "wordmark" }, "xrnloops")),
-        h("p", {}, `Can't reach the server (${e instanceof TypeError ? "no answer" : e.message}).`),
-        h("button", { class: "btn primary big", onclick: () => location.reload() }, "Try again")));
-    }
-  });
+  startOrWait();
 }
 
 boot();
 
 // For web/test, which runs this file under node on stand-ins for a browser.
-export { checkChoices, formHabit, ingest, loginView, numberChoices, numberSheet, prefs, state, tapDay };
+export { checkChoices, formHabit, ingest, loginView, numberChoices, numberSheet, prefs, signIn, state, tapDay };
