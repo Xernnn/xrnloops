@@ -657,6 +657,41 @@ def store_for(user):
 
 # ---- HTTP ----------------------------------------------------------------------------------
 
+STATIC_SETTLE_NS = 2 * 10**9  # a file written this recently could change again within its time
+static_files = {}  # path -> ((inode, mtime_ns, size), StaticFile)
+
+
+class StaticFile:
+    """One file of the web app, read once: its bytes, their ETag, and gzipped once it's asked for."""
+
+    def __init__(self, data):
+        self.data = data
+        self.tag = '"' + hashlib.sha256(data).hexdigest()[:32] + '"'
+        self._packed = None
+
+    def packed(self):
+        if self._packed is None:
+            self._packed = gzip.compress(self.data, 6)
+        return self._packed
+
+
+def static_file(path):
+    """The web app's file at [path], and whether it was read just now. Each request read, hashed
+    and gzipped it again, a 304 too, which anyone can ask for without a login on a phone-class
+    server. Read again once it changes (a deploy moves in new files); a file's time moves in clock
+    ticks, so one written in the last moments may change again without it, and is read each time."""
+    st = os.stat(path)
+    key = (st.st_ino, st.st_mtime_ns, st.st_size)
+    hit = static_files.get(path)
+    if hit and hit[0] == key:
+        return hit[1], False
+    with open(path, "rb") as f:
+        web_file = StaticFile(f.read())
+    if time.time_ns() - st.st_mtime_ns >= STATIC_SETTLE_NS:
+        static_files[path] = (key, web_file)
+    return web_file, True
+
+
 # The request line and X-Forwarded-For come from the caller. Written to the log as they are, a
 # control character in them could rewrite the terminal the log is read in, or (a \r) start a line
 # of its own for xrnhub's log reader. Escaped as http.server's own log_message, replaced here, does.
@@ -688,13 +723,14 @@ class Handler(BaseHTTPRequestHandler):
             path = path[len(PREFIX):] or "/"
         return path, {k: v[-1] for k, v in parse_qs(query).items()}
 
-    def send(self, code, body=b"", ctype="text/plain; charset=utf-8", headers=None):
+    def send(self, code, body=b"", ctype="text/plain; charset=utf-8", headers=None, packed=None):
+        """[packed]: what gives [body] gzipped, if it has been already (StaticFile.packed)."""
         if isinstance(body, str):
             body = body.encode()
         headers = {"Cache-Control": "no-store", **(headers or {})}
         worth_packing = len(body) > 1024 and not ctype.startswith("font/")  # woff2 is packed already
         if worth_packing and "gzip" in (self.headers.get("Accept-Encoding") or ""):
-            body = gzip.compress(body, 6)
+            body = packed() if packed else gzip.compress(body, 6)
             headers["Content-Encoding"] = "gzip"
         self.send_response(code)
         for k, v in SECURITY_HEADERS.items():
@@ -832,9 +868,8 @@ class Handler(BaseHTTPRequestHandler):
         file = os.path.join(args.web, name)
         if name.startswith("..") or not os.path.isfile(file):
             return self.send(404, "not found")
-        with open(file, "rb") as f:
-            data = f.read()
-        if name == "index.html":  # read here each time, so its scripts' hashes are too
+        web_file, read = static_file(file)
+        if name == "index.html" and read:  # read again, so its scripts' hashes are too
             SECURITY_HEADERS["Content-Security-Policy"] = content_policy(args.web)
         ctype = mimetypes.guess_type(file)[0] or "application/octet-stream"
         if file.endswith(".webmanifest"):
@@ -843,12 +878,11 @@ class Handler(BaseHTTPRequestHandler):
             ctype += "; charset=utf-8"
         # A font never changes under one name. Anything else may with a deploy, so the browser
         # asks each time, which costs a 304 instead of the file.
-        tag = '"' + hashlib.sha256(data).hexdigest()[:32] + '"'
         cache = "public, max-age=2592000" if name.startswith("fonts/") else "no-cache"
-        headers = {"ETag": tag, "Cache-Control": cache, "Vary": "Accept-Encoding"}
-        if tag in (self.headers.get("If-None-Match") or ""):
+        headers = {"ETag": web_file.tag, "Cache-Control": cache, "Vary": "Accept-Encoding"}
+        if web_file.tag in (self.headers.get("If-None-Match") or ""):
             return self.send(304, headers=headers)
-        self.send(200, data, ctype, headers)
+        self.send(200, web_file.data, ctype, headers, packed=web_file.packed)
 
 
 def main():

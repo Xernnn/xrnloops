@@ -482,6 +482,35 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(200, status)
         self.assertNotEqual(tag, headers["ETag"])
 
+    def test_a_file_is_read_and_packed_once_until_it_changes(self):
+        # Every GET of app.js read it, hashed it and gzipped it again, a 304 too, with no login.
+        path = self.web_file("app.js", b"// the app\n" * 200)
+        os.utime(path, ns=(time.time_ns() - 10**10,) * 2)  # written a while ago
+        reads, real_open = [], open
+        def counting(file, *a, **kw):
+            if file == path:
+                reads.append(file)
+            return real_open(file, *a, **kw)
+        with unittest.mock.patch("builtins.open", counting), \
+                unittest.mock.patch.object(srv.gzip, "compress", wraps=gzip.compress) as packs:
+            first = self.fetch("/app.js", **{"Accept-Encoding": "gzip"})
+            again = self.fetch("/app.js", **{"Accept-Encoding": "gzip"})
+            self.assertEqual(304, self.fetch("/app.js", **{"If-None-Match": first[1]["ETag"]})[0])
+            self.assertEqual(b"// the app\n" * 200, self.fetch("/app.js")[2])
+        self.assertEqual(first[2], again[2])
+        self.assertEqual(b"// the app\n" * 200, gzip.decompress(again[2]))
+        self.assertEqual((1, 1), (len(reads), packs.call_count))
+        # A deploy: the next request has the new file.
+        self.web_file("app.js", b"// the next release\n" * 200)
+        self.assertEqual(b"// the next release\n" * 200, self.fetch("/app.js")[2])
+
+    def test_a_file_just_rewritten_is_read_again_though_its_time_and_size_are_the_same(self):
+        # A file's time moves in clock ticks: two writes within one look the same.
+        self.web_file("app.js", b"A" * 2000)
+        self.assertEqual(b"A" * 2000, self.fetch("/app.js")[2])
+        self.web_file("app.js", b"B" * 2000)
+        self.assertEqual(b"B" * 2000, self.fetch("/app.js")[2])
+
     def test_fonts_are_kept_and_not_packed_again(self):
         self.web_file("fonts/a.woff2", os.urandom(4096))
         status, headers, _ = self.fetch("/fonts/a.woff2", **{"Accept-Encoding": "gzip"})
