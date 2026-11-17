@@ -1974,11 +1974,14 @@ function dayResult(habit, day) {
   return v === L.NO ? "no" : "missed";
 }
 
-/** Met and possible habit-days in [from, to]; skips don't count against you. */
+/**
+ * Met and possible habit-days in [from, to]; skips don't count against you, nor do days before a
+ * habit's first (its first entry: a habit has no creation date, and Loop's score starts there too).
+ */
 function weekScore(habits, from, to) {
   let met = 0, possible = 0;
   for (const habit of habits) {
-    for (let d = from; d <= to; d++) {
+    for (let d = Math.max(from, summary(habit).from); d <= to; d++) {
       const r = dayResult(habit, d);
       if (r === "skip") continue;
       possible++;
@@ -2009,7 +2012,7 @@ function reviewView(offset) {
   const habitRows = habits.map((habit) => {
     const sm = summary(habit);
     const trend = sm.scoreAt(last) - sm.scoreAt(start - 1);
-    const results = days.map((d) => (d > today ? null : dayResult(habit, d)));
+    const results = days.map((d) => (d > today || d < sm.from ? null : dayResult(habit, d)));
     const counted = results.filter((r) => r && r !== "skip");
     const done = counted.filter((r) => r === "met" || r === "auto").length;
     const name = habit.data.name || "Untitled";
@@ -2132,4 +2135,4 @@ async function boot() {
 boot();
 
 // For web/test, which runs this file under node on stand-ins for a browser.
-export { checkChoices, formHabit, ingest, loginView, numberChoices, numberSheet, prefs, signIn, state, tapDay };
+export { checkChoices, formHabit, ingest, loginView, numberChoices, numberSheet, prefs, signIn, state, tapDay, weekScore };
