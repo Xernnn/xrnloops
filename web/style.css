@@ -221,9 +221,7 @@ button.unlock:hover { opacity: 0.7; }
 .empty { padding: 56px 24px; text-align: center; color: var(--muted); background: var(--surface); border-radius: 24px; margin-top: 14px; }
 .empty p { margin: 0 0 16px; }
 
-.foot { display: flex; gap: 8px 18px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 18px; color: var(--muted); font-size: 13px; }
-.foot .keys { display: inline-flex; gap: 14px; flex-wrap: wrap; }
-.foot kbd { font: 600 12px/1 "MiSans", sans-serif; padding: 3px 7px; border-radius: 6px; background: var(--surface-2); color: var(--text); }
+.foot { display: flex; gap: 8px 18px; align-items: center; justify-content: flex-end; flex-wrap: wrap; margin-top: 18px; color: var(--muted); font-size: 13px; }
 
 /* ---- the flick menu: a cross of keys around the day (xrntap/FlickGesture.kt) ----------- */
 
@@ -357,8 +355,6 @@ input[type="checkbox"]:disabled { opacity: 0.5; cursor: default; }
 .heat rect:hover { stroke: var(--text); stroke-width: 1.5; }
 .heat text { fill: var(--muted); font-size: 10px; font-family: "MiSans", sans-serif; }
 .heat text.dn { pointer-events: none; font-size: 8.5px; font-weight: 600; }
-.heat-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; font-size: 13px; color: var(--muted); }
-.heat-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 
 .freq svg { width: 100%; height: auto; }
 .freq text { fill: var(--muted); font-size: 11px; font-family: "MiSans", sans-serif; }
@@ -428,8 +424,6 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
 .dbar span, .dbar small { display: block; }
 .dbar span { color: var(--muted); margin-top: 4px; }
 i.phone { background: var(--accent); }
-.legend { display: flex; gap: 6px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
-.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
 .lists { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
 .lists h3 { font-size: 13px; margin: 0 0 6px; color: var(--muted); font-weight: 700; }
 .lists ol { margin: 0; padding-left: 20px; font-size: 14px; }

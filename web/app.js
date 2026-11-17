@@ -944,7 +944,7 @@ function syncTrouble(anchor) {
   openPopover(anchor, [
     h("div", { class: "title" }, "Sync isn't working"),
     h("p", {}, `Sync failed ${ago(state.sync.since || Date.now())}: ${state.sync.error || "no answer"}.`),
-    queued > 0 && h("p", { class: "muted" }, `${queued} change${queued === 1 ? " is" : "s are"} waiting here and will go out once it works.`),
+    queued > 0 && h("p", { class: "muted" }, `${queued} unsent`),
     h("div", { class: "actions" }, h("button", {
       class: "btn primary", type: "button",
       onclick: () => {
@@ -980,7 +980,6 @@ function loginView() {
   form.append(h("div", {}, button));
   return h("div", { class: "wrap login" },
     h("div", { class: "brand" }, h("img", { src: "icon.svg", alt: "" }), h("span", { class: "wordmark" }, "xrnloops")),
-    h("p", {}, "Your habits, synced with xrnloops on the phone. Sign in with the home server's password."),
     form);
 }
 
@@ -1031,25 +1030,19 @@ function listView() {
     ? h("div", { class: "list", style: { "--cell": `${lay.cell}px`, "--name": `${lay.name}px` } },
       head, habits.map((habit) => habitRow(habit, order, gaps, lay)))
     : h("div", { class: "empty" },
-      h("p", {}, state.habits.size ? "Every habit is archived." : "No habits yet. Make one here or in xrnloops on the phone."),
+      h("p", {}, state.habits.size ? "All archived" : "No habits yet"),
       h("a", { class: "btn primary", href: "#/new" }, "New habit"));
 
-  const tapWords = { tick: "ticks it", cycle: "cycles ✓ ✗ ?" }[prefs.tap];
-  const touch = matchMedia("(pointer: coarse)").matches;
   return h("div", {},
     topBar("Habits",
-      h("a", { class: "link hide-narrow", href: "#/review", title: "How this week went: habits, unlocks, blocks" }, "Review"),
-      h("a", { class: "link hide-narrow", href: "../xrnrule/", title: "What xrnrule is blocking right now" }, "Blocks"),
+      h("a", { class: "link hide-narrow", href: "#/review" }, "Review"),
+      h("a", { class: "link hide-narrow", href: "../xrnrule/" }, "Blocks"),
       newMenuButton(),
       h("button", { type: "button", class: "link round", title: "Settings", "aria-label": "Settings", onclick: (e) => settingsMenu(e.currentTarget) }, icon("more"))),
     h("main", { class: "wrap" },
       list,
-      h("div", { class: "foot" },
-        h("span", { class: "keys" },
-          h("span", {}, h("kbd", {}, touch ? "Tap" : "Click"), ` ${tapWords}`),
-          h("span", {}, h("kbd", {}, "Hold"), " and drag: up ✓ or + · down ✗ or − · left skip · let go in the middle for ?"),
-          !touch && h("span", {}, h("kbd", {}, "Right-click"), " keeps the keys open")),
-        anyArchived && h("label", { class: "check" }, h("input", {
+      anyArchived && h("div", { class: "foot" },
+        h("label", { class: "check" }, h("input", {
           type: "checkbox", checked: state.showArchived,
           onchange: (e) => { state.showArchived = e.target.checked; render(); },
         }), "Show archived"))));
@@ -1684,12 +1677,7 @@ function historyCard(habit, sm, today) {
   const width = left + weeks * (cell + gap), height = top + 7 * (cell + gap);
   return h("section", { class: "card heat wide" },
     h("h2", {}, "History"),
-    s("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Calendar of the last year" }, months, dayLabels, parts),
-    h("div", { class: "heat-legend" },
-      h("span", {}, h("i", { style: { background: c } }), numerical ? "Target met" : "Done"),
-      h("span", {}, h("i", { style: { background: c, opacity: 0.4 } }), numerical ? "Some" : "Covered by the goal"),
-      h("span", {}, h("i", { style: { background: c, opacity: 0.18 } }), "Skipped"),
-      h("span", {}, "Click, hold or right-click a day, as in the list")));
+    s("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Calendar of the last year" }, months, dayLabels, parts));
 }
 
 function streaksCard(habit, sm) {
@@ -1820,8 +1808,8 @@ function editView(habit, newType = L.YES_NO) {
   const numerical = data.type === L.NUMERICAL;
   const [kind, num, den] = frequencyKind(data.freqNum, data.freqDen);
 
-  const name = h("input", { type: "text", name: "name", value: data.name, required: true, maxLength: 120, placeholder: numerical ? "e.g. 🏃 or Run" : "e.g. 🧘 or Meditate" });
-  const question = h("input", { type: "text", name: "question", value: data.question, placeholder: numerical ? "e.g. How many km did you run today?" : "e.g. Did you meditate today?" });
+  const name = h("input", { type: "text", name: "name", value: data.name, required: true, maxLength: 120, });
+  const question = h("input", { type: "text", name: "question", value: data.question });
   const swatches = h("div", { class: "swatches", role: "radiogroup", "aria-label": "Colour" },
     palette().map((hex, i) => h("label", { style: { background: hex }, title: `Colour ${i + 1}` },
       h("input", { type: "radio", name: "color", value: i, checked: i === data.color }), h("i"))));
@@ -1837,7 +1825,7 @@ function editView(habit, newType = L.YES_NO) {
         h("option", { value: L.AT_LEAST, selected: data.targetType === L.AT_LEAST }, "At least"),
         h("option", { value: L.AT_MOST, selected: data.targetType === L.AT_MOST }, "At most")),
       h("input", { type: "number", name: "targetValue", step: "any", min: 0, value: data.targetValue, required: true }),
-      h("input", { type: "text", name: "unit", value: data.unit, placeholder: "unit, e.g. km", style: { width: "140px" } }),
+      h("input", { type: "text", name: "unit", value: data.unit, placeholder: "Unit", style: { width: "140px" } }),
       per);
     // What the list's flick adds with + and takes off with − (NumberFlick; the phone's form has it too).
     stepField = h("label", { class: "field" }, h("span", {}, "Step for + and −"),
@@ -1890,9 +1878,7 @@ function editView(habit, newType = L.YES_NO) {
   setTimeout(() => name.focus(), 0);
   return h("div", {},
     topBar(habit ? "Edit habit" : "New habit", h("a", { class: "link", href: habit ? `#/habit/${habit.uuid}` : "#/" }, "← Back")),
-    h("main", { class: "wrap narrow" },
-      form,
-      habit?.data.reminder && h("p", { class: "muted small" }, "Reminders are set in xrnloops on the phone.")));
+    h("main", { class: "wrap narrow" }, form));
 }
 
 // ---- weekly review --------------------------------------------------------------------------
@@ -2051,13 +2037,13 @@ function reviewView(offset) {
 
 function blocksReview(days, today) {
   const card = (...children) => h("section", { class: "card review-blocks" }, h("h2", {}, "Blocks"), ...children);
-  if (review.status === "loading" || review.status === "idle") return card(h("p", { class: "muted small" }, "Loading block history…"));
+  if (review.status === "loading" || review.status === "idle") return card(h("p", { class: "muted small" }, "Loading…"));
   if (review.status === "error") {
     const again = () => {
       review.since = null;
       render();
     };
-    return card(h("p", { class: "muted small" }, "Block history isn't available: xrnrule's sync server didn't answer."),
+    return card(h("p", { class: "muted small" }, "Server unreachable"),
       h("button", { class: "btn", onclick: again }, "Try again"));
   }
   const first = days[0], lastDay = days[6];
@@ -2094,7 +2080,7 @@ function blocksReview(days, today) {
   const laptopBlocked = perDay.reduce((a, p) => a + p.laptop, 0);
 
   if (!review.events.length) {
-    return card(h("p", { class: "muted small" }, "Nothing logged yet. The phone and the laptop send their history once sync is set up in xrnrule; it fills in from then."));
+    return card(h("p", { class: "muted small" }, "Nothing logged yet"));
   }
   return card(
     h("div", { class: "stats" },
@@ -2108,7 +2094,6 @@ function blocksReview(days, today) {
         h("span", {}, weekdayShort.format(L.dayDate(p.day))),
         h("small", {}, p.minutes >= 0.5 ? `${Math.round(p.minutes)}m` : ""),
         h("small", { class: "muted" }, p.phone + p.laptop ? `${p.phone + p.laptop}×` : "")))),
-    h("div", { class: "legend muted small" }, h("i", { class: "phone" }), "Minutes unlocked (phone and laptop share them)", h("span", {}, "· × = times a blocked app was opened")),
     (topBlocked.length > 0 || byBlock.length > 0) && h("div", { class: "lists" },
       topBlocked.length > 0 && h("div", {}, h("h3", {}, "Most blocked"), h("ol", {}, topBlocked.map(([name, n]) => h("li", {}, name, h("span", { class: "muted" }, ` ${n}×`))))),
       byBlock.length > 0 && h("div", {}, h("h3", {}, "Unlock time by block"), h("ol", {}, byBlock.map(([name, ms]) => h("li", {}, name, h("span", { class: "muted" }, ` ${Math.round(ms / 60000)} min`)))))));
