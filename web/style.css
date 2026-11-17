@@ -13,8 +13,12 @@
 @font-face { font-family: "MiSans"; src: url("fonts/MiSansLatin-Medium.woff2") format("woff2"); font-weight: 500; font-display: swap; }
 @font-face { font-family: "MiSans"; src: url("fonts/MiSansLatin-Demibold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
 @font-face { font-family: "MiSans"; src: url("fonts/MiSansLatin-Semibold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
-@font-face { font-family: "MiSans"; src: url("fonts/MiSansLatin-Bold.woff2") format("woff2"); font-weight: 800; font-display: swap; }
-@font-face { font-family: "MiSans"; src: url("fonts/MiSansLatin-Heavy.woff2") format("woff2"); font-weight: 900; font-display: swap; }
+/* MiSans Latin 4.007's Bold and Heavy have an ampersand drawn where "@" should be, in every format
+   they come in, and habit names are set at 800: their "@" is the Semibold's, as in xrnmail. */
+@font-face { font-family: "MiSans"; src: url("fonts/MiSansLatin-Bold.woff2") format("woff2"); font-weight: 800; font-display: swap; unicode-range: U+0-3F, U+41-10FFFF; }
+@font-face { font-family: "MiSans"; src: url("fonts/MiSansLatin-Semibold.woff2") format("woff2"); font-weight: 800; font-display: swap; unicode-range: U+40; }
+@font-face { font-family: "MiSans"; src: url("fonts/MiSansLatin-Heavy.woff2") format("woff2"); font-weight: 900; font-display: swap; unicode-range: U+0-3F, U+41-10FFFF; }
+@font-face { font-family: "MiSans"; src: url("fonts/MiSansLatin-Semibold.woff2") format("woff2"); font-weight: 900; font-display: swap; unicode-range: U+40; }
 @font-face { font-family: "Geist Mono"; src: url("fonts/GeistMono-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
 
 /* Light: the phone's light scheme. --faint is a day's "?" (Loop's contrast40), --row a list row. */
