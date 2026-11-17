@@ -233,9 +233,10 @@
             </intent-filter>
         </receiver>
 
+        <!-- xrnloops: a tick earns an unlock in xrnrule, so only this app's own PendingIntents
+             (widgets, notifications) may send one; "false" was a permission any app can declare. -->
         <receiver android:name=".receivers.WidgetReceiver"
-            android:exported="true"
-            android:permission="false">
+            android:exported="false">
             <intent-filter>
                 <category android:name="android.intent.category.DEFAULT" />
                 <action android:name="org.isoron.uhabits.ACTION_SET_NUMERICAL_VALUE" />
