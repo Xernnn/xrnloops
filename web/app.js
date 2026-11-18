@@ -551,15 +551,17 @@ async function session(basic) {
 async function signIn(user, password) {
   try {
     await session("Basic " + btoa(unescape(encodeURIComponent(`${user}:${password}`))));
-    claimQueue(user);
-    await start();
-    state.loginError = "";
   } catch (e) {
     state.signedIn = false;
     save(KEY_SIGNED_IN, null);
     state.loginError = e instanceof AuthError ? WRONG_LOGIN : e instanceof LockedOutError ? e.message : `Can't reach the server (${e.message}).`;
-    render();
+    return render();
   }
+  // Signed in: a server that can't be reached now is waited for, not a reason to forget the
+  // session, which made the next visit ask for the password again.
+  claimQueue(user);
+  state.loginError = "";
+  await startOrWait();
 }
 
 function signOut(message = "") {
@@ -579,6 +581,26 @@ async function start() {
   live(gen);
   watchLinks(gen);
   flush();
+}
+
+/**
+ * start(), and while the server can't be reached, again with live()'s backoff (5 s doubling to a
+ * minute), on a page that says so; Try again cuts the wait short. A page opened while the server
+ * restarted stayed there until it was reloaded by hand.
+ */
+async function startOrWait() {
+  for (let failures = 0; state.signedIn; failures = Math.min(failures + 1, 4)) {
+    try {
+      return await start();
+    } catch (e) {
+      if (e instanceof AuthError) return signOut("You were signed out. Sign in again.");
+      document.getElementById("app").replaceChildren(h("div", { class: "wrap login" },
+        h("div", { class: "brand" }, h("img", { src: "icon.svg", alt: "" }), h("span", { class: "wordmark" }, "xrnloops")),
+        h("p", {}, `Can't reach the server (${e instanceof TypeError ? "no answer" : e.message}).`),
+        h("button", { class: "btn primary big", onclick: () => [...sleepers].forEach((wake) => wake()) }, "Try again")));
+      await nap(Math.min(5000 * 2 ** failures, 60000));
+    }
+  }
 }
 
 // ---- what each habit unlocks (xrnrule's shared state) -----------------------------------------
@@ -922,7 +944,7 @@ function syncTrouble(anchor) {
   openPopover(anchor, [
     h("div", { class: "title" }, "Sync isn't working"),
     h("p", {}, `Sync failed ${ago(state.sync.since || Date.now())}: ${state.sync.error || "no answer"}.`),
-    queued > 0 && h("p", { class: "muted" }, `${queued} change${queued === 1 ? " is" : "s are"} waiting here and will go out once it works.`),
+    queued > 0 && h("p", { class: "muted" }, `${queued} unsent`),
     h("div", { class: "actions" }, h("button", {
       class: "btn primary", type: "button",
       onclick: () => {
@@ -937,6 +959,7 @@ function syncTrouble(anchor) {
 // ---- login ---------------------------------------------------------------------------------
 
 function loginView() {
+  const known = load(KEY_QUEUE_OWNER, null); // the account this browser last signed in with
   const form = h("form", {
     class: "card",
     onsubmit: (e) => {
@@ -947,15 +970,16 @@ function loginView() {
       signIn(String(data.get("user")).trim(), String(data.get("password")));
     },
   },
-    h("label", { class: "field" }, h("span", {}, "User"), h("input", { type: "text", name: "user", value: "sonn", autocomplete: "username", required: true })),
-    h("label", { class: "field" }, h("span", {}, "Password"), h("input", { type: "password", name: "password", autocomplete: "current-password", required: true, autofocus: true })),
+    // Named only if this browser signed in before: the page is public, and named here, anyone
+    // could read the account name that guesses are made at.
+    h("label", { class: "field" }, h("span", {}, "User"), h("input", { type: "text", name: "user", value: known ?? "", autocomplete: "username", required: true, autofocus: !known })),
+    h("label", { class: "field" }, h("span", {}, "Password"), h("input", { type: "password", name: "password", autocomplete: "current-password", required: true, autofocus: !!known })),
     state.loginError && h("div", { class: "error" }, state.loginError),
   );
   const button = h("button", { class: "btn primary big", type: "submit" }, "Sign in");
   form.append(h("div", {}, button));
   return h("div", { class: "wrap login" },
     h("div", { class: "brand" }, h("img", { src: "icon.svg", alt: "" }), h("span", { class: "wordmark" }, "xrnloops")),
-    h("p", {}, "Your habits, synced with xrnloops on the phone. Sign in with the home server's password."),
     form);
 }
 
@@ -1006,25 +1030,19 @@ function listView() {
     ? h("div", { class: "list", style: { "--cell": `${lay.cell}px`, "--name": `${lay.name}px` } },
       head, habits.map((habit) => habitRow(habit, order, gaps, lay)))
     : h("div", { class: "empty" },
-      h("p", {}, state.habits.size ? "Every habit is archived." : "No habits yet. Make one here or in xrnloops on the phone."),
+      h("p", {}, state.habits.size ? "All archived" : "No habits yet"),
       h("a", { class: "btn primary", href: "#/new" }, "New habit"));
 
-  const tapWords = { tick: "ticks it", cycle: "cycles ✓ ✗ ?" }[prefs.tap];
-  const touch = matchMedia("(pointer: coarse)").matches;
   return h("div", {},
     topBar("Habits",
-      h("a", { class: "link hide-narrow", href: "#/review", title: "How this week went: habits, unlocks, blocks" }, "Review"),
-      h("a", { class: "link hide-narrow", href: "../xrnrule/", title: "What xrnrule is blocking right now" }, "Blocks"),
+      h("a", { class: "link hide-narrow", href: "#/review" }, "Review"),
+      h("a", { class: "link hide-narrow", href: "../xrnrule/" }, "Blocks"),
       newMenuButton(),
       h("button", { type: "button", class: "link round", title: "Settings", "aria-label": "Settings", onclick: (e) => settingsMenu(e.currentTarget) }, icon("more"))),
     h("main", { class: "wrap" },
       list,
-      h("div", { class: "foot" },
-        h("span", { class: "keys" },
-          h("span", {}, h("kbd", {}, touch ? "Tap" : "Click"), ` ${tapWords}`),
-          h("span", {}, h("kbd", {}, "Hold"), " and drag: up ✓ or + · down ✗ or − · left skip · let go in the middle for ?"),
-          !touch && h("span", {}, h("kbd", {}, "Right-click"), " keeps the keys open")),
-        anyArchived && h("label", { class: "check" }, h("input", {
+      anyArchived && h("div", { class: "foot" },
+        h("label", { class: "check" }, h("input", {
           type: "checkbox", checked: state.showArchived,
           onchange: (e) => { state.showArchived = e.target.checked; render(); },
         }), "Show archived"))));
@@ -1437,7 +1455,7 @@ function numberSheet(habit, date) {
       if (amount.value === shownAmount) return finish(null);
       // An empty box means no amount, not "undo the skip".
       const empty = valueNow() === L.SKIP ? L.SKIP : L.UNKNOWN;
-      finish(amount.value === "" ? empty : Math.round(Number(amount.value) * 1000));
+      finish(amount.value === "" ? empty : L.typedEntry(amount.value));
     },
   },
     h("div", { class: "amount-row" }, amount, habit.data.unit && h("span", {}, habit.data.unit)),
@@ -1450,8 +1468,8 @@ function numberSheet(habit, date) {
   const current = openSheet(habit, [sheetHead(habit, date), form]);
   // Closing any other way keeps what was typed. Only Save or Clear empties a day, not a blank box.
   current.onClose = () => {
-    const typed = amount.value !== "" && amount.value !== shownAmount;
-    if (typed) writeEntry(habit.uuid, date, Math.round(Number(amount.value) * 1000));
+    const typed = amount.value !== "" && amount.value !== shownAmount ? L.typedEntry(amount.value) : null;
+    if (typed != null) writeEntry(habit.uuid, date, typed);
   };
   amount.focus();
   amount.select();
@@ -1659,12 +1677,7 @@ function historyCard(habit, sm, today) {
   const width = left + weeks * (cell + gap), height = top + 7 * (cell + gap);
   return h("section", { class: "card heat wide" },
     h("h2", {}, "History"),
-    s("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Calendar of the last year" }, months, dayLabels, parts),
-    h("div", { class: "heat-legend" },
-      h("span", {}, h("i", { style: { background: c } }), numerical ? "Target met" : "Done"),
-      h("span", {}, h("i", { style: { background: c, opacity: 0.4 } }), numerical ? "Some" : "Covered by the goal"),
-      h("span", {}, h("i", { style: { background: c, opacity: 0.18 } }), "Skipped"),
-      h("span", {}, "Click, hold or right-click a day, as in the list")));
+    s("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Calendar of the last year" }, months, dayLabels, parts));
 }
 
 function streaksCard(habit, sm) {
@@ -1738,19 +1751,32 @@ function frequencyKind(num, den) {
 }
 
 /**
- * What the habit form saves: `data`, the habit as the form opened on it (or a new one's defaults),
- * with what the form `f` (its FormData) holds, or a message saying what's wrong. The habit's own
- * notes (`description`) have had no box since 2026-11-15 (XRNLOOPS.md), but they stay on the
- * server and the phone, so the ones stored now go along, never blanked: as on the phone
- * (EditHabitActivity), not the ones the form opened with, which the phone may have changed since.
+ * What the habit form saves, or a message saying what's wrong: the habit as stored when Save is
+ * pressed, with each field the form `f` (its FormData) changed from `data`, the habit as the form
+ * opened on it (or a new one's defaults). Everything else is as stored then, not as the form
+ * opened: the phone or xrnrule may have changed the reminder, archived it, reordered the list or
+ * set its icon or timer meanwhile, or renamed it while only its colour was changed here. The
+ * habit's own notes (`description`) have had no box since 2026-11-15 (XRNLOOPS.md), so they go
+ * along as stored too, never blanked, as on the phone (EditHabitActivity).
  */
 function formHabit(uuid, data, f) {
+  const edited = editedHabit(data, f);
+  if (typeof edited === "string") return edited;
+  const out = { ...(state.habits.get(uuid)?.data ?? data) };
+  const changed = Object.keys(edited).filter((k) => JSON.stringify(edited[k]) !== JSON.stringify(data[k]));
+  // How often is one setting: half of it from here and half from elsewhere would be neither's.
+  if (changed.includes("freqNum") || changed.includes("freqDen")) changed.push("freqNum", "freqDen");
+  for (const k of changed) out[k] = edited[k];
+  return out;
+}
+
+/** `data` with what the form `f` holds, or a message saying what's wrong (formHabit). */
+function editedHabit(data, f) {
   const numerical = data.type === L.NUMERICAL;
   const out = {
     ...data,
     name: String(f.get("name")).trim(),
     question: String(f.get("question")).trim(),
-    description: state.habits.get(uuid)?.data.description ?? data.description ?? "",
     color: Number(f.get("color") ?? data.color),
   };
   if (numerical) {
@@ -1782,8 +1808,8 @@ function editView(habit, newType = L.YES_NO) {
   const numerical = data.type === L.NUMERICAL;
   const [kind, num, den] = frequencyKind(data.freqNum, data.freqDen);
 
-  const name = h("input", { type: "text", name: "name", value: data.name, required: true, maxLength: 120, placeholder: numerical ? "e.g. 🏃 or Run" : "e.g. 🧘 or Meditate" });
-  const question = h("input", { type: "text", name: "question", value: data.question, placeholder: numerical ? "e.g. How many km did you run today?" : "e.g. Did you meditate today?" });
+  const name = h("input", { type: "text", name: "name", value: data.name, required: true, maxLength: 120, });
+  const question = h("input", { type: "text", name: "question", value: data.question });
   const swatches = h("div", { class: "swatches", role: "radiogroup", "aria-label": "Colour" },
     palette().map((hex, i) => h("label", { style: { background: hex }, title: `Colour ${i + 1}` },
       h("input", { type: "radio", name: "color", value: i, checked: i === data.color }), h("i"))));
@@ -1799,7 +1825,7 @@ function editView(habit, newType = L.YES_NO) {
         h("option", { value: L.AT_LEAST, selected: data.targetType === L.AT_LEAST }, "At least"),
         h("option", { value: L.AT_MOST, selected: data.targetType === L.AT_MOST }, "At most")),
       h("input", { type: "number", name: "targetValue", step: "any", min: 0, value: data.targetValue, required: true }),
-      h("input", { type: "text", name: "unit", value: data.unit, placeholder: "unit, e.g. km", style: { width: "140px" } }),
+      h("input", { type: "text", name: "unit", value: data.unit, placeholder: "Unit", style: { width: "140px" } }),
       per);
     // What the list's flick adds with + and takes off with − (NumberFlick; the phone's form has it too).
     stepField = h("label", { class: "field" }, h("span", {}, "Step for + and −"),
@@ -1852,9 +1878,7 @@ function editView(habit, newType = L.YES_NO) {
   setTimeout(() => name.focus(), 0);
   return h("div", {},
     topBar(habit ? "Edit habit" : "New habit", h("a", { class: "link", href: habit ? `#/habit/${habit.uuid}` : "#/" }, "← Back")),
-    h("main", { class: "wrap narrow" },
-      form,
-      habit?.data.reminder && h("p", { class: "muted small" }, "Reminders are set in xrnloops on the phone.")));
+    h("main", { class: "wrap narrow" }, form));
 }
 
 // ---- weekly review --------------------------------------------------------------------------
@@ -1936,11 +1960,14 @@ function dayResult(habit, day) {
   return v === L.NO ? "no" : "missed";
 }
 
-/** Met and possible habit-days in [from, to]; skips don't count against you. */
+/**
+ * Met and possible habit-days in [from, to]; skips don't count against you, nor do days before a
+ * habit's first (its first entry: a habit has no creation date, and Loop's score starts there too).
+ */
 function weekScore(habits, from, to) {
   let met = 0, possible = 0;
   for (const habit of habits) {
-    for (let d = from; d <= to; d++) {
+    for (let d = Math.max(from, summary(habit).from); d <= to; d++) {
       const r = dayResult(habit, d);
       if (r === "skip") continue;
       possible++;
@@ -1971,7 +1998,7 @@ function reviewView(offset) {
   const habitRows = habits.map((habit) => {
     const sm = summary(habit);
     const trend = sm.scoreAt(last) - sm.scoreAt(start - 1);
-    const results = days.map((d) => (d > today ? null : dayResult(habit, d)));
+    const results = days.map((d) => (d > today || d < sm.from ? null : dayResult(habit, d)));
     const counted = results.filter((r) => r && r !== "skip");
     const done = counted.filter((r) => r === "met" || r === "auto").length;
     const name = habit.data.name || "Untitled";
@@ -2010,13 +2037,13 @@ function reviewView(offset) {
 
 function blocksReview(days, today) {
   const card = (...children) => h("section", { class: "card review-blocks" }, h("h2", {}, "Blocks"), ...children);
-  if (review.status === "loading" || review.status === "idle") return card(h("p", { class: "muted small" }, "Loading block history…"));
+  if (review.status === "loading" || review.status === "idle") return card(h("p", { class: "muted small" }, "Loading…"));
   if (review.status === "error") {
     const again = () => {
       review.since = null;
       render();
     };
-    return card(h("p", { class: "muted small" }, "Block history isn't available: xrnrule's sync server didn't answer."),
+    return card(h("p", { class: "muted small" }, "Server unreachable"),
       h("button", { class: "btn", onclick: again }, "Try again"));
   }
   const first = days[0], lastDay = days[6];
@@ -2053,7 +2080,7 @@ function blocksReview(days, today) {
   const laptopBlocked = perDay.reduce((a, p) => a + p.laptop, 0);
 
   if (!review.events.length) {
-    return card(h("p", { class: "muted small" }, "Nothing logged yet. The phone and the laptop send their history once sync is set up in xrnrule; it fills in from then."));
+    return card(h("p", { class: "muted small" }, "Nothing logged yet"));
   }
   return card(
     h("div", { class: "stats" },
@@ -2067,7 +2094,6 @@ function blocksReview(days, today) {
         h("span", {}, weekdayShort.format(L.dayDate(p.day))),
         h("small", {}, p.minutes >= 0.5 ? `${Math.round(p.minutes)}m` : ""),
         h("small", { class: "muted" }, p.phone + p.laptop ? `${p.phone + p.laptop}×` : "")))),
-    h("div", { class: "legend muted small" }, h("i", { class: "phone" }), "Minutes unlocked (phone and laptop share them)", h("span", {}, "· × = times a blocked app was opened")),
     (topBlocked.length > 0 || byBlock.length > 0) && h("div", { class: "lists" },
       topBlocked.length > 0 && h("div", {}, h("h3", {}, "Most blocked"), h("ol", {}, topBlocked.map(([name, n]) => h("li", {}, name, h("span", { class: "muted" }, ` ${n}×`))))),
       byBlock.length > 0 && h("div", {}, h("h3", {}, "Unlock time by block"), h("ol", {}, byBlock.map(([name, ms]) => h("li", {}, name, h("span", { class: "muted" }, ` ${Math.round(ms / 60000)} min`)))))));
@@ -2088,19 +2114,10 @@ async function boot() {
     }
   }
   if (!state.signedIn) return render();
-  start().catch((e) => {
-    if (e instanceof AuthError) signOut("You were signed out. Sign in again.");
-    else {
-      state.loginError = "";
-      document.getElementById("app").replaceChildren(h("div", { class: "wrap login" },
-        h("div", { class: "brand" }, h("img", { src: "icon.svg", alt: "" }), h("span", { class: "wordmark" }, "xrnloops")),
-        h("p", {}, `Can't reach the server (${e instanceof TypeError ? "no answer" : e.message}).`),
-        h("button", { class: "btn primary big", onclick: () => location.reload() }, "Try again")));
-    }
-  });
+  startOrWait();
 }
 
 boot();
 
 // For web/test, which runs this file under node on stand-ins for a browser.
-export { checkChoices, formHabit, ingest, numberChoices, prefs, state, tapDay };
+export { checkChoices, formHabit, ingest, loginView, numberChoices, numberSheet, prefs, signIn, state, tapDay, weekScore };

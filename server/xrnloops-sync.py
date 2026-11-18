@@ -108,7 +108,9 @@ AT_LEAST = 0
 args = None
 auth_cache = {}  # sha256(user:password) -> (user, expires, users-file mtime)
 fail_lock = threading.Lock()
-failures = {}  # client address -> monotonic times of its recent wrong logins
+fail_settled = threading.Condition(fail_lock)  # a login being checked has been settled
+failures = {}  # client address -> (monotonic time, user name tried) of its recent wrong logins
+checking = {}  # client address -> how many of its logins are being checked right now
 stores = {}
 stores_lock = threading.Lock()
 session_key = b""  # signs the web app's login cookies; see load_session_key()
@@ -193,43 +195,91 @@ def host_key(host):
     return host.strip().lower().removesuffix(":443").removesuffix(":80")
 
 
+def recent_failures(addr, now):
+    """This address's wrong logins within FAIL_WINDOW_S; older ones are forgotten. Under fail_lock."""
+    recent = [f for f in failures.get(addr, ()) if now - f[0] < FAIL_WINDOW_S]
+    if recent:
+        failures[addr] = recent
+    else:
+        failures.pop(addr, None)
+    return recent
+
+
 def locked_out(addr):
     """Whether this address has used up its wrong logins for now."""
-    now = time.monotonic()
     with fail_lock:
-        recent = [t for t in failures.get(addr, ()) if now - t < FAIL_WINDOW_S]
-        if recent:
-            failures[addr] = recent
-        else:
-            failures.pop(addr, None)
-        return len(recent) >= FAIL_LIMIT
+        return len(recent_failures(addr, time.monotonic())) >= FAIL_LIMIT
 
 
 def reserve_guess(addr):
-    """Counts a password from this address as wrong before it is checked; False if the address
-    has used up its wrong logins. Counted afterwards, guesses sent at once all passed the check
-    while the first were still in bcrypt. A right one clears the count (see Handler.login)."""
-    now = time.monotonic()
-    with fail_lock:
+    """Waits for a place to check a password from this address in; False once the address has
+    used up its wrong logins. A login being checked holds a place until settle_guess: counted only
+    afterwards, guesses sent at once all passed the check while the first were still in bcrypt.
+    It isn't a wrong login, though: one that finds no place waits for it to be settled rather than
+    being turned away, so two clients signing in at once never lock each other out."""
+    with fail_settled:
+        now = time.monotonic()
         if len(failures) > 10000:  # a flood from many addresses: forget the stale ones
-            for a in [a for a, ts in failures.items() if now - ts[-1] >= FAIL_WINDOW_S]:
+            for a in [a for a, fs in failures.items() if now - fs[-1][0] >= FAIL_WINDOW_S]:
                 del failures[a]
-        recent = [t for t in failures.get(addr, ()) if now - t < FAIL_WINDOW_S]
-        if len(recent) >= FAIL_LIMIT:
-            failures[addr] = recent
-            return False
-        failures[addr] = recent + [now]
-        return True
+        while True:
+            wrong = len(recent_failures(addr, time.monotonic()))
+            if wrong >= FAIL_LIMIT:
+                return False
+            if wrong + checking.get(addr, 0) < FAIL_LIMIT:
+                checking[addr] = checking.get(addr, 0) + 1
+                return True
+            fail_settled.wait(1)
 
 
-def check_login(header):
-    """The user name for a valid `Authorization: Basic ...`, else None."""
+def settle_guess(addr, name, right):
+    """A login reserve_guess let through has been checked. A wrong one counts against the address,
+    under the name it tried. A right one clears that name's mistakes from this address, and no one
+    else's: a client logging in mustn't give a guesser behind the same address its guesses back.
+    None, a password already found right (cached_login) or a check that broke, settles nothing."""
+    with fail_settled:
+        left = checking.get(addr, 1) - 1
+        if left > 0:
+            checking[addr] = left
+        else:
+            checking.pop(addr, None)
+        if right is False:
+            failures.setdefault(addr, []).append((time.monotonic(), name[:64]))
+        elif right:
+            kept = [f for f in failures.get(addr, ()) if f[1] != name[:64]]
+            if kept:
+                failures[addr] = kept
+            else:
+                failures.pop(addr, None)
+        fail_settled.notify_all()
+
+
+def basic_login(header):
+    """(user, password) from `Authorization: Basic ...`, or None."""
     if not header or not header.startswith("Basic "):
         return None
     try:
         user, _, password = base64.b64decode(header[6:]).decode("utf-8").partition(":")
     except Exception:
         return None
+    return user, password
+
+
+def cached_login(header):
+    """The user name for a password already found right (the auth cache), else None: no check."""
+    login = basic_login(header)
+    if not login:
+        return None
+    hit = auth_cache.get(hashlib.sha256(f"{login[0]}:{login[1]}".encode()).hexdigest())
+    return hit[0] if hit and hit[1] > time.time() and hit[2] == users_mtime() else None
+
+
+def check_login(header):
+    """The user name for a valid `Authorization: Basic ...`, else None."""
+    login = basic_login(header)
+    if not login:
+        return None
+    user, password = login
     key = hashlib.sha256(f"{user}:{password}".encode()).hexdigest()
     mtime = users_mtime()
     hit = auth_cache.get(key)
@@ -607,6 +657,41 @@ def store_for(user):
 
 # ---- HTTP ----------------------------------------------------------------------------------
 
+STATIC_SETTLE_NS = 2 * 10**9  # a file written this recently could change again within its time
+static_files = {}  # path -> ((inode, mtime_ns, size), StaticFile)
+
+
+class StaticFile:
+    """One file of the web app, read once: its bytes, their ETag, and gzipped once it's asked for."""
+
+    def __init__(self, data):
+        self.data = data
+        self.tag = '"' + hashlib.sha256(data).hexdigest()[:32] + '"'
+        self._packed = None
+
+    def packed(self):
+        if self._packed is None:
+            self._packed = gzip.compress(self.data, 6)
+        return self._packed
+
+
+def static_file(path):
+    """The web app's file at [path], and whether it was read just now. Each request read, hashed
+    and gzipped it again, a 304 too, which anyone can ask for without a login on a phone-class
+    server. Read again once it changes (a deploy moves in new files); a file's time moves in clock
+    ticks, so one written in the last moments may change again without it, and is read each time."""
+    st = os.stat(path)
+    key = (st.st_ino, st.st_mtime_ns, st.st_size)
+    hit = static_files.get(path)
+    if hit and hit[0] == key:
+        return hit[1], False
+    with open(path, "rb") as f:
+        web_file = StaticFile(f.read())
+    if time.time_ns() - st.st_mtime_ns >= STATIC_SETTLE_NS:
+        static_files[path] = (key, web_file)
+    return web_file, True
+
+
 # The request line and X-Forwarded-For come from the caller. Written to the log as they are, a
 # control character in them could rewrite the terminal the log is read in, or (a \r) start a line
 # of its own for xrnhub's log reader. Escaped as http.server's own log_message, replaced here, does.
@@ -638,13 +723,14 @@ class Handler(BaseHTTPRequestHandler):
             path = path[len(PREFIX):] or "/"
         return path, {k: v[-1] for k, v in parse_qs(query).items()}
 
-    def send(self, code, body=b"", ctype="text/plain; charset=utf-8", headers=None):
+    def send(self, code, body=b"", ctype="text/plain; charset=utf-8", headers=None, packed=None):
+        """[packed]: what gives [body] gzipped, if it has been already (StaticFile.packed)."""
         if isinstance(body, str):
             body = body.encode()
         headers = {"Cache-Control": "no-store", **(headers or {})}
         worth_packing = len(body) > 1024 and not ctype.startswith("font/")  # woff2 is packed already
         if worth_packing and "gzip" in (self.headers.get("Accept-Encoding") or ""):
-            body = gzip.compress(body, 6)
+            body = packed() if packed else gzip.compress(body, 6)
             headers["Content-Encoding"] = "gzip"
         self.send_response(code)
         for k, v in SECURITY_HEADERS.items():
@@ -675,7 +761,18 @@ class Handler(BaseHTTPRequestHandler):
                 time.sleep(FAIL_DELAY_S)
             self.send(429, "too many wrong passwords; try again later", headers={"Retry-After": str(FAIL_WINDOW_S)})
             return None
-        user = check_login(password)
+        right = None
+        try:
+            # A password already found right is a session, not a login, and settles nothing: the
+            # phone sending it with every sync cleared the count for its whole address, so a
+            # guesser behind the same one never ran out of guesses.
+            user = cached_login(password)
+            if not user:
+                user = check_login(password)
+                right = user is not None
+        finally:
+            if password:
+                settle_guess(addr, (basic_login(password) or ("",))[0], right)
         if not user:
             if password:  # a request with none guessed nothing, and needn't hold a thread for it
                 time.sleep(FAIL_DELAY_S)
@@ -683,8 +780,6 @@ class Handler(BaseHTTPRequestHandler):
             challenge = {} if self.headers.get("X-Xrn-Client") else {"WWW-Authenticate": 'Basic realm="xrnloops"'}
             self.send(401, "login required", headers=challenge)
             return None
-        with fail_lock:
-            failures.pop(addr, None)
         return user
 
     def read_json(self):
@@ -773,9 +868,8 @@ class Handler(BaseHTTPRequestHandler):
         file = os.path.join(args.web, name)
         if name.startswith("..") or not os.path.isfile(file):
             return self.send(404, "not found")
-        with open(file, "rb") as f:
-            data = f.read()
-        if name == "index.html":  # read here each time, so its scripts' hashes are too
+        web_file, read = static_file(file)
+        if name == "index.html" and read:  # read again, so its scripts' hashes are too
             SECURITY_HEADERS["Content-Security-Policy"] = content_policy(args.web)
         ctype = mimetypes.guess_type(file)[0] or "application/octet-stream"
         if file.endswith(".webmanifest"):
@@ -784,12 +878,11 @@ class Handler(BaseHTTPRequestHandler):
             ctype += "; charset=utf-8"
         # A font never changes under one name. Anything else may with a deploy, so the browser
         # asks each time, which costs a 304 instead of the file.
-        tag = '"' + hashlib.sha256(data).hexdigest()[:32] + '"'
         cache = "public, max-age=2592000" if name.startswith("fonts/") else "no-cache"
-        headers = {"ETag": tag, "Cache-Control": cache, "Vary": "Accept-Encoding"}
-        if tag in (self.headers.get("If-None-Match") or ""):
+        headers = {"ETag": web_file.tag, "Cache-Control": cache, "Vary": "Accept-Encoding"}
+        if web_file.tag in (self.headers.get("If-None-Match") or ""):
             return self.send(304, headers=headers)
-        self.send(200, data, ctype, headers)
+        self.send(200, web_file.data, ctype, headers, packed=web_file.packed)
 
 
 def main():

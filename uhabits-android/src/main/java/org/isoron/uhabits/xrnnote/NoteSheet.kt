@@ -52,6 +52,7 @@ import org.isoron.uhabits.core.models.Entry.Companion.UNKNOWN
 import org.isoron.uhabits.core.models.Entry.Companion.YES_MANUAL
 import org.isoron.uhabits.core.models.Habit
 import org.isoron.uhabits.core.models.dayTargetEntry
+import org.isoron.uhabits.core.models.typedEntry
 import org.isoron.uhabits.databinding.XrnnoteSheetBinding
 import org.isoron.uhabits.utils.InterfaceUtils
 import org.isoron.uhabits.utils.StyledResources
@@ -192,14 +193,14 @@ class NoteSheet : BottomSheetDialogFragment() {
     }
 
     /**
-     * What's in the box, in entry values, or null for what isn't a number (a lone separator).
-     * Nothing in it means no amount, not "undo the skip".
+     * What's in the box, in entry values ([typedEntry]), or null for what isn't an amount (a lone
+     * separator, or below 0). Nothing in it means no amount, not "undo the skip".
      */
     private fun amount(): Int? {
         val text = amountText()
         if (text.isEmpty()) return if (originalValue == SKIP) SKIP else UNKNOWN
         return try {
-            (NumberFormat.getInstance().parse(text)!!.toDouble() * 1000).roundToInt()
+            typedEntry(NumberFormat.getInstance().parse(text)!!.toDouble())
         } catch (e: ParseException) {
             null
         }

@@ -94,6 +94,17 @@ class StepTest : BaseUnitTest() {
     }
 
     @Test
+    fun anAmountTypedIsStoredAsTheWebStoresIt() {
+        assertEquals(2500, typedEntry(2.5))
+        assertEquals(0, typedEntry(0.0))
+        assertEquals(SKIP + 1, typedEntry(0.003)) // not a skip
+        assertEquals(Int.MAX_VALUE, typedEntry(3_000_000.0)) // as much as an entry holds
+        assertNull(typedEntry(-5.0)) // a keyboard that types a minus: no amount, not a cleared day
+        assertNull(typedEntry(Double.NaN))
+        assertNull(typedEntry(Double.POSITIVE_INFINITY))
+    }
+
+    @Test
     fun aHabitIsMadeWithAStepOfOneAndAnEditCarriesItsStep() {
         val habit = modelFactory.buildHabit()
         assertEquals(1.0, habit.step)

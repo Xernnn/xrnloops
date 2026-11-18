@@ -18,6 +18,7 @@
  */
 package org.isoron.uhabits.core.models
 
+import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 /*
@@ -68,4 +69,16 @@ fun steppedEntry(value: Int, step: Int, steps: Int): Int {
         steps > 0 -> Entry.SKIP + 1
         else -> Entry.SKIP - 1
     }
+}
+
+/**
+ * The entry for an [amount] typed into a number day's sheet: the amount ×1000, rounded, and no
+ * more than an entry holds; or null for one there's nothing to store for: not a number, or below
+ * 0, which no amount is and which would read as a cleared day. 0.003 goes in as 0.004, since 3
+ * is how Loop keeps a skip. The web's number sheet stores the same (`typedEntry` in loop.js).
+ */
+fun typedEntry(amount: Double): Int? {
+    if (!amount.isFinite() || amount < 0) return null
+    val entry = (amount * 1000).roundToInt()
+    return if (entry == Entry.SKIP) Entry.SKIP + 1 else entry
 }

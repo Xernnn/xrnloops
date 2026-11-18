@@ -87,6 +87,7 @@ class XrnSync(
     val settings = XrnSyncSettings(context)
     private val appContext = context.applicationContext
     private val snapshotFile = File(context.filesDir, "xrnsync-snapshot.json")
+    private val snapshots = KeptSnapshot(snapshotFile)
     private val edits = XrnSyncEdits(File(context.filesDir, "xrnsync-edits.txt"))
 
     /** Imports under way ([beginImport]): no round runs meanwhile. */
@@ -367,6 +368,7 @@ class XrnSync(
                 round.snap.initialized = true
                 round.snap.save(snapshotFile)
             }
+            snapshots.keep(round.snap)
             feedSeq = round.snap.seq
             // Loop's "Extend the day past midnight": the web app and the laptop need it to agree on "today".
             val dayStart = preferences.midnightDelayHours
@@ -396,7 +398,7 @@ class XrnSync(
      */
     private fun agreed(): Snapshot {
         val server = "${settings.url}\n${settings.user}"
-        val snap = Snapshot.load(snapshotFile)
+        val snap = snapshots.take()
         if (snap.server != null && snap.server != server) {
             Log.w(TAG, "another server or account: sending everything again")
             snap.startOver()
@@ -895,6 +897,21 @@ internal data class EntryRecord(val key: String, val data: EntryData, val mtime:
         .put("mtime", mtime)
 }
 
+/**
+ * The snapshot between rounds, on the one sync thread: a round that finished keeps what it saved,
+ * so the next one doesn't read and parse the whole file again. A round takes it; one that fails
+ * keeps nothing, and the next reads the file, whose cursor may be behind what that round had read.
+ */
+internal class KeptSnapshot(private val file: File) {
+    private var kept: Snapshot? = null
+
+    fun take(): Snapshot = (kept ?: Snapshot.load(file)).also { kept = null }
+
+    fun keep(snap: Snapshot) {
+        kept = snap
+    }
+}
+
 /** What the server last agreed to, with each record's mtime; and how far its feed has been read. */
 internal class Snapshot(
     var seq: Long,
@@ -931,10 +948,41 @@ internal class Snapshot(
      */
     fun hadDays(uuid: String) = uuid in habits || uuid in tombstones
 
-    /** The file as last read or written: most rounds change nothing, and then don't touch it. */
-    private var onDisk: String? = null
+    /**
+     * What the file holds, as last read or written: most rounds change nothing, and then don't
+     * touch it. Compared record by record, not as the file's text: building that text again, for
+     * every entry in years of history, cost every round as much as writing it.
+     */
+    private var onDisk: Saved? = null
+
+    /** How many times [save] has built the file's text: it does only when something changed. */
+    internal var serialisations = 0
+        private set
+
+    private class Saved(
+        val cursor: Long,
+        val initialized: Boolean,
+        val server: String?,
+        val epoch: Long?,
+        val resend: Boolean,
+        val habits: Map<String, Stamped<HabitData>>,
+        val entries: Map<String, Stamped<EntryData>>,
+        val tombstones: Map<String, Long>
+    )
+
+    /** This snapshot as saved with [cursor]; the records are immutable, so a shallow copy keeps them. */
+    private fun saved(cursor: Long) =
+        Saved(cursor, initialized, server, epoch, resend, HashMap(habits), HashMap(entries), HashMap(tombstones))
+
+    private fun isOnDisk(cursor: Long): Boolean {
+        val s = onDisk ?: return false
+        return s.cursor == cursor && s.initialized == initialized && s.server == server && s.epoch == epoch &&
+            s.resend == resend && s.tombstones == tombstones && s.habits == habits && s.entries == entries
+    }
 
     fun save(file: File, cursor: Long = seq) {
+        if (isOnDisk(cursor)) return
+        serialisations++
         val h = JSONObject()
         for ((uuid, s) in habits) h.put(uuid, JSONObject().put("d", s.data.toJson()).put("m", s.mtime))
         val e = JSONObject()
@@ -944,12 +992,10 @@ internal class Snapshot(
         val json = JSONObject().put("seq", cursor).put("initialized", initialized).put("habits", h).put("entries", e)
             .put("server", server ?: JSONObject.NULL).put("epoch", epoch ?: JSONObject.NULL)
             .put("tombstones", t).put("resend", resend)
-        val text = json.toString()
-        if (text == onDisk) return
         val tmp = File(file.path + ".tmp")
-        tmp.writeText(text)
+        tmp.writeText(json.toString())
         if (!tmp.renameTo(file)) throw IOException("can't replace $file")
-        onDisk = text
+        onDisk = saved(cursor)
     }
 
     companion object {
@@ -990,7 +1036,10 @@ internal class Snapshot(
                     if (json.isNull("epoch")) null else json.optLong("epoch"),
                     tombstones,
                     json.optBoolean("resend")
-                ).also { it.onDisk = text }
+                ).also {
+                    // One from before the step isn't what the file holds: it has to be saved again.
+                    if (!beforeStep) it.onDisk = it.saved(json.getLong("seq"))
+                }
             } catch (e: Exception) {
                 // An unreadable snapshot only costs a first-sync again ("fill gaps"), never data.
                 Log.w("XrnSync", "snapshot unreadable, starting over", e)
