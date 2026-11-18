@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- xrnloops (XRNLOOPS.md): MiSans Bold, from Xiaomi's variable MiSans Latin at its Bold (wght
+     630, the weight the static Bold file has). The static Bold and Heavy files of MiSans Latin
+     4.007 draw an ampersand where "@" should be; the variable font draws "@". -->
+<font-family xmlns:android="http://schemas.android.com/apk/res/android">
+    <font
+        android:font="@font/xrn_misans_vf"
+        android:fontStyle="normal"
+        android:fontVariationSettings="'wght' 630"
+        android:fontWeight="630" />
+</font-family>
