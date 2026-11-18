@@ -274,9 +274,11 @@
         </receiver>
 
         <!-- Locale/Tasker -->
+        <!-- xrnloops: closed to other apps. Any app could send FIRE_SETTING to tick a habit,
+             which earns an unlock in xrnrule, and Tasker isn't used. The code is kept. -->
         <activity
             android:name=".automation.EditSettingActivity"
-            android:exported="true"
+            android:exported="false"
             android:icon="@mipmap/ic_launcher"
             android:label="@string/app_name">
             <intent-filter>
@@ -287,7 +289,7 @@
         <!-- Locale/Tasker -->
         <receiver
             android:name=".automation.FireSettingReceiver"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="com.twofortyfouram.locale.intent.action.FIRE_SETTING" />
             </intent-filter>
