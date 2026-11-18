@@ -18,6 +18,7 @@ import io
 import json
 import os
 import socket
+import struct
 import subprocess
 import sys
 import tempfile
@@ -286,6 +287,59 @@ class HttpTest(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as e:
             self.request("/api/changes?since=0", password="nope", headers={"X-Xrn-Client": "web"})
         self.assertIsNone(e.exception.headers.get("WWW-Authenticate"))
+
+    def logged_after(self, raw, close, done=("Traceback", "dropped", "long-poll")):
+        """What the server logs once [raw] is sent and [close] has ended the connection."""
+        with unittest.mock.patch("sys.stderr", new_callable=io.StringIO) as log:
+            s = socket.create_connection(("127.0.0.1", self.httpd.server_address[1]), timeout=10)
+            s.sendall(raw)
+            time.sleep(0.3)
+            close(s)
+            for _ in range(500):  # the handler finishes on its own thread
+                if any(word in log.getvalue() for word in done):
+                    break
+                time.sleep(0.01)
+            time.sleep(0.1)
+        return log.getvalue()
+
+    def test_a_long_poll_whose_caller_gave_up_ends_with_no_answer_and_no_traceback(self):
+        # The laptop's daemon gives up on a long-poll after 65 s. When its tailnet path stalls, the
+        # request reaches here late, and the answer, 50 s on, met the socket Funnel had closed by
+        # then: a BrokenPipeError traceback in the log, 288 of them in two weeks.
+        login = base64.b64encode(b"sonn:secret")
+        started = time.monotonic()
+        log = self.logged_after(
+            b"GET /api/changes?since=1000000000&wait=30 HTTP/1.1\r\nHost: x\r\nAuthorization: Basic " + login + b"\r\n\r\n",
+            lambda s: s.close())
+        self.assertIn("caller left a long-poll", log)
+        self.assertNotIn("Traceback", log)
+        self.assertLess(time.monotonic() - started, 10)  # not held the 30 s it asked for
+
+    CUT_UPLOAD = (b"POST /api/changes HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nAuthorization: Basic " +
+                  base64.b64encode(b"sonn:secret") + b"\r\nContent-Length: 4000\r\n\r\n" + b'{"habits": [' + b" " * 1000)
+
+    def test_a_caller_that_hangs_up_mid_upload_is_one_line_in_the_log_not_a_500(self):
+        # The reset was taken for a failed write here: "write failed", a 500 (which xrnhub's log
+        # page counts as an error), and then a traceback as that answer met the closed socket.
+        def reset(s):
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+            s.close()
+        log = self.logged_after(self.CUT_UPLOAD, reset)
+        self.assertNotIn("Traceback", log)
+        self.assertNotIn(" 500 ", log)
+        self.assertIn("connection dropped: ConnectionResetError", log)
+
+    def test_an_upload_cut_short_is_answered_as_such(self):
+        answer = []
+
+        def half_close(s):
+            s.shutdown(socket.SHUT_WR)
+            answer.append(b"".join(iter(lambda: s.recv(4096), b"")))
+            s.close()
+        log = self.logged_after(self.CUT_UPLOAD, half_close, done=('" 400 ',))
+        self.assertRegex(answer[0], rb"^HTTP/1\.[01] 400 ")
+        self.assertIn(b"the upload stopped short", answer[0])
+        self.assertNotIn("Traceback", log)
 
     def test_round_trip(self):
         body = {"habits": [{"uuid": "abc", "mtime": 1, "data": {"name": "Plank"}}],
