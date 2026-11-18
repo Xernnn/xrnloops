@@ -305,10 +305,13 @@ class WelcomeActivity : AppCompatActivity() {
             body.setTextColor(getColor(if (error) R.color.xrn_error else R.color.xrn_muted))
         }
 
-        fun action(@StringRes text: Int?, enabled: Boolean = true, onClick: () -> Unit = {}) {
+        /** A button; [app], another xrn app's tile, goes on it where that app's name would. */
+        fun action(@StringRes text: Int?, enabled: Boolean = true, @DrawableRes app: Int? = null, onClick: () -> Unit = {}) {
             button.visibility = if (text == null) View.GONE else View.VISIBLE
             if (text == null) return
             button.setText(text)
+            button.icon = app?.let { ContextCompat.getDrawable(this@WelcomeActivity, it) }
+            button.iconTint = null
             button.isEnabled = enabled
             button.setOnClickListener { onClick() }
         }
@@ -325,7 +328,7 @@ class WelcomeActivity : AppCompatActivity() {
         card.title(if (installed) R.string.xrnwelcome_xrnrule_found else R.string.xrnwelcome_xrnrule_missing)
         card.body(getString(if (installed) R.string.xrnwelcome_xrnrule_found_body else R.string.xrnwelcome_xrnrule_missing_body))
         val launch = packageManager.getLaunchIntentForPackage(XrnruleContract.XRNRULE_PACKAGE)
-        card.action(if (launch != null) R.string.xrnwelcome_open_xrnrule else null) {
+        card.action(if (launch != null) R.string.xrnwelcome_open_xrnrule else null, app = R.drawable.xrnrule_tile) {
             launch?.let { startActivity(it) }
         }
     }

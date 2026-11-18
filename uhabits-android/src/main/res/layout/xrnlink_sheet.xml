@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- xrnloops (XRNLOOPS.md): what a habit unlocks in xrnrule, behind the lock on its card
-     (xrnrule/XrnruleLinkSheet.kt). -->
+     (xrnrule/XrnruleLinkSheet.kt). xrnrule's tile on each block says where a tap goes. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root"
     android:layout_width="match_parent"
@@ -22,14 +22,6 @@
         android:maxLines="2"
         android:textSize="22sp"
         android:textStyle="bold" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:text="@string/xrnlink_sheet_subtitle"
-        android:textColor="?attr/contrast60"
-        android:textSize="14sp" />
 
     <LinearLayout
         android:id="@+id/blocks"

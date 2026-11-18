@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- xrnloops (XRNLOOPS.md): one block in xrnlink_sheet.xml. A tap goes on to it in xrnrule. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/row"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -61,9 +60,8 @@
     </LinearLayout>
 
     <ImageView
-        android:layout_width="18dp"
-        android:layout_height="18dp"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
         android:contentDescription="@string/xrnlink_open_in_xrnrule"
-        android:src="@drawable/xrn_ic_open_in_new"
-        app:tint="?attr/contrast60" />
+        android:src="@drawable/xrnrule_tile" />
 </LinearLayout>

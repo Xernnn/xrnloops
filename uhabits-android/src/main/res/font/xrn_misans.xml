@@ -11,8 +11,10 @@
         android:font="@font/xrn_misans_semibold"
         android:fontStyle="normal"
         android:fontWeight="700" />
+    <!-- Bold comes from the variable font at its Bold: the static Bold file draws "@" as "&". -->
     <font
-        android:font="@font/xrn_misans_bold"
+        android:font="@font/xrn_misans_vf"
         android:fontStyle="normal"
+        android:fontVariationSettings="'wght' 630"
         android:fontWeight="800" />
 </font-family>
