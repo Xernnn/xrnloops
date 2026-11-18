@@ -159,7 +159,7 @@ a.btn:hover { text-decoration: none; }
 .today-label { font-size: 13px; color: var(--muted); }
 .today-label b { color: var(--text); font-size: 15px; font-weight: 700; margin-right: 6px; }
 .label { flex: 0 1 auto; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); justify-items: start; }
-.name { font-size: 17px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.name { font-size: 17px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .name.emoji { font-size: 21px; line-height: 1.2; }
 
 /* What the habit does in xrnrule: the phone's lock, right after the name. Drawn like a day's mark
