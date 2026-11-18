@@ -60,8 +60,8 @@ android {
     }
 
     defaultConfig {
-        versionCode = 20304
-        versionName = "2.3.4"
+        versionCode = 20305
+        versionName = "2.3.5"
         minSdk = 28
         targetSdk = 36
         // xrnloops: its own app id so it installs next to the store Loop (XRNLOOPS.md).
