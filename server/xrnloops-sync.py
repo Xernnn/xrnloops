@@ -37,7 +37,8 @@ leaves out, so an older client (xrnloops) can't wipe fields it doesn't know (`ic
                                far. One this server no longer has gets 409 {"epoch"} and nothing
                                is written, so a write can't hide a restore (see Store.epoch).
     GET  /api/changes?since=N[&epoch=E] -> {"seq", "more", "habits": [...], "entries": [...], "dayStartHour", "epoch"}
-                               &wait=S long-polls up to S seconds for something newer.
+                               &wait=S long-polls up to S seconds for something newer; one
+                               whose caller hangs up first ends there, unanswered.
     POST /api/session          with Basic auth: sets the web app's login cookie (below)
     DELETE /api/session        signs the browser out, and ends its cookie on every server (below)
     GET  /health               200 "ok", no login (for monitoring)
@@ -85,6 +86,8 @@ import mimetypes
 import os
 import re
 import secrets
+import select
+import socket
 import sqlite3
 import sys
 import threading
@@ -98,6 +101,7 @@ MAX_BODY = 32 * 1024 * 1024
 FAIL_DELAY_S = 2  # after a wrong password, as Radicale does
 AUTH_CACHE_S = 600  # a bcrypt check costs ~0.3s on a phone; don't pay it per request
 MAX_WAIT_S = 55
+GONE_CHECK_S = 1  # how often a long-poll looks whether its caller is still there
 FAIL_LIMIT = 10  # wrong logins from one address within FAIL_WINDOW_S, then 429 until they age out
 FAIL_WINDOW_S = 15 * 60
 PAGE_ROWS = 5000
@@ -724,7 +728,9 @@ class Store:
             sys.stderr.write(f"since={since} is past seq={self.seq()}: restored from a backup? new epoch\n")
         return current
 
-    def changes(self, since, wait_s=0, epoch=None):
+    def changes(self, since, wait_s=0, epoch=None, gone=None):
+        """The page after [since], held up to [wait_s] for one to come. None, without one, once
+        [gone] says the caller has stopped waiting for it."""
         with self.lock:
             current = self._current_epoch(epoch, since)
             if epoch is not None and epoch != current:
@@ -734,7 +740,9 @@ class Store:
                 left = deadline - time.monotonic()
                 if left <= 0:
                     break
-                self.changed.wait(left)
+                self.changed.wait(min(left, GONE_CHECK_S) if gone else left)
+                if gone and gone():
+                    return None
             latest = self.seq()
             # Page by seq across both tables: stop at the PAGE_ROWS-th change after `since`.
             cut = self.db.execute(
@@ -817,6 +825,26 @@ class Handler(BaseHTTPRequestHandler):
         who = headers.get("X-Forwarded-For", self.client_address[0]) if headers else "-"
         sys.stderr.write(f"{who} {fmt % a}".translate(LOG_ESCAPES) + "\n")
 
+    def handle(self):
+        # A caller hanging up, mid-request or before the answer is out, is the network, not a fault
+        # here: the laptop's tailnet path drops, a phone loses its signal, a page is closed. One
+        # line says so. socketserver printed some 30 lines of traceback for each, which xrnhub's
+        # log page shows as an error.
+        try:
+            super().handle()
+        except ConnectionError as e:
+            self.close_connection = True
+            self.log_message("connection dropped: %s", type(e).__name__)
+
+    def caller_gone(self):
+        """Whether the caller has closed its end, as Funnel does once the caller gives up on a
+        long-poll: what it would have been told is then for no one."""
+        try:
+            readable, _, _ = select.select([self.connection], [], [], 0)
+            return bool(readable) and not self.connection.recv(1, socket.MSG_PEEK)
+        except (OSError, ValueError):
+            return True
+
     def parse_request(self):
         if not super().parse_request():
             return False
@@ -896,6 +924,10 @@ class Handler(BaseHTTPRequestHandler):
         if length <= 0 or length > MAX_BODY:
             raise ValueError("body missing or too large")
         raw = self.rfile.read(length)
+        if len(raw) < length:
+            # The connection closed part way: what came is no document, so it isn't read as one.
+            self.close_connection = True
+            raise ValueError("the upload stopped short")
         if (self.headers.get("Content-Encoding") or "").lower() == "gzip":
             # Unpacked only up to MAX_BODY: a few megabytes of gzip can unpack to gigabytes.
             unpack = zlib.decompressobj(wbits=16 + zlib.MAX_WBITS)
@@ -929,7 +961,12 @@ class Handler(BaseHTTPRequestHandler):
                 if not math.isfinite(wait):
                     raise ValueError("wait must be a number")
                 epoch = int(query["epoch"]) if "epoch" in query else None
-                return self.send_json(store.changes(since, wait, epoch))
+                held = time.monotonic()
+                page = store.changes(since, wait, epoch, gone=self.caller_gone if wait > 0 else None)
+                if page is None:
+                    self.close_connection = True
+                    return self.log_message("caller left a long-poll after %.0fs", time.monotonic() - held)
+                return self.send_json(page)
         except (KeyError, ValueError, OverflowError) as e:
             return self.send(400, f"bad request: {e}")
         self.send(404, "not found")
@@ -959,6 +996,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"epoch": e.epoch}, 409)
         except (KeyError, ValueError, TypeError, OverflowError) as e:
             return self.send(400, f"bad request: {e}")
+        except ConnectionError:
+            raise  # the caller hung up mid-upload, which isn't a failed write here: see handle()
         except (OSError, sqlite3.Error) as e:
             sys.stderr.write(f"write failed: {e!r}\n")
             return self.send(500, "server error")
