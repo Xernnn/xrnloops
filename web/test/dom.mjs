@@ -21,6 +21,7 @@ export class FakeNode extends EventTarget {
   remove() {}
   focus() {}
   select() {}
+  querySelector() { return null; }
 }
 
 globalThis.Node = FakeNode;

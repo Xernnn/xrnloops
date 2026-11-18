@@ -224,10 +224,38 @@ function mark(name, cls = "") {
   }, s("path", { d }));
 }
 
-const MORE_VERT = "M12,8c1.1,0 2,-0.9 2,-2s-0.9,-2 -2,-2 -2,0.9 -2,2 0.9,2 2,2zM12,10c-1.1,0 -2,0.9 -2,2s0.9,2 2,2 2,-0.9 2,-2 -0.9,-2 -2,-2zM12,16c-1.1,0 -2,0.9 -2,2s0.9,2 2,2 2,-0.9 2,-2 -0.9,-2 -2,-2z"; // Material's more_vert
-
 function icon(name, cls = "icon") {
-  return s("svg", { class: cls, viewBox: "0 0 24 24", "aria-hidden": "true" }, s("path", { d: name === "more" ? MORE_VERT : ICONS[name] }));
+  return s("svg", { class: cls, viewBox: "0 0 24 24", "aria-hidden": "true" }, s("path", { d: ICONS[name] }));
+}
+
+/**
+ * Line icons on a 24-unit grid, drawn as the family's other pages draw theirs (xrnhub's bar):
+ * Lucide's shapes (ISC licence), stroked in the text colour.
+ */
+const STROKES = {
+  settings: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2zM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z",
+  plus: "M12 5v14M5 12h14",
+  close: "M18 6 6 18M6 6l12 12",
+  prev: "m15 18-6-6 6-6",
+  next: "m9 18 6-6-6-6",
+  phone: "M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM12 18h.01",
+  laptop: "M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16",
+  unlocked: "M7 11V7a5 5 0 0 1 9.9-1M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z",
+  signout: "M9 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3M15 16l4-4-4-4M19 12H9",
+};
+
+function stroke(name, cls = "") {
+  return s("svg", { class: `stroke ${cls}`.trim(), viewBox: "0 0 24 24", "aria-hidden": "true" }, s("path", { d: STROKES[name] }));
+}
+
+/**
+ * An xrn app's tile (XRNLOOPS.md, "The family's tiles"): ours, or xrnrule's where this page
+ * names or links it. Below 24 px each takes the art drawn for 16 px, whose x stays readable.
+ */
+function tile(app, size) {
+  const small = size < 24;
+  const src = app === "xrnrule" ? (small ? "xrnrule-16.svg" : "xrnrule.svg") : small ? "favicon.svg" : "icon.svg";
+  return h("img", { class: "tile", src, alt: "", width: size, height: size });
 }
 
 // ---- data ----------------------------------------------------------------------------------
@@ -595,7 +623,7 @@ async function startOrWait() {
     } catch (e) {
       if (e instanceof AuthError) return signOut("You were signed out. Sign in again.");
       document.getElementById("app").replaceChildren(h("div", { class: "wrap login" },
-        h("div", { class: "brand" }, h("img", { src: "icon.svg", alt: "" }), h("span", { class: "wordmark" }, "xrnloops")),
+        h("div", { class: "brand", role: "img", "aria-label": "xrnloops" }, tile("xrnloops", 64)),
         h("p", {}, `Can't reach the server (${e instanceof TypeError ? "no answer" : e.message}).`),
         h("button", { class: "btn primary big", onclick: () => [...sleepers].forEach((wake) => wake()) }, "Try again")));
       await nap(Math.min(5000 * 2 ** failures, 60000));
@@ -725,10 +753,12 @@ function linkBadge(habit) {
   }, lockIcon(link));
 }
 
-/** The phone's XrnruleLinkSheet: every block that uses the habit, each going on to xrnrule. */
+/**
+ * The phone's XrnruleLinkSheet: every block that uses the habit, each going on to xrnrule, whose
+ * tile ends the row where "Open in xrnrule" was.
+ */
 function linkMenu(anchor, habit, list) {
   openPopover(anchor, h("div", { style: habitColors(habit) },
-    h("div", { class: "title" }, "Unlocks in xrnrule"),
     orderedLinks(list).map((link) => h("button", {
       type: "button", class: "item linkrow", role: "menuitem", title: "Open in xrnrule",
       onclick: () => {
@@ -741,7 +771,7 @@ function linkMenu(anchor, habit, list) {
         h("b", {}, link.blockName || link.targets || "A block"),
         h("small", {}, linkStatus(link)),
         link.blockName && link.targets && h("small", { class: "faint" }, link.targets)),
-      icon("openinnew")))));
+      tile("xrnrule", 22)))));
 }
 
 function openBlocks() {
@@ -900,21 +930,21 @@ window.addEventListener("resize", () => {
   });
 });
 
-/** Our glyph beside the wordmark, where xrnrule has its lock: the loop from the icon, in the accent. */
-function loopMark() {
-  return s("svg", { class: "mark", viewBox: "27 29 49 50", "aria-hidden": "true" },
-    s("path", { d: "M64.55,39.79 A19,19 0 1 1 39.93,35.89", fill: "none", stroke: "currentColor", "stroke-width": 10 }),
-    s("path", { d: "M49.26,30.06 L42.69,45.96 L32.09,29 Z", fill: "currentColor" }));
-}
-
-function topBar(page, ...right) {
+/**
+ * The bar on every page: our tile where the name was, the two pages as tabs, then the page's own
+ * button (New, on the list), xrnrule's tile, which goes there, and Settings.
+ */
+function topBar(tab, ...actions) {
+  const tabLink = (id, href, label) => h("a", { class: "tab", href, "aria-current": tab === id ? "page" : null }, label);
   return h("header", { class: "bar" },
     h("div", { class: "wrap" },
-      h("h1", {}, h("a", { href: "#/", title: "All habits" }, loopMark(), h("span", { class: "wordmark" }, "xrnloops"))),
-      page && h("span", { class: "page" }, page),
+      h("a", { class: "brand", href: "#/", title: "xrnloops", "aria-label": "xrnloops" }, tile("xrnloops", 30)),
+      h("nav", { class: "tabs", "aria-label": "Pages" }, tabLink("habits", "#/", "Habits"), tabLink("review", "#/review", "Review")),
       h("span", { class: "spacer" }),
       h("span", { id: "sync", style: { display: "contents" } }),
-      ...right));
+      ...actions,
+      h("a", { class: "app-link", href: "../xrnrule/", title: "xrnrule", "aria-label": "xrnrule" }, tile("xrnrule", 28)),
+      h("button", { type: "button", class: "icon-btn", title: "Settings", "aria-label": "Settings", onclick: settingsPanel }, stroke("settings"))));
 }
 
 /** The phone's amber cloud while sync is failing; "Saving…" while a write is on its way. */
@@ -928,7 +958,7 @@ function updateSyncBadge() {
   el.dataset.shown = shown;
   if (failing) {
     const button = h("button", {
-      type: "button", class: "link round trouble", title: "Sync isn't working", "aria-label": "Sync isn't working",
+      type: "button", class: "icon-btn trouble", title: "Sync isn't working", "aria-label": "Sync isn't working",
       onclick: (e) => syncTrouble(e.currentTarget),
     }, icon("cloudoff"));
     el.replaceChildren(button);
@@ -979,7 +1009,7 @@ function loginView() {
   const button = h("button", { class: "btn primary big", type: "submit" }, "Sign in");
   form.append(h("div", {}, button));
   return h("div", { class: "wrap login" },
-    h("div", { class: "brand" }, h("img", { src: "icon.svg", alt: "" }), h("span", { class: "wordmark" }, "xrnloops")),
+    h("div", { class: "brand", role: "img", "aria-label": "xrnloops" }, tile("xrnloops", 64)),
     form);
 }
 
@@ -1034,11 +1064,7 @@ function listView() {
       h("a", { class: "btn primary", href: "#/new" }, "New habit"));
 
   return h("div", {},
-    topBar("Habits",
-      h("a", { class: "link hide-narrow", href: "#/review" }, "Review"),
-      h("a", { class: "link hide-narrow", href: "../xrnrule/" }, "Blocks"),
-      newMenuButton(),
-      h("button", { type: "button", class: "link round", title: "Settings", "aria-label": "Settings", onclick: (e) => settingsMenu(e.currentTarget) }, icon("more"))),
+    topBar("habits", newMenuButton()),
     h("main", { class: "wrap" },
       list,
       anyArchived && h("div", { class: "foot" },
@@ -1050,42 +1076,64 @@ function listView() {
 
 function newMenuButton() {
   return h("button", {
-    class: "btn primary",
+    type: "button", class: "new-btn", "aria-haspopup": "menu",
     onclick: (e) => openPopover(e.currentTarget, [
       h("div", { class: "title" }, "New habit"),
       menuItem("✓", "Yes or no", () => (location.hash = "#/new")),
       menuItem("#", "Measurable (a number)", () => (location.hash = "#/new/numerical")),
     ]),
-  }, "+ New");
+  }, stroke("plus"), h("span", {}, "New"));
 }
 
-/** The phone's settings that make sense here, kept in this browser. */
-function settingsMenu(anchor) {
-  const seg = (key, options) => {
-    const buttons = options.map(([value, label]) => h("button", {
-      type: "button", class: prefs[key] === value ? "on" : "",
-      onclick: () => {
-        prefs[key] = value;
-        save(KEY_PREFS, prefs);
-        for (const b of buttons) b.classList.toggle("on", b === buttons[options.findIndex(([v]) => v === value)]);
-        if (key === "theme") applyTheme();
-        render();
-      },
-    }, label));
-    return h("div", { class: "seg" }, buttons);
+/**
+ * Settings: the phone's settings that make sense here, kept in this browser (KEY_PREFS), and the
+ * account. A panel at the side, or from the bottom on a phone; every change shows at once.
+ */
+function settingsPanel() {
+  const choose = (key, value) => {
+    prefs[key] = value;
+    save(KEY_PREFS, prefs);
+    if (key === "theme") applyTheme();
+    render();
   };
-  openPopover(anchor, [
-    h("div", { class: "group" }, h("div", { class: "title" }, "Tap on a day"),
-      seg("tap", [["tick", "Ticks it"], ["cycle", "Cycles ✓ ✗ ?"]])),
-    h("div", { class: "group" }, h("div", { class: "title" }, "Today's column"),
-      seg("todayRight", [[true, "On the right"], [false, "On the left"]])),
-    h("div", { class: "group" }, h("div", { class: "title" }, "Theme"),
-      seg("theme", [["system", "System"], ["light", "Light"], ["dark", "Dark"], ["black", "Black"]])),
-    h("div", { class: "group" },
-      h("button", { type: "button", class: "item", onclick: () => { closePopover(); location.hash = "#/review"; } }, h("span", {}, "▤"), "Weekly review"),
-      h("button", { type: "button", class: "item", onclick: () => { closePopover(); openBlocks(); } }, h("span", {}, "🔒"), "Blocks in xrnrule"),
-      h("button", { type: "button", class: "item", onclick: () => { closePopover(); signOut(); } }, h("span", {}, "→"), "Sign out")),
-  ]);
+  const seg = (key, label, options) => {
+    const buttons = options.map(([value, text]) => h("button", {
+      type: "button", role: "radio", "aria-checked": String(prefs[key] === value),
+      onclick: () => {
+        for (const b of buttons) b.setAttribute("aria-checked", String(b === buttons[options.findIndex(([v]) => v === value)]));
+        choose(key, value);
+      },
+    }, text));
+    return h("div", { class: "seg", role: "radiogroup", "aria-label": label }, buttons);
+  };
+  const toggle = (key, label) => h("button", {
+    type: "button", class: "switch", role: "switch", "aria-label": label, "aria-checked": String(!!prefs[key]),
+    onclick: (e) => {
+      e.currentTarget.setAttribute("aria-checked", String(!prefs[key]));
+      choose(key, !prefs[key]);
+    },
+  });
+  const row = (label, control, cls = "") => h("div", { class: `srow ${cls}`.trim() }, h("span", { class: "slabel" }, label), control);
+  const group = (title, ...rows) => h("section", { class: "sgroup" }, h("h3", {}, title), h("div", { class: "srows" }, rows));
+  const account = load(KEY_QUEUE_OWNER, null);
+  openSheet(null, [
+    h("div", { class: "panel-head" },
+      h("h2", {}, "Settings"),
+      h("button", { type: "button", class: "icon-btn", title: "Close", "aria-label": "Close", onclick: closeSheet }, stroke("close"))),
+    group("Days",
+      row("Tap on a day", seg("tap", "Tap on a day", [["tick", "Ticks it"], ["cycle", "Cycles ✓ ✗ ?"]])),
+      row("Today on the right", toggle("todayRight", "Today on the right"))),
+    group("Look",
+      row("Theme", seg("theme", "Theme", [["system", "System"], ["light", "Light"], ["dark", "Dark"], ["black", "Black"]]), "wide")),
+    group("Account",
+      row(account ?? "Signed in", h("button", {
+        type: "button", class: "btn out",
+        onclick: () => {
+          closeSheet();
+          signOut();
+        },
+      }, stroke("signout"), "Sign out"))),
+  ], { cls: "panel", label: "Settings" });
 }
 
 function scoreRing(habit, score, size = 22, thickness = 3.5) {
@@ -1396,17 +1444,19 @@ document.addEventListener("keydown", (e) => {
 
 let sheet = null;
 
-function openSheet(habit, children) {
+/** A sheet in a habit's colours, or with no habit, Settings' panel (`cls` "panel"). */
+function openSheet(habit, children, { cls = "sheet", label = null } = {}) {
   closeSheet();
   closePopover();
-  const panel = h("div", { class: "sheet", role: "dialog", "aria-modal": "true", style: habitColors(habit) }, children);
+  const panel = h("div", { class: cls, role: "dialog", "aria-modal": "true", "aria-label": label, style: habit && habitColors(habit) }, children);
   const scrim = h("div", {
-    class: "scrim",
+    class: `scrim ${cls === "panel" ? "side" : ""}`.trim(),
     onpointerdown: (e) => {
       if (e.target === scrim) closeSheet();
     },
   }, panel);
   document.body.append(scrim);
+  if (cls === "panel") panel.querySelector("button")?.focus({ preventScroll: true });
   sheet = { scrim, onClose: null };
   return sheet;
 }
@@ -1538,7 +1588,7 @@ function habitView(habit) {
   layoutKey = layoutNow();
 
   return h("div", {},
-    topBar(null, h("a", { class: "link", href: "#/" }, "← Habits")),
+    topBar("habits"),
     h("main", { class: "wrap" }, h("div", { class: "cards", style: habitColors(habit) },
       h("section", { class: "card wide" },
         h("div", { class: "hero" },
@@ -1877,8 +1927,8 @@ function editView(habit, newType = L.YES_NO) {
   formChanged = () => fields() !== opened;
   setTimeout(() => name.focus(), 0);
   return h("div", {},
-    topBar(habit ? "Edit habit" : "New habit", h("a", { class: "link", href: habit ? `#/habit/${habit.uuid}` : "#/" }, "← Back")),
-    h("main", { class: "wrap narrow" }, form));
+    topBar("habits"),
+    h("main", { class: "wrap narrow" }, h("h1", { class: "page-title" }, habit ? "Edit habit" : "New habit"), form));
 }
 
 // ---- weekly review --------------------------------------------------------------------------
@@ -1977,127 +2027,321 @@ function weekScore(habits, from, to) {
   return { met, possible, rate: possible ? met / possible : 0 };
 }
 
-const RESULT_MARK = { met: "check", auto: "check", skip: "minus", no: "times", missed: "question" };
+const isDone = (result) => result === "met" || result === "auto";
+
+/**
+ * The streak running on `day`, counted up to that day (Loop's streaks, so a skip doesn't break
+ * one). On today, one that ran to yesterday still runs, as the list's streak column counts it.
+ */
+function streakAt(sm, day, today) {
+  const through = (d) => sm.streaks.find(([begin, end]) => begin <= d && d <= end);
+  const streak = through(day) ?? (day === today ? through(day - 1) : null);
+  return streak ? Math.min(streak[1], day) - streak[0] + 1 : 0;
+}
+
+/**
+ * The week from `start` (a Monday) as the review shows it. Each habit's seven days (null for a
+ * day still to come or before its first), done of possible (a skip counts for neither), and the
+ * streak at the week's last day so far; each day's share of the habits done; the whole week's;
+ * the best and worst habit (worst only if it did worse than the best); and the days with every
+ * habit done.
+ */
+function weekReview(habits, start, today = L.todayNum()) {
+  const days = Array.from({ length: 7 }, (_, i) => start + i);
+  const last = Math.min(start + 6, today);
+  const rows = habits.map((habit) => {
+    const sm = summary(habit);
+    const cells = days.map((d) => (d > today || d < sm.from ? null : dayResult(habit, d)));
+    const counted = cells.filter((r) => r && r !== "skip");
+    const done = counted.filter(isDone).length;
+    return {
+      habit, cells, done, possible: counted.length, rate: counted.length ? done / counted.length : null,
+      streak: last < start ? 0 : streakAt(sm, last, today),
+    };
+  });
+  const perDay = days.map((day, i) => {
+    let met = 0, possible = 0;
+    for (const row of rows) {
+      const r = row.cells[i];
+      if (!r || r === "skip") continue;
+      possible++;
+      if (isDone(r)) met++;
+    }
+    return { day, met, possible, rate: possible ? met / possible : null };
+  });
+  const met = rows.reduce((a, r) => a + r.done, 0);
+  const possible = rows.reduce((a, r) => a + r.possible, 0);
+  const ranked = rows.filter((r) => r.possible > 0)
+    .sort((a, b) => b.rate - a.rate || b.done - a.done || a.habit.data.position - b.habit.data.position);
+  const best = ranked[0] ?? null;
+  const worst = ranked.length > 1 && ranked.at(-1).rate < best.rate ? ranked.at(-1) : null;
+  const longest = rows.reduce((top, r) => (r.streak > (top?.streak ?? 0) ? r : top), null);
+  return {
+    days, rows, perDay, met, possible, rate: possible ? met / possible : null, best, worst, longest,
+    perfect: perDay.filter((p) => p.possible > 0 && p.met === p.possible).length,
+    daysSoFar: perDay.filter((p) => p.day <= today).length,
+  };
+}
+
+/**
+ * What xrnrule's blocks did in the week from `start`, from its event log (distinctEvents'): the
+ * times something was blocked, day by day on the phone and on the laptop; the minutes unlocked
+ * (an unlock is shared, so one total); unlocks earned and minutes bought; the most blocked apps
+ * and sites; the unlocked time by block; and, to compare with, the same days of the week before
+ * (`daysSoFar` of them: Monday to today while the week is still going).
+ */
+function blocksWeek(events, blocks, start, daysSoFar = 7) {
+  const phone = Array(7).fill(0), laptop = Array(7).fill(0), unlocked = Array(7).fill(0);
+  const before = { blocked: 0, unlocked: 0, earned: 0 };
+  const targets = new Map(), byBlock = new Map();
+  let earned = 0, bought = 0;
+  for (const e of events) {
+    const i = dayOfMs(e.at) - start;
+    if (i >= -7 && i < -7 + daysSoFar) {
+      if (e.t === "blocked") before.blocked++;
+      else if (e.t === "unlock") before.unlocked += (e.ms ?? 0) / 60000;
+      else if (e.t === "habit") before.earned++;
+    }
+    if (i < 0 || i > 6) continue;
+    if (e.t === "blocked") {
+      const device = e.d === "phone" ? "phone" : "laptop";
+      (device === "phone" ? phone : laptop)[i]++;
+      const name = e.name || e.target || "?";
+      const t = targets.get(name) ?? { name, phone: 0, laptop: 0, total: 0 };
+      t[device]++;
+      t.total++;
+      targets.set(name, t);
+    } else if (e.t === "unlock") {
+      const min = (e.ms ?? 0) / 60000;
+      unlocked[i] += min;
+      const name = blocks[e.block]?.name || "Deleted block";
+      byBlock.set(name, (byBlock.get(name) ?? 0) + min);
+    } else if (e.t === "habit") earned++;
+    else if (e.t === "bought") bought += (e.ms ?? 0) / 60000;
+  }
+  const sum = (list) => list.reduce((a, b) => a + b, 0);
+  return {
+    phone, laptop, unlocked, earned, bought, before,
+    blocked: sum(phone) + sum(laptop),
+    phoneTotal: sum(phone), laptopTotal: sum(laptop), unlockedTotal: sum(unlocked),
+    top: [...targets.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name)).slice(0, 5),
+    byBlock: [...byBlock].map(([name, min]) => ({ name, min })).sort((a, b) => b.min - a.min).slice(0, 5),
+  };
+}
+
+const RESULT_MARK = { met: "check", auto: "check", skip: "minus", no: "times" };
+const RESULT_WORD = { met: "Done", auto: "Done (goal met)", skip: "Skipped", no: "Not done", missed: "Not entered" };
+const dayRange = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
+const pct = (x) => (x == null ? "–" : `${Math.round(x * 100)}%`);
+const signed = (n, unit = "") => `${n > 0 ? "+" : n < 0 ? "−" : "±"}${Math.abs(n)}${unit}`;
+
+/** Minutes where a day's column has room for them: "45m", "1h20". */
+function shortMinutes(min) {
+  const m = Math.round(min);
+  return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, "0") : ""}`;
+}
 
 function reviewView(offset) {
   const today = L.todayNum();
   const weekday = (L.dayDate(today).getUTCDay() + 6) % 7; // Monday = 0
   const start = today - weekday - offset * 7;
-  const end = start + 6;
-  const last = Math.min(end, today);
   loadReview(msOfDay(start - 7));
-
   const habits = visibleHabits().filter((x) => !x.data.archived);
-  const days = Array.from({ length: 7 }, (_, i) => start + i);
-  const week = weekScore(habits, start, last);
+  const week = weekReview(habits, start, today);
   const before = weekScore(habits, start - 7, start - 1);
-  const pct = (x) => `${Math.round(x * 100)}%`;
-  const range = `${dateLong.format(L.dayDate(start))} – ${dateLong.format(L.dayDate(end))}`;
-  const deltaPts = Math.round((week.rate - before.rate) * 100);
-
-  const habitRows = habits.map((habit) => {
-    const sm = summary(habit);
-    const trend = sm.scoreAt(last) - sm.scoreAt(start - 1);
-    const results = days.map((d) => (d > today || d < sm.from ? null : dayResult(habit, d)));
-    const counted = results.filter((r) => r && r !== "skip");
-    const done = counted.filter((r) => r === "met" || r === "auto").length;
-    const name = habit.data.name || "Untitled";
-    return h("tr", { style: habitColors(habit) },
-      h("th", {}, h("a", { href: `#/habit/${habit.uuid}` }, name)),
-      results.map((r) => h("td", { class: `rv ${r ?? "future"}` }, r && mark(RESULT_MARK[r]))),
-      h("td", { class: "rv-count" }, counted.length ? `${done}/${counted.length}` : "–"),
-      h("td", { class: "rv-trend " + (trend > 0.005 ? "up" : trend < -0.005 ? "down" : "") },
-        `${trend >= 0 ? "+" : ""}${Math.round(trend * 100)}%`));
-  });
 
   return h("div", {},
-    topBar("Review", h("a", { class: "link", href: "#/" }, "← Habits")),
-    h("main", { class: "wrap" }, h("div", { class: "cards" },
-      h("section", { class: "card wide" },
-        h("div", { class: "head review-nav" },
-          h("a", { class: "btn", href: `#/review/${offset + 1}`, title: "The week before" }, "←"),
-          h("div", { class: "review-title" }, h("b", {}, offset === 0 ? "This week" : offset === 1 ? "Last week" : `${offset} weeks ago`), h("span", { class: "muted small" }, range)),
-          offset > 0 ? h("a", { class: "btn", href: offset === 1 ? "#/review" : `#/review/${offset - 1}`, title: "The week after" }, "→") : h("span", { class: "btn", style: { visibility: "hidden" } }, "→")),
-        h("div", { class: "stats" },
-          h("div", { class: "stat" }, h("b", {}, week.possible ? pct(week.rate) : "–"), h("span", {}, "Habit days met")),
-          h("div", { class: "stat" }, h("b", { class: deltaPts > 0 ? "up" : deltaPts < 0 ? "down" : "" }, before.possible && week.possible ? `${deltaPts >= 0 ? "+" : ""}${deltaPts}` : "–"), h("span", {}, "Points vs the week before")),
-          h("div", { class: "stat" }, h("b", {}, week.met), h("span", {}, `of ${week.possible} done`)),
-          h("div", { class: "stat" }, h("b", {}, habits.length), h("span", {}, habits.length === 1 ? "Habit" : "Habits")))),
-      h("section", { class: "card review-habits" },
-        h("h2", {}, "Habits"),
-        habits.length
-          ? h("div", { class: "table-wrap" }, h("table", {},
-            h("thead", {}, h("tr", {}, h("th", {}),
-              days.map((d) => h("th", { class: d === today ? "today" : "" }, weekdayShort.format(L.dayDate(d)), h("small", {}, L.dayDate(d).getUTCDate()))),
-              h("th", {}, "Done"), h("th", {}, "Score"))),
-            h("tbody", {}, habitRows)))
-          : h("p", { class: "muted" }, "No habits yet.")),
-      blocksReview(days, today))));
+    topBar("review"),
+    h("main", { class: "wrap review" },
+      weekNav(offset, start),
+      reviewSummary(week, before),
+      habits.length
+        ? habitWeek(week, today)
+        : h("div", { class: "empty" }, h("p", {}, "No habits yet"), h("a", { class: "btn primary", href: "#/new" }, "New habit")),
+      blocksSection(week.days, today)));
 }
 
-function blocksReview(days, today) {
-  const card = (...children) => h("section", { class: "card review-blocks" }, h("h2", {}, "Blocks"), ...children);
-  if (review.status === "loading" || review.status === "idle") return card(h("p", { class: "muted small" }, "Loading…"));
+/** ‹ the week › — the arrows, ← and → go a week back and forth. */
+function weekNav(offset, start) {
+  const label = offset === 0 ? "This week" : offset === 1 ? "Last week" : `${offset} weeks ago`;
+  const go = (n) => (n === 0 ? "#/review" : `#/review/${n}`);
+  return h("div", { class: "week-nav" },
+    h("a", { class: "icon-btn", href: go(offset + 1), title: "Week before", "aria-label": "Week before" }, stroke("prev")),
+    h("div", { class: "week-title" },
+      h("b", {}, dayRange.formatRange(L.dayDate(start), L.dayDate(start + 6))),
+      h("span", {}, label)),
+    offset > 0
+      ? h("a", { class: "icon-btn", href: go(offset - 1), title: "Week after", "aria-label": "Week after" }, stroke("next"))
+      : h("span", { class: "icon-btn off", "aria-hidden": "true" }, stroke("next")));
+}
+
+/** A ring for a share, in the accent or a habit's colour (--c). */
+function shareRing(share, size, thickness) {
+  const r = size / 2 - thickness / 2, c = 2 * Math.PI * r;
+  return s("svg", { class: "ring", width: size, height: size, viewBox: `0 0 ${size} ${size}`, "aria-hidden": "true" },
+    s("circle", { class: "track", cx: size / 2, cy: size / 2, r, fill: "none", "stroke-width": thickness }),
+    share > 0 && s("circle", {
+      cx: size / 2, cy: size / 2, r, fill: "none", stroke: "var(--c, var(--accent))", "stroke-width": thickness, "stroke-linecap": "round",
+      "stroke-dasharray": `${c * share} ${c}`, transform: `rotate(-90 ${size / 2} ${size / 2})`,
+    }));
+}
+
+function reviewSummary(week, before) {
+  const delta = week.rate != null && before.possible ? Math.round(week.rate * 100) - Math.round(before.rate * 100) : null;
+  const named = (label, row, figure) => h("div", { class: "rv-tile" + (row ? "" : " none"), style: row && habitColors(row.habit) },
+    h("span", { class: "rv-label" }, label),
+    row
+      ? [h("a", { class: "rv-name" + (isEmojiName(row.habit.data.name) ? " emoji" : ""), href: `#/habit/${row.habit.uuid}` }, row.habit.data.name || "Untitled"),
+        h("b", { class: "rv-fig" }, figure(row))]
+      : h("b", { class: "rv-fig" }, "–"));
+  return h("section", { class: "rv-summary" },
+    h("div", { class: "rv-tile main" },
+      h("div", { class: "ring-wrap" }, shareRing(week.rate ?? 0, 92, 10), h("b", {}, pct(week.rate))),
+      h("div", { class: "rv-main-figs" },
+        h("span", { class: "rv-label" }, "Done"),
+        h("b", { class: "rv-fig" }, week.possible ? `${week.met}/${week.possible}` : "–"),
+        delta != null && h("span", { class: "rv-delta " + (delta > 0 ? "up" : delta < 0 ? "down" : "") }, `${signed(delta)} pts`))),
+    h("div", { class: "rv-tile" },
+      h("span", { class: "rv-label" }, "Perfect days"),
+      h("b", { class: "rv-fig" }, week.possible ? [String(week.perfect), h("small", {}, `/${week.daysSoFar}`)] : "–")),
+    named("Best", week.best, (r) => pct(r.rate)),
+    named("Worst", week.worst, (r) => pct(r.rate)),
+    named("Longest streak", week.longest, (r) => [String(r.streak), h("small", {}, "d")]));
+}
+
+/** The day columns' heads, today marked as on the list. */
+function dayHeads(days, today) {
+  return days.map((d) => h("div", { class: "wk-day" + (d === today ? " today" : "") + (d > today ? " future" : "") },
+    h("span", {}, weekdayShort.format(L.dayDate(d)).toUpperCase()),
+    h("b", {}, L.dayDate(d).getUTCDate())));
+}
+
+/** One habit's day: a block in its colour, joined to the day before and after when both are done. */
+function weekCell(habit, cells, i, day) {
+  const r = cells[i];
+  if (!r) return h("div", { class: "wk-cell" }, h("i", { class: "blank" }));
+  const doneish = (x) => isDone(x) || x === "skip";
+  const joined = (doneish(r) ? (doneish(cells[i - 1]) ? " jl" : "") + (doneish(cells[i + 1]) ? " jr" : "") : "");
+  let inside = r === "missed" ? null : mark(RESULT_MARK[r]);
+  if (habit.data.type === L.NUMERICAL && r !== "skip" && r !== "missed") {
+    const value = entriesOf(habit.uuid).get(L.dayStr(day))?.value ?? 0;
+    inside = h("span", { class: "amt" }, L.formatNumber(value / 1000));
+  }
+  const word = `${dateLong.format(L.dayDate(day))}: ${RESULT_WORD[r]}`;
+  return h("div", { class: "wk-cell", title: word, "aria-label": word, role: "img" }, h("i", { class: r + joined }, inside));
+}
+
+/** The habits × the week, a share and a streak each, and each day's share under them. */
+function habitWeek(week, today) {
+  const rows = week.rows.map((row) => {
+    const name = row.habit.data.name || "Untitled";
+    return h("div", { class: "wk-row", style: habitColors(row.habit) },
+      h("a", { class: "wk-name" + (isEmojiName(name) ? " emoji" : ""), href: `#/habit/${row.habit.uuid}`, title: name }, name),
+      row.cells.map((_, i) => weekCell(row.habit, row.cells, i, week.days[i])),
+      h("div", { class: "wk-share" },
+        h("div", { class: "meter" }, h("i", { style: { width: `${(row.rate ?? 0) * 100}%` } })),
+        h("b", {}, pct(row.rate)),
+        h("small", {}, row.possible ? `${row.done}/${row.possible}` : "")),
+      h("div", { class: "wk-streak" }, row.streak ? [String(row.streak), h("small", {}, "d")] : "–"));
+  });
+  const dayBars = week.perDay.map((p) => h("div", { class: "wk-bar" + (p.rate == null ? " none" : "") + (p.rate === 1 ? " full" : ""), title: p.possible ? `${p.met}/${p.possible}` : "" },
+    h("div", { class: "col" }, h("i", { style: { height: `${(p.rate ?? 0) * 100}%` } })),
+    h("small", {}, p.rate == null ? "" : pct(p.rate))));
+  return h("section", { class: "card week-grid" },
+    h("div", { class: "wk-row wk-head" },
+      h("div", {}),
+      dayHeads(week.days, today),
+      h("div", { class: "wk-h" }, "Done"),
+      h("div", { class: "wk-h" }, "Streak")),
+    rows,
+    h("div", { class: "wk-row wk-foot" },
+      h("div", { class: "wk-name all" }, "All"),
+      dayBars,
+      h("div", { class: "wk-share" }, h("b", {}, pct(week.rate))),
+      h("div", {})));
+}
+
+/**
+ * The xrnrule side, in one card under its tile: what was blocked on each device and what was
+ * unlocked, day by day in the habits' columns, then the most blocked and the unlocked time by
+ * block. The colours are xrnrule's: red blocked, green open, amber earned.
+ */
+function blocksSection(days, today) {
+  const head = (...figures) => h("div", { class: "rule-head" },
+    h("a", { class: "app-link", href: "../xrnrule/", title: "xrnrule", "aria-label": "xrnrule" }, tile("xrnrule", 30)),
+    figures);
+  const card = (...children) => h("section", { class: "card rule" }, ...children);
+  if (review.status === "loading" || review.status === "idle") return card(head(h("span", { class: "muted" }, "…")));
   if (review.status === "error") {
     const again = () => {
       review.since = null;
       render();
     };
-    return card(h("p", { class: "muted small" }, "Server unreachable"),
-      h("button", { class: "btn", onclick: again }, "Try again"));
+    return card(head(h("span", { class: "muted" }, "Can't reach xrnrule"), h("button", { class: "btn", onclick: again }, "Try again")));
   }
-  const first = days[0], lastDay = days[6];
-  const inWeek = review.events.filter((e) => {
-    const d = dayOfMs(e.at);
-    return d >= first && d <= lastDay;
-  });
-  const prior = review.events.filter((e) => dayOfMs(e.at) < first);
-  const sum = (list, t, f = () => 1) => list.filter((e) => e.t === t).reduce((a, e) => a + f(e), 0);
-  const unlockMin = (list) => Math.round(sum(list, "unlock", (e) => e.ms ?? 0) / 60000);
-  // Unlock time is shared by the devices, so it's one total; blocked opens happen on one device.
-  const perDay = days.map((d) => {
-    const mine = inWeek.filter((e) => dayOfMs(e.at) === d);
-    return {
-      day: d,
-      minutes: sum(mine, "unlock", (e) => e.ms ?? 0) / 60000,
-      phone: sum(mine.filter((e) => e.d === "phone"), "blocked"),
-      laptop: sum(mine.filter((e) => e.d !== "phone"), "blocked"),
-    };
-  });
-  const peak = Math.max(1, ...perDay.map((p) => p.minutes));
-  const topBlocked = Object.entries(inWeek.filter((e) => e.t === "blocked").reduce((m, e) => {
-    const key = e.name || e.target || "?";
-    m[key] = (m[key] ?? 0) + 1;
-    return m;
-  }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const byBlock = Object.entries(inWeek.filter((e) => e.t === "unlock").reduce((m, e) => {
-    const key = review.blocks[e.block]?.name ?? "A deleted block";
-    m[key] = (m[key] ?? 0) + (e.ms ?? 0);
-    return m;
-  }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const blockedNow = sum(inWeek, "blocked"), blockedBefore = sum(prior, "blocked");
-  const phoneBlocked = perDay.reduce((a, p) => a + p.phone, 0);
-  const laptopBlocked = perDay.reduce((a, p) => a + p.laptop, 0);
-
-  if (!review.events.length) {
-    return card(h("p", { class: "muted small" }, "Nothing logged yet"));
+  const wk = blocksWeek(review.events, review.blocks, days[0], days.filter((d) => d <= today).length);
+  if (!review.events.length || wk.blocked + wk.unlockedTotal + wk.earned + wk.bought === 0) {
+    return card(head(h("span", { class: "muted" }, "Nothing logged")));
   }
+  const figure = (cls, value, label, delta) => h("div", { class: `rule-fig ${cls}` },
+    h("b", {}, value), h("span", {}, label), delta);
+  const change = (now, then, goodWhenDown, unit = "") => {
+    const n = Math.round(now - then);
+    if (n === 0) return null;
+    const tone = n === 0 || goodWhenDown == null ? "" : (n < 0) === goodWhenDown ? "up" : "down";
+    return h("small", { class: `rv-delta ${tone}` }, signed(n, unit));
+  };
+  const peak = (list) => Math.max(1, ...list);
+  const heatRow = (cls, glyph, label, values, total, format = String) => {
+    const top = peak(values);
+    return h("div", { class: `wk-row heat ${cls}` },
+      h("div", { class: "wk-name" }, stroke(glyph), h("span", {}, label)),
+      values.map((v, i) => {
+        const k = v > 0 ? 0.18 + 0.82 * (v / top) : 0;
+        const word = `${dateLong.format(L.dayDate(days[i]))}: ${format(v)}`;
+        return h("div", { class: "wk-cell" + (days[i] > today ? " future" : "") },
+          days[i] <= today && h("i", { class: v > 0 ? (k > 0.55 ? "strong" : "") : "zero", style: { "--k": k ? k.toFixed(3) : null }, title: word }, v > 0 ? format(v) : ""));
+      }),
+      h("div", { class: "wk-share" }, h("b", {}, total)),
+      h("div", {}));
+  };
+  const listRows = (items, cls, value, bars) => {
+    const top = Math.max(1, ...items.map(value));
+    return h("ol", { class: `rule-list ${cls}` }, items.map((item) => h("li", {},
+      h("span", { class: "nm" }, item.name),
+      h("span", { class: "bar" }, bars(item, top)),
+      h("b", {}, minuteOrCount(value(item), cls)))));
+  };
+  const minuteOrCount = (v, cls) => (cls === "unlocks" ? minutes(Math.round(v)) : String(v));
   return card(
-    h("div", { class: "stats" },
-      h("div", { class: "stat" }, h("b", {}, `${unlockMin(inWeek)} min`), h("span", {}, `Unlocked (week before: ${unlockMin(prior)})`)),
-      h("div", { class: "stat" }, h("b", {}, blockedNow), h("span", {}, `Times blocked (week before: ${blockedBefore})`)),
-      h("div", { class: "stat" }, h("b", {}, sum(inWeek, "habit")), h("span", {}, "Unlocks earned")),
-      h("div", { class: "stat" }, h("b", {}, `${phoneBlocked} / ${laptopBlocked}`), h("span", {}, "Blocked on phone / laptop"))),
-    h("div", { class: "bars", role: "img", "aria-label": "Unlocked minutes per day" }, perDay.map((p) =>
-      h("div", { class: "dbar" + (p.day > today ? " future" : ""), title: `${Math.round(p.minutes)} min unlocked; blocked ${p.phone}× on the phone, ${p.laptop}× on the laptop` },
-        h("div", { class: "stack" }, h("i", { class: "phone", style: { height: `${(p.minutes / peak) * 100}%` } })),
-        h("span", {}, weekdayShort.format(L.dayDate(p.day))),
-        h("small", {}, p.minutes >= 0.5 ? `${Math.round(p.minutes)}m` : ""),
-        h("small", { class: "muted" }, p.phone + p.laptop ? `${p.phone + p.laptop}×` : "")))),
-    (topBlocked.length > 0 || byBlock.length > 0) && h("div", { class: "lists" },
-      topBlocked.length > 0 && h("div", {}, h("h3", {}, "Most blocked"), h("ol", {}, topBlocked.map(([name, n]) => h("li", {}, name, h("span", { class: "muted" }, ` ${n}×`))))),
-      byBlock.length > 0 && h("div", {}, h("h3", {}, "Unlock time by block"), h("ol", {}, byBlock.map(([name, ms]) => h("li", {}, name, h("span", { class: "muted" }, ` ${Math.round(ms / 60000)} min`)))))));
+    head(
+      figure("blocked", wk.blocked, "Blocked", change(wk.blocked, wk.before.blocked, true)),
+      figure("open", minutes(Math.round(wk.unlockedTotal)), "Unlocked", change(wk.unlockedTotal, wk.before.unlocked, null, " min")),
+      figure("earned", wk.earned, "Earned", change(wk.earned, wk.before.earned, false)),
+      wk.bought >= 0.5 && figure("bought", minutes(Math.round(wk.bought)), "Bought")),
+    h("div", { class: "week-grid rule-days" },
+      heatRow("blocked", "phone", "Phone", wk.phone, wk.phoneTotal),
+      heatRow("blocked laptop", "laptop", "Laptop", wk.laptop, wk.laptopTotal),
+      heatRow("open", "unlocked", "Unlocked", wk.unlocked, shortMinutes(wk.unlockedTotal), shortMinutes)),
+    (wk.top.length > 0 || wk.byBlock.length > 0) && h("div", { class: "rule-lists" },
+      wk.top.length > 0 && h("div", {}, h("h3", {}, "Most blocked"),
+        listRows(wk.top, "targets", (t) => t.total, (t, top) => [
+          t.phone > 0 && h("i", { class: "phone", style: { width: `${(t.phone / top) * 100}%` }, title: `Phone ${t.phone}` }),
+          t.laptop > 0 && h("i", { class: "laptop", style: { width: `${(t.laptop / top) * 100}%` }, title: `Laptop ${t.laptop}` })])),
+      wk.byBlock.length > 0 && h("div", {}, h("h3", {}, "Unlocked by block"),
+        listRows(wk.byBlock, "unlocks", (b) => b.min, (b, top) => h("i", { style: { width: `${(b.min / top) * 100}%` } })))));
 }
+
+// A week back and forth from the keyboard, on the review.
+document.addEventListener("keydown", (e) => {
+  if (lastRoute !== "review" || flick || sheet || popover || e.altKey || e.ctrlKey || e.metaKey) return;
+  if (e.target instanceof Element && e.target.closest("input, textarea, select")) return;
+  const step = { ArrowLeft: 1, ArrowRight: -1 }[e.key];
+  if (!step) return;
+  const offset = Math.max(0, Number(location.hash.split("/")[2]) || 0) + step;
+  if (offset < 0) return;
+  location.hash = offset === 0 ? "#/review" : `#/review/${offset}`;
+});
 
 // ---- boot ----------------------------------------------------------------------------------
 
@@ -2120,4 +2364,4 @@ async function boot() {
 boot();
 
 // For web/test, which runs this file under node on stand-ins for a browser.
-export { checkChoices, formHabit, ingest, loginView, numberChoices, numberSheet, prefs, signIn, state, tapDay, weekScore };
+export { blocksWeek, checkChoices, distinctEvents, formHabit, ingest, loginView, numberChoices, numberSheet, prefs, settingsPanel, signIn, state, tapDay, weekReview, weekScore };
