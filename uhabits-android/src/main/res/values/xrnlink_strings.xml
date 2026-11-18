@@ -3,7 +3,6 @@
      Loop's translators. -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <!-- The sheet behind the lock on a habit's card: how each block stands. -->
-    <string name="xrnlink_sheet_subtitle">Unlocks in xrnrule</string>
     <string name="xrnlink_open_in_xrnrule">Open in xrnrule</string>
     <string name="xrnlink_locked">Locked · unlocks %1$s</string>
     <string name="xrnlink_done_locked">Locked · this part is done, it needs more</string>

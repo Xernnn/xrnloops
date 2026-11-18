@@ -43,21 +43,13 @@
                 style="@style/Card"
                 android:gravity="center">
 
+                <!-- xrnloops: our tile is the name (XRNLOOPS.md, "The family's tiles"). -->
                 <ImageView
-                    android:layout_width="100dp"
-                    android:layout_height="100dp"
-                    android:layout_margin="6dp"
-                    android:src="@mipmap/ic_launcher" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:gravity="center"
-                    android:textStyle="bold"
-                    android:textSize="16sp"
-                    android:layout_margin="6dp"
-                    android:textColor="?aboutScreenColor"
-                    android:text="@string/xrnloops_app_name" />
+                    android:layout_width="88dp"
+                    android:layout_height="88dp"
+                    android:layout_margin="12dp"
+                    android:contentDescription="@string/xrnloops_app_name"
+                    android:src="@drawable/xrnloops_tile" />
 
                 <TextView
                     android:id="@+id/tvVersion"

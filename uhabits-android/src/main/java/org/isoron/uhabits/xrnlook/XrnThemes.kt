@@ -62,9 +62,9 @@ object XrnFonts {
     fun bold(context: Context): Typeface = context.resources.getFont(R.font.xrn_misans_semibold)
 }
 
-/** The list's bar as xrnrule has it: the mark and the app's name, not a screen title. */
-fun Toolbar.showWordmark() {
-    logo = ContextCompat.getDrawable(context, R.drawable.xrn_bar_mark)
-    title = context.getString(R.string.xrn_wordmark)
-    setTitleTextAppearance(context, R.style.XrnToolbar_Wordmark)
+/** The list's bar as the family has it: our tile where the app's name was, and no title. */
+fun Toolbar.showTile() {
+    logo = ContextCompat.getDrawable(context, R.drawable.xrnloops_tile)
+    logoDescription = context.getString(R.string.xrnloops_app_name)
+    title = null
 }

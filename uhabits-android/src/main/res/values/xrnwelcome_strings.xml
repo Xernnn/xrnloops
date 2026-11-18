@@ -9,7 +9,6 @@
     <string name="xrnwelcome_done">Done</string>
 
     <!-- 1. Hello -->
-    <string name="xrnwelcome_hello_title">xrnloops</string>
     <string name="xrnwelcome_hello_tagline">Do it. Tick it. Unlock.</string>
     <string name="xrnwelcome_hello_body">My own Loop. The same streaks and scores, wired into xrnrule and my home server.</string>
 
@@ -26,7 +25,7 @@
     <string name="xrnwelcome_xrnrule_found_body">In xrnrule, open a block\'s checklist and tap Link xrnloops habit.</string>
     <string name="xrnwelcome_xrnrule_missing">xrnrule isn\'t installed</string>
     <string name="xrnwelcome_xrnrule_missing_body">Ticks still count here. They just don\'t unlock anything yet.</string>
-    <string name="xrnwelcome_open_xrnrule">Open xrnrule</string>
+    <string name="xrnwelcome_open_xrnrule">Open</string>
 
     <!-- 3. Your habits -->
     <string name="xrnwelcome_habits_eyebrow">Your habits</string>
