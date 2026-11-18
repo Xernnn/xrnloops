@@ -131,7 +131,10 @@ localStorage: the cookie is HttpOnly, so no script on the host (it also serves t
 XrnTube and xrnrule's status page) can read it, and it counts only with the `X-Xrn-Client`
 header, which another site can't send. It lasts 30 days and is signed with `session.key`, made
 next to the users file, which xrnrule-sync shares, so one sign-in covers both pages; a new
-password ends every session. Every answer carries `X-Frame-Options: DENY`, `nosniff`,
+password ends every session. Signing out ends that one cookie on every server that takes it
+(since 2026-11-18): its SHA-256 goes on `signed-out.json` beside `session.key`, which xrnhub,
+xrnrule-sync and xrninsta also write to (under an flock on `signed-out.json.lock`) and refuse.
+Every answer carries `X-Frame-Options: DENY`, `nosniff`,
 `no-referrer` and a CSP that runs only the web app's own files (index.html's inline script by
 hash, worked out at start), and gzip bodies are unpacked only up to the 32 MB limit.
 
