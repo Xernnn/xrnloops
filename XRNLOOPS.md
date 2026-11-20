@@ -5,8 +5,11 @@ This is a modified copy of [Loop Habit Tracker](https://github.com/iSoron/uhabit
 formerly xrnhabit and HabitFirst) can unlock blocked apps when you tick a habit here. The modified version stays
 GPLv3. xrnrule talks to it only over Android IPC and contains no Loop code.
 
-Cloned shallow from upstream `7e993e1` (2.3.1). To rebase onto a newer upstream, run
-`git fetch --unshallow` first.
+Based on upstream's `dev` at `7e993e1` (2.3.1, 21 Jul 2026). This repo holds the whole upstream
+history, but as a copy whose hashes differ from GitHub's after August 2015 (the content is the
+same): upstream's `7e993e1` is `e542850b` here. Left as it is, git takes a commit of August 2015
+as the base of a merge with upstream; fetch upstream and run `git replace e542850b 7e993e1` first,
+so the merge starts from where the fork did.
 
 ## What changed
 
