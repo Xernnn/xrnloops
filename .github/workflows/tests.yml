@@ -38,14 +38,33 @@ jobs:
           :uhabits-android:ktlintCheck
           :uhabits-android:compileDebugAndroidTestKotlin
 
+      # The sync server on the oldest and newest Python it may run on: how deep json.loads nests
+      # changed in 3.14, which the home server runs. Each runs even when the other fails.
       - uses: actions/setup-python@v7
+        id: py312
+        if: ${{ !cancelled() }}
         with:
           python-version: '3.12'
 
-      - name: Sync server tests
+      - uses: actions/setup-python@v7
+        id: py314
+        if: ${{ !cancelled() }}
+        with:
+          python-version: '3.14'
+
+      - name: Sync server tests, Python 3.12
+        if: ${{ !cancelled() }}
         run: |
-          pip install bcrypt
-          python3 -m unittest server/test_xrnloops_sync.py
+          py="${{ steps.py312.outputs.python-path }}"
+          "$py" -m pip install --quiet bcrypt
+          "$py" -m unittest server/test_xrnloops_sync.py
+
+      - name: Sync server tests, Python 3.14
+        if: ${{ !cancelled() }}
+        run: |
+          py="${{ steps.py314.outputs.python-path }}"
+          "$py" -m pip install --quiet bcrypt
+          "$py" -m unittest server/test_xrnloops_sync.py
 
       - name: Keep the reports of a failed run
         if: failure()
