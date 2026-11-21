@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ xrnloops (XRNLOOPS.md): the debug build installs beside the real app, under its own app id
+  ~ (applicationIdSuffix), and stays out of xrnrule's link. xrnrule talks only to
+  ~ com.xern.xrnloops; this build neither declares nor asks for the permission that guards the
+  ~ link, and can't see xrnrule, so a tick here unlocks nothing. Declaring the permission would
+  ~ also stop a build signed with another key from installing at all
+  ~ (INSTALL_FAILED_DUPLICATE_PERMISSION).
+  -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <permission
+        android:name="com.xern.xrnrule.permission.HABITS"
+        tools:node="remove" />
+    <uses-permission
+        android:name="com.xern.xrnrule.permission.HABITS"
+        tools:node="remove" />
+    <queries>
+        <package
+            android:name="com.xern.xrnrule"
+            tools:node="remove" />
+    </queries>
+</manifest>

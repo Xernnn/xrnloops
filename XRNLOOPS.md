@@ -74,6 +74,7 @@ so the merge starts from where the fork did.
 | Bold draws "@" on the phone (2026-11-19). MiSans Latin 4.007's static Bold draws an ampersand for "@"; dialog titles, the welcome screen's titles and the family's weight 800 now take Bold from Xiaomi's variable MiSans Latin at wght 630, the static Bold's weight, and the static file is gone (the web app routes "@" at 800 and 900 to the Semibold since 2026-11-17) | `res/font/xrn_misans_vf.ttf`, `res/font/xrn_misans_bold.xml`, `res/font/xrn_misans.xml`; `src/test/.../xrnlook/XrnFontsTest.kt` |
 | The web app's bar, Settings and Review (2026-11-19). The bar is our tile, Habits and Review as tabs, then New (on the list), xrnrule's tile (in place of "Blocks") and a Settings button (in place of the "more" dots); the page labels and back links went, the tabs do that. Settings is a panel (from the bottom on a phone) with grouped rows: "Tap on a day" and the theme as segmented choices, today on the right as a switch, and the account with Sign out, each kept in `xrnloops.prefs` as before. The Review page is rebuilt, see "The web app" below | `web/app.js` (`topBar`, `settingsPanel`, `weekReview`, `blocksWeek`, `reviewView`), `web/style.css`; `web/test/review.test.mjs`, `web/test/settings.test.mjs` |
 | Settings' About opens this app's own page (2026-11-21). `preferences.xml` named the app id in its `<intent>` (`com.xern.xrnloops`), so a build under another id, the debug build, opened the release app's About, which isn't exported, and crashed. The preference has a key now and `SettingsFragment` gives it an intent for its own `AboutActivity` | `res/xml/preferences.xml`, `activities/settings/SettingsFragment.kt`; `src/test/.../activities/settings/SettingsIntentsTest.kt` |
+| The debug build installs beside the real app (2026-11-21): app id `com.xern.xrnloops.debug`, "xrnloops debug" on the launcher, version name `…-debug`, its own data. It stays out of xrnrule's link: its manifest drops the `HABITS` permission (declaring it under another key refuses the install), the request for it and the `<queries>` entry for xrnrule, and xrnrule only ever names `com.xern.xrnloops`. The instrumented tests follow the debug id | `uhabits-android/build.gradle.kts` (`applicationIdSuffix`), `src/debug/AndroidManifest.xml`, `src/debug/res/values/xrnloops.xml`; `build.sh`, `docs/TEST.md`, `androidTest/.../acceptance/steps/BackupSteps.kt`; `src/test/.../xrnrule/DebugBuildLinkTest.kt` |
 
 ## The contract
 
@@ -241,15 +242,22 @@ python3 -m unittest server/test_xrnloops_sync.py     # the store + HTTP
 ## Build and install
 
 ```fish
-fish -l -c './gradlew :uhabits-android:assembleDebug'
-adb install -r uhabits-android/build/outputs/apk/debug/uhabits-android-debug.apk
+fish -l -c './gradlew :uhabits-android:assembleRelease'
+adb install -r uhabits-android/build/outputs/apk/release/uhabits-android-release.apk
 ```
 
-Needs SDK platform 36. Both apps must be signed with the **same key**. Debug builds on the same
-machine share `~/.android/debug.keystore`. With different keys, the second install fails with
-`INSTALL_FAILED_DUPLICATE_PERMISSION`. To use a key that doesn't depend on this machine, both
-builds read `../xrn-signing.properties` when it exists (`storeFile`, `storePassword`, `keyAlias`,
-`keyPassword`; `storeFile` relative to that file's folder).
+Needs SDK platform 36. Both apps must be signed with the **same key**. With different keys, the
+second install fails with `INSTALL_FAILED_DUPLICATE_PERMISSION`. To use a key that doesn't depend
+on this machine, both builds read `../xrn-signing.properties` when it exists (`storeFile`,
+`storePassword`, `keyAlias`, `keyPassword`; `storeFile` relative to that file's folder).
+
+The debug build (`assembleDebug`, `apk/debug/uhabits-android-debug.apk`) is another app since
+2026-11-21: `com.xern.xrnloops.debug`, "xrnloops debug" on the launcher, version `…-debug`, with
+its own habits and settings, so it installs beside the real one and never touches it. It stays out
+of xrnrule's link (`src/debug/AndroidManifest.xml` takes out the `HABITS` permission and the view
+of xrnrule; xrnrule only talks to `com.xern.xrnloops`), so it installs whatever key signed it, and
+like any fresh install it has no server address and doesn't sync until someone signs in. The
+instrumented tests run against it (`com.xern.xrnloops.debug.test`).
 
 ## Moving your habits over from the store Loop
 

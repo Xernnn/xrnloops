@@ -199,6 +199,10 @@ repo: `storeFile`, `storePassword`, `keyAlias`, `keyPassword`) when that file ex
 debug builds use the machine's debug key and release builds come out unsigned. It has to be the key
 xrnrule is signed with, or the second install fails with `INSTALL_FAILED_DUPLICATE_PERMISSION`.
 
+The debug build is a separate app, `com.xern.xrnloops.debug` ("xrnloops debug"), with its own
+habits and settings, so it installs beside the real one without touching it. xrnrule doesn't talk
+to it, and it has no server address and doesn't sync until you sign in.
+
 The instrumented tests (view screenshots and UI tests) run on an API 35 emulator;
 [docs/TEST.md](docs/TEST.md) has the steps. GitHub runs the JVM tests, ktlint, a compile of the
 instrumented tests and the server's tests on every push (`.github/workflows/tests.yml`).

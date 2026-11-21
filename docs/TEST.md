@@ -36,8 +36,8 @@ adb root && adb shell settings put global window_animation_scale 0   # and the o
 ./gradlew :uhabits-android:assembleDebug :uhabits-android:assembleDebugAndroidTest
 adb install -t -r uhabits-android/build/outputs/apk/debug/uhabits-android-debug.apk
 adb install -r uhabits-android/build/outputs/apk/androidTest/debug/uhabits-android-debug-androidTest.apk
-adb shell am instrument -r -e size medium -w com.xern.xrnloops.test/androidx.test.runner.AndroidJUnitRunner
-adb shell am instrument -r -e size large -w com.xern.xrnloops.test/androidx.test.runner.AndroidJUnitRunner
+adb shell am instrument -r -e size medium -w com.xern.xrnloops.debug.test/androidx.test.runner.AndroidJUnitRunner
+adb shell am instrument -r -e size large -w com.xern.xrnloops.debug.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-Failed view tests leave their images in `/sdcard/Android/data/com.xern.xrnloops/files/test-screenshots/`; pull that folder to `uhabits-android/build/outputs/` and run `./build.sh android-accept-images` to take them. GitHub runs only the tests that need no emulator (`.github/workflows/tests.yml`).
+Failed view tests leave their images in `/sdcard/Android/data/com.xern.xrnloops.debug/files/test-screenshots/`; pull that folder to `uhabits-android/build/outputs/` and run `./build.sh android-accept-images` to take them. GitHub runs only the tests that need no emulator (`.github/workflows/tests.yml`).

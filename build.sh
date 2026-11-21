@@ -24,7 +24,7 @@ AVD_PREFIX="uhabitsTest"
 EMULATOR="${ANDROID_HOME}/emulator/emulator"
 GRADLE="./gradlew --stacktrace --quiet --console=plain"
 GRADLE_LOG="build/gradle-output.log"
-PACKAGE_NAME=com.xern.xrnloops  # xrnloops: was org.isoron.uhabits (XRNLOOPS.md)
+PACKAGE_NAME=com.xern.xrnloops.debug  # xrnloops: the debug build's id; was org.isoron.uhabits (XRNLOOPS.md)
 SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
 VERSION=$(grep versionName uhabits-android/build.gradle.kts | sed -e 's/.*"\([^"]*\)".*/\1/g')
 ATTEMPTS=1
