@@ -31,13 +31,15 @@
     <color name="xrn_green">#22C55E</color>
     <color name="xrn_green_container">#1F3A2A</color>
     <color name="xrn_on_green_container">#BBF7D0</color>
-    <color name="xrn_tile">#2B9348</color>
+    <color name="xrn_green_variant">#2B9348</color>
+    <!-- The tile's green (web/icon.svg), only for drawing the tile. -->
+    <color name="xrn_tile">#037200</color>
     <color name="xrn_ink">#18181B</color>
     <color name="xrn_error">#F04242</color>
 
     <style name="XrnTheme" parent="Theme.MaterialComponents.NoActionBar">
         <item name="colorPrimary">@color/xrn_green</item>
-        <item name="colorPrimaryVariant">@color/xrn_tile</item>
+        <item name="colorPrimaryVariant">@color/xrn_green_variant</item>
         <item name="colorOnPrimary">@color/xrn_ink</item>
         <item name="colorSecondary">@color/xrn_green</item>
         <item name="colorOnSecondary">@color/xrn_ink</item>
