@@ -205,3 +205,12 @@ Opencsv is a very simple CSV (comma-separated values) parser library for Java.
 	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 	See the License for the specific language governing permissions and
 	limitations under the License.
+
+## MiSans
+
+<https://hyperos.mi.com/font/en/>
+
+MiSans by Xiaomi, used under the MiSans font licence (free for commercial use
+when the software notes that it uses MiSans). The font files
+(`uhabits-android/src/main/res/font/xrn_misans_*.ttf`, `web/fonts/`) are not
+covered by this repository's licence.

@@ -34,10 +34,10 @@ const tick = (habit, mtime) => ({ habit, date: "2026-11-11", value: 2, notes: ""
 const queue = (...entries) => ({ habits: [], entries });
 
 let opened = 0;
-/** A tab of the web app, signed in as sonn, opened on what localStorage holds by then. */
+/** A tab of the web app, signed in as alex, opened on what localStorage holds by then. */
 async function openTab() {
   store.set("xrn.signedIn", "true");
-  if (!store.has(OWNER)) store.set(OWNER, JSON.stringify("sonn"));
+  if (!store.has(OWNER)) store.set(OWNER, JSON.stringify("alex"));
   const win = (globalThis.window = new EventTarget());
   await import(`../app.js?tab=${++opened}`);
   return {
@@ -85,7 +85,7 @@ test("a record goes by its newer write, whichever tab made it", async () => {
   assert.deepEqual(sent.map((e) => [e.habit, e.mtime, e.value]), [["read", 9, 2], ["walk", 7, 0]]);
 });
 
-test("signed in as someone else in the other tab, what was queued here for sonn is dropped", async () => {
+test("signed in as someone else in the other tab, what was queued here for alex is dropped", async () => {
   store.set(PENDING, JSON.stringify(queue(tick("walk", 5))));
   const tab = await openTab();
   tab.hears(OWNER, "other");

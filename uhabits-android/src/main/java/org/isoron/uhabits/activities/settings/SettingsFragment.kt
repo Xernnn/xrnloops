@@ -46,6 +46,7 @@ import org.isoron.uhabits.activities.habits.list.RESULT_IMPORT_DATA
 import org.isoron.uhabits.activities.habits.list.RESULT_REPAIR_DB
 import org.isoron.uhabits.core.preferences.Preferences
 import org.isoron.uhabits.core.ui.NotificationTray
+import org.isoron.uhabits.intents.IntentFactory
 import org.isoron.uhabits.notifications.AndroidNotificationTray.Companion.createAndroidNotificationChannel
 import org.isoron.uhabits.notifications.RingtoneManager
 import org.isoron.uhabits.utils.StyledResources
@@ -95,6 +96,8 @@ class SettingsFragment : PreferenceFragmentCompat(), OnSharedPreferenceChangeLis
         setResultOnPreferenceClick("exportCSV", RESULT_EXPORT_CSV)
         setResultOnPreferenceClick("exportDB", RESULT_EXPORT_DB)
         setResultOnPreferenceClick("repairDB", RESULT_REPAIR_DB)
+        // xrnloops: this app's own About, whatever its app id (the debug build's has a suffix).
+        findPreference("about")?.intent = IntentFactory().startAboutActivity(requireContext())
         XrnSyncPreferences.attach(this)
         XrnTap.attach(this)
     }

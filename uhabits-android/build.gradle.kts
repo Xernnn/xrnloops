@@ -103,6 +103,10 @@ android {
         debug {
             enableUnitTestCoverage = true
             signingConfigs.findByName("xrn")?.let { signingConfig = it }
+            // xrnloops: installs beside the real app as "xrnloops debug", with its own data, and
+            // stays out of xrnrule's link (src/debug/AndroidManifest.xml; XRNLOOPS.md).
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
         }
     }
 

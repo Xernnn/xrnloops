@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- xrnloops: the debug build's name on the launcher, beside the real xrnloops (XRNLOOPS.md). -->
+<resources>
+    <string name="xrnloops_app_name" translatable="false">xrnloops debug</string>
+</resources>

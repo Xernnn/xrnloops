@@ -240,7 +240,7 @@ class HttpTest(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory()
         users = os.path.join(cls.tmp.name, "htpasswd")
         with open(users, "w") as f:
-            f.write("sonn:" + bcrypt.hashpw(b"secret", bcrypt.gensalt(4)).decode() + "\n")
+            f.write("alex:" + bcrypt.hashpw(b"secret", bcrypt.gensalt(4)).decode() + "\n")
         web = os.path.join(cls.tmp.name, "web")
         os.makedirs(web)
         with open(os.path.join(web, "index.html"), "w") as f:
@@ -263,7 +263,7 @@ class HttpTest(unittest.TestCase):
     def request(self, path, body=None, password="secret", headers=None):
         req = urllib.request.Request(self.base + path, method="POST" if body is not None else "GET",
                                      data=json.dumps(body).encode() if body is not None else None)
-        req.add_header("Authorization", "Basic " + base64.b64encode(f"sonn:{password}".encode()).decode())
+        req.add_header("Authorization", "Basic " + base64.b64encode(f"alex:{password}".encode()).decode())
         req.add_header("Content-Type", "application/json")
         for k, v in (headers or {}).items():
             req.add_header(k, v)
@@ -306,7 +306,7 @@ class HttpTest(unittest.TestCase):
         # The laptop's daemon gives up on a long-poll after 65 s. When its tailnet path stalls, the
         # request reaches here late, and the answer, 50 s on, met the socket Funnel had closed by
         # then: a BrokenPipeError traceback in the log, 288 of them in two weeks.
-        login = base64.b64encode(b"sonn:secret")
+        login = base64.b64encode(b"alex:secret")
         started = time.monotonic()
         log = self.logged_after(
             b"GET /api/changes?since=1000000000&wait=30 HTTP/1.1\r\nHost: x\r\nAuthorization: Basic " + login + b"\r\n\r\n",
@@ -316,7 +316,7 @@ class HttpTest(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 10)  # not held the 30 s it asked for
 
     CUT_UPLOAD = (b"POST /api/changes HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nAuthorization: Basic " +
-                  base64.b64encode(b"sonn:secret") + b"\r\nContent-Length: 4000\r\n\r\n" + b'{"habits": [' + b" " * 1000)
+                  base64.b64encode(b"alex:secret") + b"\r\nContent-Length: 4000\r\n\r\n" + b'{"habits": [' + b" " * 1000)
 
     def test_a_caller_that_hangs_up_mid_upload_is_one_line_in_the_log_not_a_500(self):
         # The reset was taken for a failed write here: "write failed", a 500 (which xrnhub's log
@@ -389,7 +389,7 @@ class HttpTest(unittest.TestCase):
             with unittest.mock.patch.object(bcrypt, "checkpw", wraps=bcrypt.checkpw) as checkpw:
                 self.assertIsNone(srv.check_login(header))
             return checkpw.call_count
-        self.assertEqual(1, checks("sonn:nope"))
+        self.assertEqual(1, checks("alex:nope"))
         self.assertEqual(1, checks("nobody:nope"))  # none: the answer came sooner, and said so
         self.assertIsNone(srv.check_login("Basic " + base64.b64encode(b"nobody:secret").decode()))
 
@@ -400,7 +400,7 @@ class HttpTest(unittest.TestCase):
             start = time.monotonic()
             status = self.raw("GET", "/api/changes?since=0", headers={"X-Forwarded-For": addr, **headers})[0]
             return status, time.monotonic() - start
-        srv.failures["203.0.113.61"] = [(time.monotonic(), "sonn")] * srv.FAIL_LIMIT  # locked out
+        srv.failures["203.0.113.61"] = [(time.monotonic(), "alex")] * srv.FAIL_LIMIT  # locked out
         with unittest.mock.patch.object(srv, "FAIL_DELAY_S", 0.5):
             for addr, status in (("203.0.113.60", 401), ("203.0.113.61", 429)):
                 got, took = timed(addr)
@@ -437,9 +437,9 @@ class HttpTest(unittest.TestCase):
         for _ in range(5):
             self.assertEqual(401, self.guess_as("admin", "nope", addr))
         for _ in range(4):
-            self.assertEqual(401, self.guess_as("sonn", "nope", addr))
+            self.assertEqual(401, self.guess_as("alex", "nope", addr))
         srv.auth_cache.clear()
-        self.assertEqual(200, self.guess_as("sonn", "secret", addr))  # sonn's four go, admin's five stay
+        self.assertEqual(200, self.guess_as("alex", "secret", addr))  # alex's four go, admin's five stay
         for _ in range(srv.FAIL_LIMIT - 5):
             self.assertEqual(401, self.guess_as("admin", "nope", addr))
         self.assertEqual(429, self.guess_as("admin", "nope", addr))
@@ -450,12 +450,12 @@ class HttpTest(unittest.TestCase):
         # sync, so the guesses never ran out. A password already found right (the auth cache) is
         # a session, not a login.
         addr = "203.0.113.81"
-        self.assertEqual(200, self.guess_as("sonn", "secret", addr))  # the phone, signed in
+        self.assertEqual(200, self.guess_as("alex", "secret", addr))  # the phone, signed in
         for _ in range(srv.FAIL_LIMIT - 1):
-            self.assertEqual(401, self.guess_as("sonn", "nope", addr))
-            self.assertEqual(200, self.guess_as("sonn", "secret", addr))  # it syncs on
-        self.assertEqual(401, self.guess_as("sonn", "nope", addr))
-        self.assertEqual(429, self.guess_as("sonn", "nope", addr))
+            self.assertEqual(401, self.guess_as("alex", "nope", addr))
+            self.assertEqual(200, self.guess_as("alex", "secret", addr))  # it syncs on
+        self.assertEqual(401, self.guess_as("alex", "nope", addr))
+        self.assertEqual(429, self.guess_as("alex", "nope", addr))
 
     def test_a_login_in_flight_is_not_a_wrong_guess(self):
         # Counted as wrong before it was checked, a right login being checked took a place: two
@@ -467,13 +467,13 @@ class HttpTest(unittest.TestCase):
             time.sleep(0.3)
             return real(header)
         with unittest.mock.patch.object(srv, "FAIL_LIMIT", 3):
-            self.assertEqual(401, self.guess_as("sonn", "nope", addr))
-            self.assertEqual(401, self.guess_as("sonn", "nope", addr))  # one place left
+            self.assertEqual(401, self.guess_as("alex", "nope", addr))
+            self.assertEqual(401, self.guess_as("alex", "nope", addr))  # one place left
             srv.auth_cache.clear()
             start = threading.Barrier(2)
             def login(_):
                 start.wait()
-                return self.guess_as("sonn", "secret", addr)
+                return self.guess_as("alex", "secret", addr)
             with unittest.mock.patch.object(srv, "check_login", slow):
                 with concurrent.futures.ThreadPoolExecutor(2) as pool:
                     self.assertEqual([200, 200], list(pool.map(login, range(2))))
@@ -485,7 +485,7 @@ class HttpTest(unittest.TestCase):
                     b'{"habits":[{"uuid":"n","mtime":1,"data":{"targetValue":1e999}}],"entries":[]}',
                     b'{"habits":[{"uuid":"n","mtime":1e999,"data":{}}],"entries":[]}',
                     b'{"habits":[],"entries":[{"habit":"n","date":"2026-10-16","value":1180591620717411303424,"mtime":1}]}'):
-            token = base64.b64encode(b"sonn:secret").decode()
+            token = base64.b64encode(b"alex:secret").decode()
             status, _ = self.raw("POST", "/api/changes", bad, {"Authorization": f"Basic {token}"})
             self.assertEqual(400, status, bad)
 
@@ -575,7 +575,7 @@ class HttpTest(unittest.TestCase):
         self.assertIsNone(headers["Content-Encoding"])
 
     def test_the_data_is_never_kept(self):
-        token = base64.b64encode(b"sonn:secret").decode()
+        token = base64.b64encode(b"alex:secret").decode()
         status, headers, _ = self.fetch("/api/changes?since=0", Authorization=f"Basic {token}")
         self.assertEqual((200, "no-store"), (status, headers["Cache-Control"]))
         self.assertIsNone(headers["ETag"])
@@ -657,7 +657,7 @@ class HttpTest(unittest.TestCase):
         return res.status, res
 
     def basic(self, password="secret"):
-        return "Basic " + base64.b64encode(f"sonn:{password}".encode()).decode()
+        return "Basic " + base64.b64encode(f"alex:{password}".encode()).decode()
 
     def test_the_web_app_signs_in_with_a_cookie_scripts_cannot_read(self):
         status, res = self.raw("POST", "/xrnloops/api/session", headers={"Authorization": self.basic(), "X-Xrn-Client": "web"})
@@ -683,9 +683,9 @@ class HttpTest(unittest.TestCase):
     def a_cookie(self, expires):
         """A login cookie as make_session makes it, running out at [expires]: two made in the same
         second are the same cookie."""
-        who = base64.urlsafe_b64encode(b"sonn").decode().rstrip("=")
+        who = base64.urlsafe_b64encode(b"alex").decode().rstrip("=")
         body = f"{who}.{expires}"
-        return f"{body}.{srv.session_mac(body, srv.password_tag('sonn'))}"
+        return f"{body}.{srv.session_mac(body, srv.password_tag('alex'))}"
 
     def as_web(self, cookie):
         return {"Cookie": f"{srv.SESSION_COOKIE}={cookie}", "X-Xrn-Client": "web"}
@@ -760,16 +760,16 @@ class HttpTest(unittest.TestCase):
         clock = unittest.mock.Mock()
         clock.time.return_value = 1_900_000_100.5
         with unittest.mock.patch.object(srv, "time", clock):
-            first = srv.make_session("sonn")
-            self.assertEqual("sonn", srv.end_session(f"{srv.SESSION_COOKIE}={first}"))
-            again = srv.make_session("sonn")
+            first = srv.make_session("alex")
+            self.assertEqual("alex", srv.end_session(f"{srv.SESSION_COOKIE}={first}"))
+            again = srv.make_session("alex")
             self.assertEqual(int(first.split(".")[1]) + 1, int(again.split(".")[1]))
-            self.assertEqual("sonn", srv.check_session(f"{srv.SESSION_COOKIE}={again}"))
+            self.assertEqual("alex", srv.check_session(f"{srv.SESSION_COOKIE}={again}"))
             # Signed out by the hub instead, the next one is new again.
             self.write_list({**self.read_list(), self.hash_of(again): int(again.split(".")[1])})
-            third = srv.make_session("sonn")
+            third = srv.make_session("alex")
             self.assertNotIn(third, (first, again))
-            self.assertEqual("sonn", srv.check_session(f"{srv.SESSION_COOKIE}={third}"))
+            self.assertEqual("alex", srv.check_session(f"{srv.SESSION_COOKIE}={third}"))
 
     def test_servers_signing_out_at_once_keep_every_sign_out(self):
         # The servers share one file: written without a lock, of two signing out together, one
