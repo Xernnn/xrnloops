@@ -489,6 +489,35 @@ class HttpTest(unittest.TestCase):
             status, _ = self.raw("POST", "/api/changes", bad, {"Authorization": f"Basic {token}"})
             self.assertEqual(400, status, bad)
 
+    def post_raw(self, body):
+        """POST /api/changes with [body] as it is: (status, the answer's text)."""
+        conn = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1], timeout=10)
+        conn.request("POST", "/api/changes", body=body, headers={"Authorization": self.basic()})
+        with conn.getresponse() as res:  # no answer at all raises here
+            answer = res.status, res.read().decode()
+        conn.close()
+        return answer
+
+    def test_a_body_nested_deeper_than_json_loads_goes_gets_an_answer(self):
+        # Past the depth it parses (a few thousand levels, tens of thousands on Python 3.14),
+        # json.loads raises RecursionError, which isn't a ValueError: it went past the handler's
+        # except, and the connection closed with no answer and a traceback in the log.
+        entry = b'{"habit":"deep","date":"2026-10-16","value":2,"mtime":1}'
+        body = b'{"entries":[' + entry + b'],"x":' + b"[" * 100_000 + b"]" * 100_000 + b"}"
+        with unittest.mock.patch("sys.stderr", new_callable=io.StringIO) as log:
+            status, text = self.post_raw(body)
+        self.assertEqual((400, True), (status, "nested" in text))
+        self.assertNotIn("Traceback", log.getvalue())
+        _, feed, _ = self.request("/api/changes?since=0")
+        self.assertNotIn("deep", [e["habit"] for e in json.loads(feed)["entries"]])
+
+    def test_a_body_nested_up_to_the_limit_is_taken(self):
+        def nested(depth):  # {"entries": [], "x": [[...]]}: the outermost object is level 1
+            return b'{"entries":[],"x":' + b"[" * (depth - 1) + b"]" * (depth - 1) + b"}"
+        self.assertEqual(200, self.post_raw(nested(srv.MAX_DEPTH))[0])
+        status, text = self.post_raw(nested(srv.MAX_DEPTH + 1))
+        self.assertEqual((400, True), (status, "nested" in text))
+
     def test_a_write_from_a_lost_history_gets_409(self):
         _, text, _ = self.request("/api/changes?since=0")
         feed = json.loads(text)
