@@ -32,7 +32,7 @@ let opened = 0;
  */
 export async function openApp(habits, entries) {
   store.set("xrn.signedIn", "true");
-  store.set("xrnloops.pendingOwner", JSON.stringify("sonn"));
+  store.set("xrnloops.pendingOwner", JSON.stringify("alex"));
   const app = await import(`../app.js?copy=${++opened}`);
   app.ingest({ habits: habits.map((h) => ({ mtime: 1, deleted: false, ...h })), entries: entries.map((e) => ({ mtime: 1, ...e })) });
   return {
