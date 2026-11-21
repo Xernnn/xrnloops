@@ -98,6 +98,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs
 
 MAX_BODY = 32 * 1024 * 1024
+# How many lists and objects deep a request body may go. The clients' own nest a handful; json.loads
+# raises RecursionError past a few thousand (tens of thousands on Python 3.14), which no except
+# here caught, and str() of a value that deep is as costly as it is long.
+MAX_DEPTH = 64
 FAIL_DELAY_S = 2  # after a wrong password, as Radicale does
 AUTH_CACHE_S = 600  # a bcrypt check costs ~0.3s on a phone; don't pay it per request
 MAX_WAIT_S = 55
@@ -511,6 +515,20 @@ HABIT_FIELDS = {
     "type": YES_NO, "targetType": AT_LEAST, "targetValue": 0.0, "unit": "", "archived": False,
     "position": 0, "reminder": None, "icon": "", "timer": False, "step": 1.0,
 }
+
+
+def nested_within(value, limit):
+    """Whether no list or object in [value] sits more than [limit] deep, the outermost being 1.
+    Walked with a list of its own, not by recursion, so any depth is measured without a stack."""
+    todo = [(value, 1)] if isinstance(value, (dict, list)) else []
+    while todo:
+        value, depth = todo.pop()
+        if depth > limit:
+            return False
+        for v in value.values() if isinstance(value, dict) else value:
+            if isinstance(v, (dict, list)):
+                todo.append((v, depth + 1))
+    return True
 
 
 def clean_habit_data(data):
@@ -939,7 +957,13 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("body too large")
             if not unpack.eof:
                 raise ValueError("bad gzip")
-        body = json.loads(raw)
+        try:
+            body = json.loads(raw)
+            deep = not nested_within(body, MAX_DEPTH)
+        except RecursionError:  # past the parser's depth: not a ValueError, and it ended with no answer
+            deep = True
+        if deep:
+            raise ValueError(f"body nested deeper than {MAX_DEPTH} levels")
         if not isinstance(body, dict):
             raise ValueError("body must be a JSON object")
         return body
