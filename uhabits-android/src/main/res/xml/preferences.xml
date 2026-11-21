@@ -192,14 +192,12 @@
             android:key="linksCategory"
             android:title="@string/links">
 
+        <!-- xrnloops: SettingsFragment opens this app's own About; an <intent> here would have
+             to name a package, and the debug build's app id isn't the release one. -->
         <Preference
+                android:key="about"
                 android:title="@string/about"
-                app:iconSpaceReserved="false">
-            <intent
-                    android:action="android.intent.action.VIEW"
-                    android:targetClass="org.isoron.uhabits.activities.about.AboutActivity"
-                    android:targetPackage="com.xern.xrnloops" />
-        </Preference>
+                app:iconSpaceReserved="false" />
 
     </PreferenceCategory>
 
