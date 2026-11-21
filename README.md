@@ -15,10 +15,15 @@ Loop, and Loop's authors neither make nor endorse it.
 
 ## Screenshots
 
-These are the web app, served by the sync server from a throwaway data folder with made-up habits
-and made-up xrnrule blocks, in headless Chromium. The phone app draws the same screens in the same
-look (the web app follows its code piece by piece), but it is Android Views with no Compose
-previews, so it can't be drawn without a device or an emulator.
+The phone app, on a real phone, with made-up habits from a backup file, installed as the debug
+build (`com.xern.xrnloops.debug`) beside the real one:
+
+| ![The habit list on the phone](docs/screenshots/android-list.png) | ![A number habit's page: target, score and history](docs/screenshots/android-habit.png) | ![Further down: calendar, best streaks and frequency](docs/screenshots/android-habit2.png) |
+|---|---|---|
+| The list, with yes/no and number habits | A habit's target, score and history | Its calendar, best streaks and frequency |
+
+The rest are the web app, served by the sync server from a throwaway data folder with made-up habits
+and made-up xrnrule blocks, in headless Chromium.
 
 ![The habit list on a laptop](docs/screenshots/list.png)
 
