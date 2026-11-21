@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- xrnloops (XRNLOOPS.md): MiSans Latin as one family, so textStyle="bold" picks a bold file
      instead of a synthetic bold. Each weight takes the file xrnrule gives it: 700 is MiSans
-     Semibold and 800 is MiSans Bold, which look like those weights did in Nunito. -->
+     Semibold and 800 is MiSans Bold, which look like those weights did in Nunito.
+     MiSans by Xiaomi, used under the MiSans font licence (free for commercial use when the software
+     notes that it uses MiSans). The xrn_misans_*.ttf files beside this one are not covered by this
+     repository's licence. https://hyperos.mi.com/font/en/ -->
 <font-family xmlns:android="http://schemas.android.com/apk/res/android">
     <font
         android:font="@font/xrn_misans_regular"

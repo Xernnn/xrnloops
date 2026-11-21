@@ -20,5 +20,6 @@ crowdin.yml
 kotlin-js-store
 *.md
 !XRNLOOPS.md
+!web/fonts/README.md
 .kotlin
 __pycache__

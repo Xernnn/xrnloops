@@ -264,8 +264,10 @@ GNU General Public License, version 3 or (at your option) any later version. See
 translators are credited on the app's About screen.
 
 Third-party code and fonts that come with Loop are listed in [NOTICE.md](NOTICE.md). The fork adds
-Xiaomi's MiSans Latin font (`uhabits-android/src/main/res/font/`, `web/fonts/`), which is Xiaomi's
-and not covered by the GPL.
+MiSans Latin (`uhabits-android/src/main/res/font/xrn_misans_*.ttf`, `web/fonts/`): MiSans by Xiaomi,
+used under the MiSans font licence (free for commercial use when the software notes that it uses
+MiSans). The font files are not covered by this repository's licence.
+https://hyperos.mi.com/font/en/
 
 ## Docs
 
