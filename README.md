@@ -40,7 +40,7 @@ Hold a day for a moment and slide. Yes/no: up ✓, down ✗, left – (skip), le
 | | |
 |---|---|
 | ![The day's sheet for a number habit](docs/screenshots/sheet.png) | ![The blocks a habit unlocks](docs/screenshots/lock.png) |
-| A number day's sheet: any amount, or a key for the day's target, 0, skip or clear. | The lock after a name: every xrnrule block that waits on the habit, and how it stands. |
+| A number day's sheet: its own pad, − and + by the habit's step, the bar to the day's target, and keys for the target, skip or clear. | The lock after a name: every xrnrule block that waits on the habit, and how it stands. |
 
 ![A habit's page](docs/screenshots/habit.png)
 
@@ -88,9 +88,10 @@ The same pages at phone width in the dark theme.
   100000), which the flick's up and down keys add and take off. − never goes below 0, and the sums
   are kept in Loop's thousandths, so a step of 0.25 or 0.1 doesn't drift.
 - **A day's sheet** in place of Loop's checkmark popup and number box: the habit's name and the day,
-  then Done / Not done / Skip / Clear, or for a number the amount, with keys for the day's target
-  (rounded towards meeting it), 0, skip and clear. A sheet writes only what was picked or typed, so
-  it can't put back a value that sync changed while it was open.
+  then Done / Not done / Skip / Clear, or for a number the amount between − and + (by the habit's
+  step), a bar towards the day's target, keys for the target (rounded towards meeting it), skip and
+  clear, and a pad of its own, so the phone's keyboard never covers the screen. A sheet writes only
+  what was picked or typed, so it can't put back a value that sync changed while it was open.
 - **The xrn look.** The xrn family's zinc greys and green, MiSans for all text (including what Loop
   draws on a canvas), rounded cards and rows with a hairline edge, and 7 days across a phone instead
   of 5. Its own launcher icon (the xrn family tile) and notification icon, the tile in the list's
