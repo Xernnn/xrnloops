@@ -1457,7 +1457,7 @@ function openSheet(habit, children, { cls = "sheet", label = null } = {}) {
   }, panel);
   document.body.append(scrim);
   if (cls === "panel") panel.querySelector("button")?.focus({ preventScroll: true });
-  sheet = { scrim, onClose: null };
+  sheet = { scrim, panel, onClose: null };
   return sheet;
 }
 
@@ -1477,52 +1477,159 @@ function sheetHead(habit, date) {
     h("div", { class: "date" }, describeDay(L.dayNum(date))));
 }
 
+/** The locale's decimal separator, as the phone's pad shows it (DecimalFormatSymbols). */
+const decimalSeparator = new Intl.NumberFormat().formatToParts(1.5).find((p) => p.type === "decimal")?.value ?? ".";
+
+const KEY_HOLD_MS = 400; // held this long, − and + repeat and ⌫ empties the box (the phone's)
+const KEY_REPEAT_MS = 90;
+
 /**
- * A number day: any amount (Loop's number dialog on the phone). The day's sheet for a yes/no day
- * went with its note on 2026-11-15: the flick keys have its four values, here and on the calendar.
+ * A press on `el` runs `tap`. Held for KEY_HOLD_MS it runs `hold` instead, and with `repeat`
+ * again every KEY_REPEAT_MS until the pointer lifts or leaves; the click that ends a hold is
+ * swallowed. A keyboard's Enter or Space on it is a tap.
+ */
+function holdable(el, tap, hold, repeat = false) {
+  let timer = null, held = false;
+  const stop = () => {
+    clearTimeout(timer);
+    clearInterval(timer);
+    timer = null;
+  };
+  el.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    held = false;
+    stop();
+    timer = setTimeout(() => {
+      held = true;
+      hold();
+      if (repeat) timer = setInterval(hold, KEY_REPEAT_MS);
+    }, KEY_HOLD_MS);
+  });
+  for (const type of ["pointerup", "pointerleave", "pointercancel"]) el.addEventListener(type, stop);
+  el.addEventListener("click", () => {
+    if (held) held = false;
+    else tap();
+  });
+}
+
+/**
+ * A number day (the phone's NoteSheet): the amount between − and +, a bar towards the day's
+ * target, quick keys for the target, skip and clear (each saves at once), the sheet's own pad and
+ * Save. A keyboard types on the pad too: digits, "." or ",", Backspace (Delete empties the box),
+ * ↑ and ↓ for + and −, Enter to save. What closing writes is AmountPad's: an amount nobody changed
+ * writes nothing, Save with no amount empties the day (a skip stays), and leaving any other way
+ * keeps an amount keyed in and never blanks a day. The day's sheet for a yes/no day went with its
+ * note on 2026-11-15: the flick keys have its four values, here and on the calendar.
  */
 function numberSheet(habit, date) {
-  const entry = entriesOf(habit.uuid).get(date);
-  const value = entry?.value ?? L.UNKNOWN;
-  const amount = h("input", {
-    type: "number", step: "any", min: 0, inputMode: "decimal", placeholder: "0",
-    value: value >= 0 && value !== L.SKIP ? value / 1000 : "",
-  });
-  const shownAmount = amount.value;
-  // The day as it is now: the phone may have entered an amount while this sheet was open, and
-  // an amount nobody typed here mustn't be written back over it (as NoteSheet on the phone).
-  const valueNow = () => entriesOf(habit.uuid).get(date)?.value ?? value;
+  const opened = entriesOf(habit.uuid).get(date)?.value ?? L.UNKNOWN;
+  const pad = new L.AmountPad(opened);
+  // The day as it is now: the phone may have skipped it while this sheet was open.
+  const valueNow = () => entriesOf(habit.uuid).get(date)?.value ?? opened;
+  const unit = habit.data.unit;
+  const target = L.dayTargetEntry(habit);
+  const step = L.stepEntry(habit);
+  const shown = (entry) => L.AmountPad.shown(entry).replace(".", decimalSeparator);
   const finish = (stored) => {
     current.onClose = null;
     closeSheet();
     if (stored != null) writeEntry(habit.uuid, date, stored);
   };
-  const target = L.dayTargetEntry(habit);
-  const form = h("form", {
-    style: { display: "grid", gap: "16px" },
-    onsubmit: (e) => {
-      e.preventDefault();
-      if (amount.value === shownAmount) return finish(null);
-      // An empty box means no amount, not "undo the skip".
-      const empty = valueNow() === L.SKIP ? L.SKIP : L.UNKNOWN;
-      finish(amount.value === "" ? empty : L.typedEntry(amount.value));
-    },
-  },
-    h("div", { class: "amount-row" }, amount, habit.data.unit && h("span", {}, habit.data.unit)),
-    h("div", { class: "quick" },
-      h("button", { type: "button", class: "btn", onclick: () => finish(target) }, `${L.formatNumber(target / 1000)} ${habit.data.unit}`.trim()),
-      h("button", { type: "button", class: "btn", onclick: () => finish(0) }, "0"),
-      h("button", { type: "button", class: "btn", onclick: () => finish(L.SKIP) }, "Skip"),
-      h("button", { type: "button", class: "btn ghost", onclick: () => finish(L.UNKNOWN) }, "Clear")),
-    h("div", { class: "actions" }, h("button", { class: "btn primary big", type: "submit" }, "Save")));
-  const current = openSheet(habit, [sheetHead(habit, date), form]);
-  // Closing any other way keeps what was typed. Only Save or Clear empties a day, not a blank box.
-  current.onClose = () => {
-    const typed = amount.value !== "" && amount.value !== shownAmount ? L.typedEntry(amount.value) : null;
-    if (typed != null) writeEntry(habit.uuid, date, typed);
+
+  const amount = h("span", { class: "amount" });
+  const readout = h("div", { class: "readout", role: "status", "aria-live": "polite" },
+    amount, unit && h("span", { class: "unit" }, unit));
+  const fill = h("div", { class: "fill" });
+  const goal = h("span", { class: "goal" }, `/ ${shown(target)}`);
+  const progress = target > 0 && h("div", { class: "progress" }, h("div", { class: "bar" }, fill), goal);
+  const show = () => {
+    const empty = pad.text === "";
+    const text = empty ? "\u2013" : pad.text.replace(".", decimalSeparator);
+    amount.textContent = text;
+    const size = text.length <= 3 ? "" : text.length <= 5 ? " m" : text.length <= 7 ? " s" : " xs";
+    amount.setAttribute("class", `amount${size}${empty ? " none" : ""}`);
+    readout.setAttribute("aria-label", empty ? "No amount" : `${text} ${unit}`.trim());
+    if (!progress) return;
+    const met = L.meetsDayTarget(pad.entry, target, habit.data.targetType);
+    // "At most": the bar is how much of the day's allowance is used, and past it isn't met.
+    const over = habit.data.targetType === L.AT_MOST && !met && !empty;
+    const fraction = L.dayProgress(pad.entry, target);
+    fill.style.width = `${fraction * 100}%`;
+    fill.style.minWidth = fraction > 0 ? "6px" : "0"; // a start shows as a dot
+    fill.setAttribute("class", over ? "fill over" : "fill");
+    goal.setAttribute("class", met ? "goal met" : "goal");
+    progress.setAttribute("aria-label", `${empty ? "0" : text} of ${shown(target)} ${unit}`.trim());
   };
-  amount.focus();
-  amount.select();
+  const type = (ok) => ok && show();
+  const stepBy = (steps) => {
+    pad.step(step, steps);
+    show();
+  };
+
+  // The pad's keys and − + keep the focus where it is, so Enter saves after a click on one.
+  const keep = (e) => e.preventDefault();
+  const stepButton = (steps) => {
+    const label = L.formatStep(step).replace(".", decimalSeparator);
+    const sign = steps > 0 ? "+" : "\u2212";
+    const text = step === 1000 ? sign : sign + label;
+    const size = step === 1000 ? "" : label.length <= 2 ? " m" : label.length <= 4 ? " s" : " xs";
+    const btn = h("button", {
+      type: "button", class: `round${size}`, tabIndex: -1, onmousedown: keep,
+      "aria-label": `${steps > 0 ? "Add" : "Take off"} ${label} ${unit}`.trim(),
+    }, text);
+    holdable(btn, () => stepBy(steps), () => stepBy(steps), true);
+    return btn;
+  };
+  const key = (label, attrs, run) => {
+    const btn = h("button", { type: "button", class: "key", tabIndex: -1, onmousedown: keep, ...attrs }, label);
+    if (run) btn.addEventListener("click", run);
+    return btn;
+  };
+  const back = key(icon("backspace"), { "aria-label": "Delete", "data-key": "back" });
+  holdable(back, () => type(pad.backspace()), () => type(pad.clear()));
+  const keys = h("div", { class: "pad" },
+    [1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => key(String(d), { "data-key": String(d) }, () => type(pad.digit(d)))),
+    key(decimalSeparator, { "aria-label": "Decimal point", "data-key": ".", class: "key sep" }, () => type(pad.separator())),
+    key("0", { "data-key": "0" }, () => type(pad.digit(0))),
+    back);
+
+  // A day with nothing on it has nothing to pick out: "Clear" isn't what it's set to.
+  const chip = (value, label, attrs = {}) => h("button", {
+    type: "button", onclick: () => finish(value), ...attrs,
+    class: "chip" + (value === opened && value !== L.UNKNOWN ? " on" : "") + (value === L.UNKNOWN ? " faint" : ""),
+  }, label);
+  const chips = h("div", { class: "chips" },
+    target > 0 && chip(target, [icon("flag"), shown(target)], { "aria-label": `Target, ${shown(target)} ${unit}`.trim() }),
+    chip(L.SKIP, "Skip"),
+    chip(L.UNKNOWN, "Clear"));
+  const save = h("button", { type: "button", class: "btn save big", onclick: () => finish(pad.toSave(valueNow())) }, "Save");
+
+  const current = openSheet(habit, [
+    sheetHead(habit, date),
+    h("div", { class: "readout-row" }, stepButton(-1), readout, stepButton(1)),
+    progress, chips, keys, save,
+  ], { cls: "sheet number" });
+  // Closing any other way keeps an amount keyed in. Only Save or Clear empties a day.
+  current.onClose = () => {
+    const kept = pad.toKeep();
+    if (kept != null) writeEntry(habit.uuid, date, kept);
+  };
+  current.panel.setAttribute("tabindex", "-1");
+  current.panel.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (/^[0-9]$/.test(e.key)) type(pad.digit(Number(e.key)));
+    else if (e.key === "." || e.key === "," || e.key === "Decimal") type(pad.separator());
+    else if (e.key === "Backspace") type(pad.backspace());
+    else if (e.key === "Delete") type(pad.clear());
+    else if (e.key === "ArrowUp") stepBy(1);
+    else if (e.key === "ArrowDown") stepBy(-1);
+    // Enter saves, unless a quick key or Save has the focus: then it presses that one.
+    else if (e.key === "Enter" && !(e.target !== current.panel && e.target?.tagName === "BUTTON" && e.target.tabIndex >= 0)) save.click();
+    else return;
+    e.preventDefault();
+  });
+  show();
+  current.panel.focus({ preventScroll: true });
 }
 
 // ---- popovers ------------------------------------------------------------------------------

@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- xrnloops (XRNLOOPS.md): a number day in the day's sheet (xrnnote/NoteSheet.kt): the amount
+     between − and +, how far it is towards the day's target, the quick keys, the sheet's own
+     pad and Save. No text field, so the phone's keyboard never comes up. The web app's number
+     sheet has the same parts. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:visibility="gone">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:gravity="center_vertical"
+        android:minHeight="88dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/minus"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:id="@+id/hero"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:accessibilityLiveRegion="polite"
+            android:baselineAligned="true"
+            android:gravity="center_horizontal"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
+
+            <TextView
+                android:id="@+id/amount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:importantForAccessibility="no"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="?attr/contrast100"
+                android:textSize="56sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/unit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:ellipsize="end"
+                android:importantForAccessibility="no"
+                android:maxLines="1"
+                android:textColor="?attr/contrast60"
+                android:textSize="18sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/plus"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- The day's share of the target: a bar in the habit's colour and "/ 8". -->
+    <LinearLayout
+        android:id="@+id/progress"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="72dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="72dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <org.isoron.uhabits.xrnnote.DayBar
+            android:id="@+id/bar"
+            android:layout_width="0dp"
+            android:layout_height="6dp"
+            android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/target"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:maxLines="1"
+            android:textColor="?attr/contrast60"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/chips"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:orientation="horizontal" />
+
+    <LinearLayout
+        android:id="@+id/pad"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:orientation="vertical" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/save"
+        style="@style/XrnButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        android:text="@string/xrnnote_save" />
+</LinearLayout>
