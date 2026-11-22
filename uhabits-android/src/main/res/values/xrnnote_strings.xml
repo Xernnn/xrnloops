@@ -6,7 +6,17 @@
     <string name="xrnnote_skip">Skip</string>
     <string name="xrnnote_clear">Clear</string>
     <string name="xrnnote_save">Save</string>
-    <string name="xrnnote_no_amount" translatable="false">0</string>
+    <!-- The number sheet (2026-11-22): "–" for no amount, "/ 8" after the bar to the target; the
+         rest is for TalkBack only, as the sheet shows figures and short labels. -->
+    <string name="xrnnote_no_amount" translatable="false">–</string>
+    <string name="xrnnote_of_target" translatable="false">/ %s</string>
+    <string name="xrnnote_no_amount_spoken">No amount</string>
+    <string name="xrnnote_progress">%1$s of %2$s</string>
+    <string name="xrnnote_target">Target, %s</string>
+    <string name="xrnnote_add">Add %s</string>
+    <string name="xrnnote_take_off">Take off %s</string>
+    <string name="xrnnote_decimal">Decimal point</string>
+    <string name="xrnnote_delete">Delete</string>
     <string name="xrnnote_today">Today · %s</string>
     <string name="xrnnote_yesterday">Yesterday · %s</string>
     <string name="xrnform_discard_question">Discard your changes?</string>
