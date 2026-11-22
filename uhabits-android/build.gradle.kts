@@ -129,6 +129,16 @@ android {
     }
     buildFeatures.viewBinding = true
     lint.abortOnError = false
+
+    testOptions {
+        unitTests {
+            // xrnloops: Robolectric draws the number sheet with the app's real resources and fonts
+            // (NumberSheetShotsTest). Its PNGs go to -Pshots=<dir>, or build/shots.
+            isIncludeAndroidResources = true
+            val shots = (findProperty("shots") ?: layout.buildDirectory.dir("shots").get().asFile.path).toString()
+            all { it.systemProperty("xrnloops.shots", shots) }
+        }
+    }
 }
 
 mokkery {
@@ -168,4 +178,6 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     // xrnloops: the real org.json, for the sync's records; android.jar's only throws in a unit test.
     testImplementation(libs.json)
+    // xrnloops: the number sheet drawn and driven in a JVM test, with no phone (NumberSheetShotsTest).
+    testImplementation(libs.robolectric)
 }

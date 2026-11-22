@@ -20,6 +20,7 @@ ktxCoroutine = "1.10.1"
 legacy-support = "1.0.0"
 material = "1.12.0"
 mokkery = "3.3.0"
+robolectric = "4.14.1"
 rules = "1.6.1"
 shadow = "8.1.1"
 sqliteJdbc = "3.45.1.0"
@@ -51,6 +52,7 @@ legacy-preference-v14 = { group = "androidx.legacy", name = "legacy-preference-v
 legacy-support-v4 = { group = "androidx.legacy", name = "legacy-support-v4", version.ref = "legacy-support" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 rules = { group = "androidx.test", name = "rules", version.ref = "rules" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqliteJdbc" }
 uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
 documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
