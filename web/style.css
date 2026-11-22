@@ -270,19 +270,61 @@ button.unlock:hover { opacity: 0.7; }
 .sheet .title { font-size: 21px; font-weight: 800; line-height: 1.2; color: var(--c); }
 .sheet .title.emoji { font-size: 28px; }
 .sheet .date { font-size: 14px; color: var(--muted); margin-top: 2px; }
-.sheet input {
-  width: 100%; border: 1px solid var(--row-edge); background: var(--row); border-radius: 16px; padding: 11px 14px;
+
+/* A number day: the amount between − and +, the bar to the target, quick keys, the pad, Save. */
+.sheet.number { gap: 0; }
+.sheet.number:focus { outline: none; }
+.sheet .readout-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) 56px; align-items: center; min-height: 88px; margin-top: 12px; }
+/* The unit goes under the amount when the two don't fit side by side. */
+.sheet .readout { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 0 8px; min-width: 0; padding: 0 8px; }
+.sheet .amount { font-size: 56px; font-weight: 700; line-height: 1.1; letter-spacing: -0.01em; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sheet .amount.m { font-size: 48px; }
+.sheet .amount.s { font-size: 40px; }
+.sheet .amount.xs { font-size: 32px; }
+.sheet .amount.none { color: var(--faint); font-weight: 400; }
+.sheet .unit { font-size: 18px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 100%; }
+.sheet .round {
+  width: 56px; height: 56px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center; cursor: pointer;
+  background: color-mix(in srgb, var(--c) 18%, transparent); color: var(--c); font-size: 30px; font-weight: 700; line-height: 1;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none;
 }
-.sheet input:focus { outline: none; border-color: var(--c); }
-.sheet .amount-row { display: flex; gap: 10px; align-items: center; }
-.sheet .amount-row input { font-size: 22px; font-weight: 700; max-width: 180px; }
-.sheet .amount-row span { color: var(--muted); font-size: 16px; }
-.sheet .quick { display: flex; gap: 8px; flex-wrap: wrap; }
-.sheet .actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
-.sheet .actions .primary { flex: 1; }
+.sheet .round.m { font-size: 18px; }
+.sheet .round.s { font-size: 14px; }
+.sheet .round.xs { font-size: 11px; }
+.sheet .round:hover { background: color-mix(in srgb, var(--c) 26%, transparent); }
+.sheet .round:active { background: color-mix(in srgb, var(--c) 34%, transparent); }
+.sheet .progress { display: flex; align-items: center; gap: 10px; margin: 4px 72px 0; }
+.sheet .progress .bar { flex: 1; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--c) 22%, transparent); overflow: hidden; }
+.sheet .progress .fill { height: 100%; border-radius: 3px; background: var(--c); }
+.sheet .progress .fill.over { background: var(--muted); }
+.sheet .goal { font-size: 14px; color: var(--muted); white-space: nowrap; }
+.sheet .goal.met { color: var(--c); font-weight: 700; }
+.sheet .chips { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; margin-top: 24px; }
+.sheet .chip {
+  height: 48px; border-radius: 24px; border: 1px solid var(--row-edge); background: var(--row); padding: 0 8px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap;
+}
+.sheet .chip svg.icon { width: 18px; height: 18px; flex: none; }
+.sheet .chip svg.icon path { fill: var(--c); }
+.sheet .chip.faint { color: var(--muted); }
+.sheet .chip.on { background: var(--c); border-color: var(--c); color: var(--on-c); }
+.sheet .chip.on svg.icon path { fill: var(--on-c); }
+.sheet .chip:hover, .sheet .key:hover { border-color: var(--outline); }
+.sheet .chip:active, .sheet .key:active { background: var(--surface-2); }
+.sheet .chip.on:active { background: var(--c); filter: brightness(0.92); }
+.sheet .pad { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.sheet .key {
+  height: 58px; border-radius: 16px; border: 1px solid var(--row-edge); background: var(--row); padding: 0; cursor: pointer;
+  display: grid; place-items: center; font-size: 26px; font-weight: 400; color: var(--text); touch-action: manipulation; user-select: none; -webkit-user-select: none;
+}
+.sheet .key.sep { font-size: 34px; font-weight: 700; }
+.sheet .key svg.icon { width: 24px; height: 24px; }
+.sheet .key svg.icon path { fill: currentColor; }
+.sheet .save { width: 100%; margin-top: 12px; min-height: 52px; background: var(--c); color: var(--on-c); font-weight: 700; font-size: 16px; }
+.sheet .save:hover { filter: brightness(1.06); }
 @media (max-width: 560px) {
   .scrim { place-items: end center; padding: 0; }
-  .sheet { border-radius: 28px 28px 0 0; width: 100%; padding-bottom: 22px; }
+  .sheet { border-radius: 28px 28px 0 0; width: 100%; padding-bottom: calc(22px + env(safe-area-inset-bottom)); }
 }
 
 /* ---- popovers (settings, sync trouble, new habit) ---------------------------------------- */

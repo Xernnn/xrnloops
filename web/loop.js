@@ -253,6 +253,108 @@ export function typedEntry(text) {
   return entry === SKIP ? SKIP + 1 : entry;
 }
 
+/**
+ * The amount in a number day's sheet while it is keyed in on the sheet's pad, and what the sheet
+ * writes when it closes (the phone's AmountPad, uhabits-core models/AmountPad.kt). `opened` is the
+ * day's entry as the sheet opened on it. `text` is the amount with "." for the separator, "" for
+ * none; only an amount gets in (digits, one separator, three decimals, no more than an entry
+ * holds), and the first key after opening, or after + or −, starts a new amount.
+ */
+export class AmountPad {
+  static DECIMALS = 3;
+  static MAX_AMOUNT = MAX_ENTRY / 1000;
+
+  /** An entry as the pad shows it: "2.5", "0.715", "8"; "" for an empty or skipped day. */
+  static shown(entry) {
+    if (entry < 0 || entry === SKIP) return "";
+    const whole = Math.floor(entry / 1000), part = entry % 1000;
+    return part === 0 ? String(whole) : `${whole}.${String(part).padStart(3, "0").replace(/0+$/, "")}`;
+  }
+
+  constructor(opened) {
+    this.opened = opened;
+    this.text = AmountPad.shown(opened);
+    this.openedText = this.text;
+    this.fresh = true;
+  }
+
+  /** What the text stands for as an entry (typedEntry), or null for no amount. */
+  get entry() {
+    return this.text === "" ? null : typedEntry(this.text);
+  }
+
+  get changed() {
+    return this.text !== this.openedText;
+  }
+
+  /** A digit (0 to 9) on the end; false when it can't go there. */
+  digit(d) {
+    const from = this.fresh ? "" : this.text;
+    if (from.includes(".") && from.split(".")[1].length >= AmountPad.DECIMALS) return false;
+    const next = from === "0" ? String(d) : from + d;
+    if (Number(next) > AmountPad.MAX_AMOUNT) return false;
+    this.fresh = false;
+    this.text = next;
+    return true;
+  }
+
+  /** The decimal separator; a box with nothing in it gets "0." */
+  separator() {
+    const from = this.fresh ? "" : this.text;
+    if (from.includes(".")) return false;
+    this.fresh = false;
+    this.text = (from || "0") + ".";
+    return true;
+  }
+
+  /** ⌫: the last character off. */
+  backspace() {
+    this.fresh = false;
+    if (this.text === "") return false;
+    this.text = this.text.slice(0, -1);
+    return true;
+  }
+
+  /** ⌫ held: no amount. */
+  clear() {
+    this.fresh = false;
+    if (this.text === "") return false;
+    this.text = "";
+    return true;
+  }
+
+  /** + (1) or − (-1) by the habit's step (an entry), from what the sheet shows, as the flick goes. */
+  step(step, steps) {
+    this.text = AmountPad.shown(steppedEntry(this.entry ?? UNKNOWN, step, steps));
+    this.fresh = true;
+  }
+
+  /** What Save writes, or null for nothing; no amount empties the day but leaves a skip (`now`). */
+  toSave(now = this.opened) {
+    if (!this.changed) return null;
+    if (this.text === "") return now === SKIP ? SKIP : UNKNOWN;
+    return this.entry;
+  }
+
+  /** What leaving any way but Save writes: an amount keyed in, and nothing else. */
+  toKeep() {
+    return this.changed && this.text !== "" ? this.entry : null;
+  }
+}
+
+/** How far a day is towards its share of the target, 0 to 1, or null with no target (dayProgress). */
+export function dayProgress(entry, target) {
+  if (target <= 0) return null;
+  if (entry == null || entry < 0 || entry === SKIP) return 0;
+  return Math.min(entry / target, 1);
+}
+
+/** Whether a day meets its share of the target as the list colours it (meetsDayTarget). */
+export function meetsDayTarget(entry, target, targetType) {
+  if (target <= 0 || entry == null || entry < 0 || entry === SKIP) return false;
+  return targetType === AT_MOST ? entry <= target : entry >= target;
+}
+
 /** A step (an entry) as its keys show it, to the thousandth: "1", "0.25", "1500" (stepLabel). */
 export function formatStep(step) {
   return String(Math.round(step) / 1000);

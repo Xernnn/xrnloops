@@ -21,6 +21,7 @@ export class FakeNode extends EventTarget {
   remove() {}
   focus() {}
   select() {}
+  click() { this.dispatchEvent(new Event("click")); }
   querySelector() { return null; }
 }
 
