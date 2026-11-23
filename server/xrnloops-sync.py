@@ -70,6 +70,25 @@ may add "baseSeq" to any record (see above).
 Entry values are Loop's: UNKNOWN=-1, NO=0, YES_AUTO=1, YES_MANUAL=2, SKIP=3; numerical habits
 store the amount x1000.
 
+Habits that tick themselves (optional). With a file at --auto (default
+~/.config/xrnloops/auto.json), the server asks a personal hub (xrnhub's read-only /api/v1) every
+two minutes whether a habit's day already shows what the habit stands for, and ticks it:
+
+    {"user": "alex", "hub": "http://127.0.0.1:5238", "token": "xrnhub_...",
+     "rules": [{"habit": "Weigh in", "from": "weight", "missed": "no"},
+               {"habit": "Plan the day", "from": "calendar", "hours": 8},
+               {"habit": "Log spending", "from": "money"},
+               {"habit": "Pantry", "from": "inventory"}]}
+
+`habit` is a yes/no habit's name or uuid. `from` is what ticks it: `weight` (a weighing that
+day), `calendar` (at least `hours` of timed events that day, overlaps counted once, and only the
+time that has passed unless the rule adds `"planned": true`), `money` (a
+transaction entered that day, not one a repeating bill made) or `inventory` (anything done to an
+item that day). A day is the habit day, from dayStartHour to the next. A tick is an ordinary
+entry (YES_MANUAL), written over "not entered" or "no", never over a tick or a skip, and it is
+never taken back. A day left unmet stays as it is, unless the rule says `"missed": "no"`: then a
+finished day with nothing entered becomes "no". See auto_round.
+
     python3 xrnloops-sync.py --data ~/xrnloops-sync/data --users ~/.config/xrn-sync/users \
         --web ~/xrnloops-sync/web
 """
@@ -92,8 +111,9 @@ import sqlite3
 import sys
 import threading
 import time
+import urllib.request
 import zlib
-from datetime import date
+from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs
 
@@ -115,6 +135,12 @@ SESSION_S = 30 * 86400
 
 YES_NO = 0
 AT_LEAST = 0
+UNKNOWN, NO, YES_AUTO, YES_MANUAL, SKIP = -1, 0, 1, 2, 3  # an entry's value, as Loop has them
+
+AUTO_EVERY_S = 120  # how often the habits that tick themselves are looked at
+AUTO_BACK_DAYS = 3  # finished days still looked at, for what arrives late or while this was down
+AUTO_BACK_EVERY = 15  # ...on one round in so many: the others look at today only
+AUTO_TIMEOUT_S = 20
 
 args = None
 auth_cache = {}  # sha256(user:password) -> (user, expires, users-file mtime)
@@ -783,11 +809,225 @@ class Store:
                     "dayStartHour": self.day_start_hour(), "epoch": current}
 
 
+    def habits(self):
+        """Every habit that isn't deleted: uuid -> its data."""
+        with self.lock:
+            return {r[0]: json.loads(r[1]) for r in self.db.execute("SELECT uuid, data FROM habits WHERE deleted=0")}
+
+    def entry(self, habit, day):
+        """The stored entry of [habit] on [day], or None."""
+        with self.lock:
+            row = self.db.execute("SELECT 1 FROM entries WHERE habit=? AND date=?", (habit, day)).fetchone()
+            return self._entry_row(habit, day) if row else None
+
+
 def store_for(user):
     with stores_lock:
         if user not in stores:
             stores[user] = Store(os.path.join(args.data, "users", user, "loop.sqlite"))
         return stores[user]
+
+
+# ---- habits that tick themselves ------------------------------------------------------------
+
+def auto_moment(text):
+    """A time as the hub writes it ("2026-11-15T07:05:00+11:00", or the home inventory's
+    "2026-11-15T08:00:00.000Z"), or None for a whole day or anything else."""
+    try:
+        moment = datetime.fromisoformat(str(text).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return moment if moment.tzinfo else None
+
+
+def auto_window(day, start_hour):
+    """The habit day [day] on this machine's clock: from its start hour to the next day's."""
+    lo = datetime(day.year, day.month, day.day, start_hour).astimezone()
+    after = day + timedelta(days=1)
+    return lo, datetime(after.year, after.month, after.day, start_hour).astimezone()
+
+
+def auto_weighed(answer, lo, hi, rule, now):
+    return any(lo <= m < hi for m in (auto_moment(w.get("at")) for w in answer.get("weighings") or []) if m)
+
+
+def auto_calendar(answer, lo, hi, rule, now):
+    """Whether the day's timed events cover the rule's hours. Events that overlap count once,
+    and one that runs past the day counts up to its edge; whole-day events aren't hours. Only
+    time that has passed counts, so a day planned ahead ticks once it has been lived, unless the
+    rule says "planned": true."""
+    if answer.get("ready") is False:
+        return None  # the hub is still reading the calendar: nothing is known yet
+    if not rule.get("planned"):
+        hi = min(hi, now)
+    spans = []
+    for event in answer.get("events") or []:
+        start, end = auto_moment(event.get("start")), auto_moment(event.get("end"))
+        if event.get("allDay") or not start or not end:
+            continue
+        start, end = max(start, lo), min(end, hi)
+        if start < end:
+            spans.append((start, end))
+    covered, upto = timedelta(), None
+    for start, end in sorted(spans):
+        if upto is None or start > upto:
+            covered, upto = covered + (end - start), end
+        elif end > upto:
+            covered, upto = covered + (end - upto), end
+    hours = rule.get("hours", 8)
+    if isinstance(hours, bool) or not isinstance(hours, (int, float)) or hours <= 0:
+        raise ValueError("hours must be a number above 0")
+    return covered >= timedelta(hours=hours)
+
+
+def auto_spent(answer, lo, hi, rule, now):
+    # A bill a repeating one made was entered by the app, not by you.
+    return any(lo <= m < hi for m in (auto_moment(t.get("at")) for t in answer.get("transactions") or []
+                                      if not t.get("repeating")) if m)
+
+
+def auto_stocked(answer, lo, hi, rule, now):
+    return any(lo <= m < hi for item in answer.get("items") or []
+               for m in (auto_moment(h.get("date")) for h in item.get("history") or []) if m)
+
+
+# What a rule's "from" names: the hub's path, whether it takes a range of days, and the test of
+# one day in its answer (True, False, or None when the hub can't say yet).
+AUTO_SOURCES = {
+    "weight": ("/api/v1/health/weight", True, auto_weighed),
+    "calendar": ("/api/v1/calendar", True, auto_calendar),
+    "money": ("/api/v1/money/transactions", True, auto_spent),
+    "inventory": ("/api/v1/inventory", False, auto_stocked),
+}
+
+
+def auto_name(text):
+    """A habit's name as rules match it: an emoji with or without its variation selector is the same name."""
+    return str(text).replace("\ufe0f", "").replace("\ufe0e", "").strip()
+
+
+def auto_habit(habits, wanted):
+    """The uuid of the yes/no habit a rule names (by uuid, or by name: one in use before an archived one)."""
+    if wanted in habits:
+        return wanted if habits[wanted].get("type", YES_NO) == YES_NO else None
+    named = [u for u, data in habits.items()
+             if auto_name(data.get("name", "")) == auto_name(wanted) and data.get("type", YES_NO) == YES_NO]
+    named.sort(key=lambda u: (bool(habits[u].get("archived")), habits[u].get("position", 0), u))
+    return named[0] if named else None
+
+
+def auto_round(store, rules, fetch, now, back=AUTO_BACK_DAYS):
+    """One look at every rule: ticks the days that already show what their habit stands for.
+
+    [fetch] gets a hub path (with its query) as parsed JSON; [now] is this machine's time. Each
+    source is asked once, for today and the [back] days before it, and only when a rule still
+    has a day to settle. A day that was ticked or skipped is left alone; a met day that says "no"
+    or nothing is ticked; an unmet day that is over and says nothing becomes "no" where the rule
+    asks for that. A write names the version it read (baseSeq), so a change that came in between
+    wins. Returns what it wrote, and the problems it met, as text lines."""
+    start_hour = store.day_start_hour()
+    today = (now - timedelta(hours=start_hour)).date()
+    days = [today - timedelta(days=n) for n in range(back + 1)]
+    habits = store.habits()
+    answers, wrote, problems = {}, [], []
+    for rule in rules:
+        source = AUTO_SOURCES.get(rule.get("from"))
+        uuid = auto_habit(habits, str(rule.get("habit", "")))
+        if source is None or uuid is None:
+            problems.append(f"no {'source' if source is None else 'yes/no habit'} for rule {rules.index(rule) + 1}")
+            continue
+        path, ranged, test = source
+        for day in days:
+            stored = store.entry(uuid, day.isoformat())
+            value = stored["value"] if stored else UNKNOWN
+            if value in (YES_AUTO, YES_MANUAL, SKIP):
+                continue
+            over = day != today
+            if path not in answers:
+                query = f"?from={days[-1].isoformat()}&to={(today + timedelta(days=1)).isoformat()}" if ranged else ""
+                try:
+                    answers[path] = fetch(path + query)
+                except Exception as e:  # the hub is down or refuses: nothing is known
+                    answers[path] = None
+                    problems.append(f"{rule.get('from')}: {e}")
+            answer = answers[path]
+            if not isinstance(answer, dict):
+                break
+            try:
+                met = test(answer, *auto_window(day, start_hour), rule, now.astimezone())
+            except (ValueError, TypeError, AttributeError) as e:
+                problems.append(f"{rule.get('from')}: {e}")
+                break
+            if met:
+                new = YES_MANUAL
+            elif met is False and over and value == UNKNOWN and rule.get("missed") == "no":
+                new = NO
+            else:
+                continue
+            entry = {"habit": uuid, "date": day.isoformat(), "value": new,
+                     "notes": stored["notes"] if stored else "", "mtime": int(now.timestamp() * 1000)}
+            if stored:
+                entry["baseSeq"] = stored["seq"]
+            if store.apply({"entries": [entry]})["accepted"]["entries"]:
+                wrote.append(f"{rule.get('from')} {day.isoformat()} {'yes' if new == YES_MANUAL else 'no'}")
+    return wrote, problems
+
+
+def auto_config(path):
+    """The rules file, or None when there is none. A wrong one raises ValueError."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            config = json.load(f)
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as e:
+        raise ValueError(f"{path}: {e}")
+    if not isinstance(config, dict) or not isinstance(config.get("rules"), list) \
+            or not all(isinstance(r, dict) for r in config["rules"]):
+        raise ValueError(f"{path}: needs \"rules\", a list")
+    for key in ("user", "hub", "token"):
+        if not isinstance(config.get(key), str) or not config[key]:
+            raise ValueError(f"{path}: needs \"{key}\"")
+    if not re.fullmatch(r"https?://[^\s?#]+", config["hub"]):
+        raise ValueError(f"{path}: \"hub\" must be an http address")
+    return config
+
+
+def auto_fetch(config):
+    def fetch(path):
+        request = urllib.request.Request(config["hub"].rstrip("/") + path,
+                                         headers={"Authorization": "Bearer " + config["token"]})
+        with urllib.request.urlopen(request, timeout=AUTO_TIMEOUT_S) as answer:
+            return json.loads(answer.read(MAX_BODY))
+    return fetch
+
+
+def auto_loop(path):
+    """Runs auto_round every AUTO_EVERY_S while the rules file is there. The log gets what was
+    ticked, and a problem once, when it begins and when it ends, not every two minutes."""
+    said, rounds = None, 0
+    while True:
+        # Finished days change rarely, and a rule that leaves them unanswered would have its
+        # source asked every round for good: they get one round in AUTO_BACK_EVERY.
+        back = 0 if rounds % AUTO_BACK_EVERY else AUTO_BACK_DAYS
+        rounds += 1
+        try:
+            config = auto_config(path)
+            if config is None:
+                problems = []
+            elif not os.path.exists(os.path.join(args.data, "users", config["user"], "loop.sqlite")):
+                problems = [f"no habits kept for \"{config['user']}\""]
+            else:
+                wrote, problems = auto_round(store_for(config["user"]), config["rules"], auto_fetch(config), datetime.now(), back)
+                for line in wrote:
+                    sys.stderr.write(f"auto: {line}\n")
+        except Exception as e:  # nothing here may end the thread
+            problems = [str(e)]
+        trouble = "; ".join(sorted(set(problems)))
+        if trouble != said:
+            sys.stderr.write(f"auto: {trouble}\n" if trouble else "auto: fine again\n" if said else "")
+            said = trouble
+        time.sleep(AUTO_EVERY_S)
 
 
 # ---- HTTP ----------------------------------------------------------------------------------
@@ -1068,6 +1308,8 @@ def main():
     p.add_argument("--users", required=True, help="htpasswd file with bcrypt hashes")
     p.add_argument("--web", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "web"),
                    help="the web app's folder")
+    p.add_argument("--auto", default="~/.config/xrnloops/auto.json",
+                   help="rules for habits that tick themselves from a personal hub; none without the file")
     args = p.parse_args()
     args.data = os.path.expanduser(args.data)
     args.users = os.path.expanduser(args.users)
@@ -1078,6 +1320,7 @@ def main():
     session_key = load_session_key()
     srv = ThreadingHTTPServer((args.host, args.port), Handler)
     srv.daemon_threads = True
+    threading.Thread(target=auto_loop, args=(os.path.expanduser(args.auto),), daemon=True).start()
     sys.stderr.write(f"xrnloops-sync on http://{args.host}:{args.port}, data in {args.data}\n")
     srv.serve_forever()
 
