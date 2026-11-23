@@ -88,41 +88,60 @@ class AutoTest(unittest.TestCase):
         wrote, problems = self.round(rules, weighings)
         self.assertEqual(YES_MANUAL, self.value("scale", "2026-11-14"))
         self.assertEqual((["weight 2026-11-14 yes"], []), (wrote, problems))
-        self.assertEqual(["/api/v1/health/weight?from=2026-11-11&to=2026-11-15"], self.asked)
-        self.assertEqual(([], []), srv.auto_round(self.store, rules, self.fail, self.now, back=0), "today is settled: nothing is asked")
+        self.assertEqual(["/api/v1/health/weight?from=2026-11-14&to=2026-11-15"], self.asked)
+        self.assertEqual(([], []), srv.auto_round(self.store, rules, self.fail, self.now), "today is settled: nothing is asked")
 
     def test_before_the_day_starts_is_still_the_day_before(self):
         rules = [{"habit": "scale", "from": "weight"}]
-        self.round(rules, {"/api/v1/health/weight": {"weighings": [{"at": self.at(14, 1, 30)}]}})
-        self.assertEqual(YES_MANUAL, self.value("scale", "2026-11-13"))
+        early = {"/api/v1/health/weight": {"weighings": [{"at": self.at(15, 1, 30)}]}}
+        self.round(rules, early, now=datetime.datetime(2026, 11, 15, 1, 40))
+        self.assertEqual(YES_MANUAL, self.value("scale", "2026-11-14"), "01:30 on the 15th is the 14th's")
+        self.assertIsNone(self.value("scale", "2026-11-15"))
+        self.round(rules, early, now=datetime.datetime(2026, 11, 15, 9, 0))
+        self.assertIsNone(self.value("scale", "2026-11-15"), "and not the 15th's, once that has begun")
+
+    def test_a_day_that_is_over_is_never_written(self):
+        # The first version looked three days back: half an hour after it was turned on it made
+        # ticks of four days that had been marked "no" by hand, because the calendar and the
+        # wallet now showed them done. A finished day keeps what it says.
+        self.store.apply({"entries": [
+            {"habit": "plan", "date": "2026-11-13", "value": NO, "notes": "", "mtime": 5},
+            {"habit": "spend", "date": "2026-11-12", "value": NO, "notes": "", "mtime": 5}]})
+        seq = self.store.seq()
+        done = {"/api/v1/calendar": {"ready": True, "events": [
+                    {"allDay": False, "start": self.at(13, 8), "end": self.at(13, 18)}]},
+                "/api/v1/money/transactions": {"transactions": [{"at": self.at(12, 9)}, {"at": self.at(13, 9)}]},
+                "/api/v1/health/weight": {"weighings": [{"at": self.at(13, 7)}]}}
+        rules = [{"habit": "plan", "from": "calendar"}, {"habit": "spend", "from": "money"},
+                 {"habit": "scale", "from": "weight", "missed": "no"}]
+        self.assertEqual(([], []), self.round(rules, done))
+        self.assertEqual(NO, self.value("plan", "2026-11-13"))
+        self.assertEqual(NO, self.value("spend", "2026-11-12"))
+        self.assertIsNone(self.value("spend", "2026-11-13"), "nor a day nothing was entered for, though it was done")
+        self.assertIsNone(self.value("scale", "2026-11-13"))
+        self.assertEqual(seq, self.store.seq(), "nothing was written at all")
+        self.assertEqual({"/api/v1/calendar?from=2026-11-14&to=2026-11-15", "/api/v1/money/transactions?from=2026-11-14&to=2026-11-15",
+                          "/api/v1/health/weight?from=2026-11-14&to=2026-11-15"}, set(self.asked), "only today is asked about")
+
+    def test_an_unmet_day_is_left_as_it_is(self):
+        nothing = {"/api/v1/health/weight": {"weighings": []}}
+        self.assertEqual(([], []), self.round([{"habit": "scale", "from": "weight"}], nothing))
         self.assertIsNone(self.value("scale", "2026-11-14"))
-
-    def test_a_missed_day_becomes_no_only_where_the_rule_says_and_only_once_over(self):
-        nothing = {"/api/v1/health/weight": {"weighings": []}, "/api/v1/money/transactions": {"transactions": []}}
-        self.round([{"habit": "scale", "from": "weight", "missed": "no"}, {"habit": "spend", "from": "money"}], nothing)
-        self.assertEqual(NO, self.value("scale", "2026-11-13"))
-        self.assertEqual(NO, self.value("scale", "2026-11-11"))
-        self.assertIsNone(self.value("scale", "2026-11-10"), "further back than it looks")
-        self.assertIsNone(self.value("scale", "2026-11-14"), "today isn't over")
-        self.assertIsNone(self.value("spend", "2026-11-13"), "a rule that doesn't ask stays unanswered")
-
-    def test_a_weighing_that_arrives_late_ticks_over_the_no(self):
-        rules = [{"habit": "scale", "from": "weight", "missed": "no"}]
-        self.round(rules, {"/api/v1/health/weight": {"weighings": []}})
-        self.round(rules, {"/api/v1/health/weight": {"weighings": [{"at": self.at(13, 23, 10)}]}})
-        self.assertEqual(YES_MANUAL, self.value("scale", "2026-11-13"))
 
     def test_what_was_ticked_or_skipped_by_hand_is_left_alone(self):
         self.store.apply({"entries": [
-            {"habit": "scale", "date": "2026-11-13", "value": SKIP, "notes": "", "mtime": 5},
-            {"habit": "scale", "date": "2026-11-12", "value": YES_MANUAL, "notes": "", "mtime": 5},
+            {"habit": "spend", "date": "2026-11-14", "value": SKIP, "notes": "", "mtime": 5},
+            {"habit": "pantry", "date": "2026-11-14", "value": YES_MANUAL, "notes": "", "mtime": 5},
             {"habit": "scale", "date": "2026-11-14", "value": NO, "notes": "kept", "mtime": 5}]})
         seq = self.store.seq()
-        self.round([{"habit": "scale", "from": "weight", "missed": "no"}], {"/api/v1/health/weight": {"weighings": []}})
-        self.assertEqual(SKIP, self.value("scale", "2026-11-13"))
-        self.assertEqual(YES_MANUAL, self.value("scale", "2026-11-12"))
+        entered = {"/api/v1/money/transactions": {"transactions": [{"at": self.at(14, 9)}]}, "/api/v1/inventory": {"items": []},
+                   "/api/v1/health/weight": {"weighings": []}}
+        self.round([{"habit": "spend", "from": "money"}, {"habit": "pantry", "from": "inventory"}, {"habit": "scale", "from": "weight"}], entered)
+        self.assertEqual(SKIP, self.value("spend", "2026-11-14"))
+        self.assertEqual(YES_MANUAL, self.value("pantry", "2026-11-14"))
         self.assertEqual(NO, self.value("scale", "2026-11-14"))
-        self.assertEqual(seq + 1, self.store.seq(), "only the unanswered 11th was written")
+        self.assertEqual(seq, self.store.seq())
+        self.assertEqual(["/api/v1/health/weight?from=2026-11-14&to=2026-11-15"], self.asked, "a settled habit's source isn't asked")
         self.round([{"habit": "scale", "from": "weight"}], {"/api/v1/health/weight": {"weighings": [{"at": self.at(14, 8)}]}})
         entry = self.store.entry("scale", "2026-11-14")
         self.assertEqual((YES_MANUAL, "kept"), (entry["value"], entry["notes"]), "a weighing ticks over a no, and keeps the note")
@@ -146,7 +165,7 @@ class AutoTest(unittest.TestCase):
         # An event from 00:00 counts from 03:00, where the day starts: 3 h, and 7 make ten.
         self.round(rules, events((self.at(14, 0), self.at(14, 6)), (self.at(14, 9), self.at(14, 16))))
         self.assertEqual(YES_MANUAL, self.value("plan", "2026-11-14"))
-        self.assertIsNone(self.value("plan", "2026-11-13"), "its first three hours are the 13th's, and too few")
+        self.assertIsNone(self.value("plan", "2026-11-13"))
 
     def test_the_calendar_counts_the_time_that_has_passed_unless_the_rule_counts_plans(self):
         day = {"/api/v1/calendar": {"ready": True, "events": [
@@ -160,9 +179,10 @@ class AutoTest(unittest.TestCase):
         self.assertEqual(YES_MANUAL, self.value("spend", "2026-11-14"))
 
     def test_a_calendar_still_being_read_says_nothing(self):
-        rules = [{"habit": "plan", "from": "calendar", "missed": "no"}]
-        self.assertEqual(([], []), self.round(rules, {"/api/v1/calendar": {"ready": False, "events": []}}))
-        self.assertIsNone(self.value("plan", "2026-11-13"))
+        rules = [{"habit": "plan", "from": "calendar"}]
+        whole = [{"allDay": False, "start": self.at(14, 8), "end": self.at(14, 18)}]
+        self.assertEqual(([], []), self.round(rules, {"/api/v1/calendar": {"ready": False, "events": whole}}))
+        self.assertIsNone(self.value("plan", "2026-11-14"))
 
     def test_money_ticks_on_what_you_entered_not_on_a_repeating_bill(self):
         rules = [{"habit": "spend", "from": "money"}]
@@ -198,11 +218,11 @@ class AutoTest(unittest.TestCase):
         self.assertEqual([], self.store.changes(self.store.seq())["entries"])
 
     def test_a_hub_that_fails_writes_nothing_and_is_asked_once(self):
-        rules = [{"habit": "scale", "from": "weight", "missed": "no"}, {"habit": "spend", "from": "weight"}]
+        rules = [{"habit": "scale", "from": "weight"}, {"habit": "spend", "from": "weight"}]
         wrote, problems = self.round(rules, {"/api/v1/health/weight": OSError("refused")})
         self.assertEqual(([], ["weight: refused"]), (wrote, problems))
         self.assertEqual(1, len(self.asked))
-        self.assertIsNone(self.value("scale", "2026-11-13"), "not knowing isn't a missed day")
+        self.assertIsNone(self.value("scale", "2026-11-14"))
 
     def test_a_change_made_meanwhile_wins(self):
         self.store.apply({"entries": [{"habit": "scale", "date": "2026-11-14", "value": NO, "notes": "", "mtime": 5}]})
@@ -246,11 +266,11 @@ class AutoTest(unittest.TestCase):
         threading.Thread(target=hub.serve_forever, daemon=True).start()
         try:
             fetch = srv.auto_fetch({"hub": f"http://127.0.0.1:{hub.server_address[1]}/", "token": "xrnhub_x"})
-            self.assertEqual({"weighings": []}, fetch("/api/v1/health/weight?from=2026-11-11&to=2026-11-15"))
+            self.assertEqual({"weighings": []}, fetch("/api/v1/health/weight?from=2026-11-14&to=2026-11-15"))
         finally:
             hub.shutdown()
             hub.server_close()
-        self.assertEqual({"path": "/api/v1/health/weight?from=2026-11-11&to=2026-11-15", "auth": "Bearer xrnhub_x"}, seen)
+        self.assertEqual({"path": "/api/v1/health/weight?from=2026-11-14&to=2026-11-15", "auth": "Bearer xrnhub_x"}, seen)
 
 
 class StoreTest(unittest.TestCase):

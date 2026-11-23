@@ -75,7 +75,7 @@ Habits that tick themselves (optional). With a file at --auto (default
 two minutes whether a habit's day already shows what the habit stands for, and ticks it:
 
     {"user": "alex", "hub": "http://127.0.0.1:5238", "token": "xrnhub_...",
-     "rules": [{"habit": "Weigh in", "from": "weight", "missed": "no"},
+     "rules": [{"habit": "Weigh in", "from": "weight"},
                {"habit": "Plan the day", "from": "calendar", "hours": 8},
                {"habit": "Log spending", "from": "money"},
                {"habit": "Pantry", "from": "inventory"}]}
@@ -86,8 +86,8 @@ time that has passed unless the rule adds `"planned": true`), `money` (a
 transaction entered that day, not one a repeating bill made) or `inventory` (anything done to an
 item that day). A day is the habit day, from dayStartHour to the next. A tick is an ordinary
 entry (YES_MANUAL), written over "not entered" or "no", never over a tick or a skip, and it is
-never taken back. A day left unmet stays as it is, unless the rule says `"missed": "no"`: then a
-finished day with nothing entered becomes "no". See auto_round.
+never taken back. Only today is ever written, while it is today: a day left unmet stays as it
+is, and a day that is over is never touched, whatever arrives later. See auto_round.
 
     python3 xrnloops-sync.py --data ~/xrnloops-sync/data --users ~/.config/xrn-sync/users \
         --web ~/xrnloops-sync/web
@@ -138,8 +138,6 @@ AT_LEAST = 0
 UNKNOWN, NO, YES_AUTO, YES_MANUAL, SKIP = -1, 0, 1, 2, 3  # an entry's value, as Loop has them
 
 AUTO_EVERY_S = 120  # how often the habits that tick themselves are looked at
-AUTO_BACK_DAYS = 3  # finished days still looked at, for what arrives late or while this was down
-AUTO_BACK_EVERY = 15  # ...on one round in so many: the others look at today only
 AUTO_TIMEOUT_S = 20
 
 args = None
@@ -916,18 +914,19 @@ def auto_habit(habits, wanted):
     return named[0] if named else None
 
 
-def auto_round(store, rules, fetch, now, back=AUTO_BACK_DAYS):
-    """One look at every rule: ticks the days that already show what their habit stands for.
+def auto_round(store, rules, fetch, now):
+    """One look at every rule: ticks today where it already shows what its habit stands for.
 
-    [fetch] gets a hub path (with its query) as parsed JSON; [now] is this machine's time. Each
-    source is asked once, for today and the [back] days before it, and only when a rule still
-    has a day to settle. A day that was ticked or skipped is left alone; a met day that says "no"
-    or nothing is ticked; an unmet day that is over and says nothing becomes "no" where the rule
-    asks for that. A write names the version it read (baseSeq), so a change that came in between
-    wins. Returns what it wrote, and the problems it met, as text lines."""
+    [fetch] gets a hub path (with its query) as parsed JSON; [now] is this machine's time. Only
+    the habit day [now] is in is looked at and written. A day that is over keeps what it says,
+    whatever the hub knows of it since: the first version went back three days, and on its first
+    half hour turned four days marked "no" by hand into ticks. Today, a tick or a skip is left
+    alone, and a met day that says "no" or nothing is ticked. A source is asked once, and only
+    when a rule still has today to settle. A write names the version it read (baseSeq), so a
+    change that came in between wins. Returns what it wrote, and the problems it met, as text lines."""
     start_hour = store.day_start_hour()
     today = (now - timedelta(hours=start_hour)).date()
-    days = [today - timedelta(days=n) for n in range(back + 1)]
+    day = today.isoformat()
     habits = store.habits()
     answers, wrote, problems = {}, [], []
     for rule in rules:
@@ -937,39 +936,32 @@ def auto_round(store, rules, fetch, now, back=AUTO_BACK_DAYS):
             problems.append(f"no {'source' if source is None else 'yes/no habit'} for rule {rules.index(rule) + 1}")
             continue
         path, ranged, test = source
-        for day in days:
-            stored = store.entry(uuid, day.isoformat())
-            value = stored["value"] if stored else UNKNOWN
-            if value in (YES_AUTO, YES_MANUAL, SKIP):
-                continue
-            over = day != today
-            if path not in answers:
-                query = f"?from={days[-1].isoformat()}&to={(today + timedelta(days=1)).isoformat()}" if ranged else ""
-                try:
-                    answers[path] = fetch(path + query)
-                except Exception as e:  # the hub is down or refuses: nothing is known
-                    answers[path] = None
-                    problems.append(f"{rule.get('from')}: {e}")
-            answer = answers[path]
-            if not isinstance(answer, dict):
-                break
+        stored = store.entry(uuid, day)
+        if stored and stored["value"] in (YES_AUTO, YES_MANUAL, SKIP):
+            continue
+        if path not in answers:
+            query = f"?from={day}&to={(today + timedelta(days=1)).isoformat()}" if ranged else ""
             try:
-                met = test(answer, *auto_window(day, start_hour), rule, now.astimezone())
-            except (ValueError, TypeError, AttributeError) as e:
+                answers[path] = fetch(path + query)
+            except Exception as e:  # the hub is down or refuses: nothing is known
+                answers[path] = None
                 problems.append(f"{rule.get('from')}: {e}")
-                break
-            if met:
-                new = YES_MANUAL
-            elif met is False and over and value == UNKNOWN and rule.get("missed") == "no":
-                new = NO
-            else:
-                continue
-            entry = {"habit": uuid, "date": day.isoformat(), "value": new,
-                     "notes": stored["notes"] if stored else "", "mtime": int(now.timestamp() * 1000)}
-            if stored:
-                entry["baseSeq"] = stored["seq"]
-            if store.apply({"entries": [entry]})["accepted"]["entries"]:
-                wrote.append(f"{rule.get('from')} {day.isoformat()} {'yes' if new == YES_MANUAL else 'no'}")
+        answer = answers[path]
+        if not isinstance(answer, dict):
+            continue
+        try:
+            met = test(answer, *auto_window(today, start_hour), rule, now.astimezone())
+        except (ValueError, TypeError, AttributeError) as e:
+            problems.append(f"{rule.get('from')}: {e}")
+            continue
+        if not met:
+            continue
+        entry = {"habit": uuid, "date": day, "value": YES_MANUAL,
+                 "notes": stored["notes"] if stored else "", "mtime": int(now.timestamp() * 1000)}
+        if stored:
+            entry["baseSeq"] = stored["seq"]
+        if store.apply({"entries": [entry]})["accepted"]["entries"]:
+            wrote.append(f"{rule.get('from')} {day} yes")
     return wrote, problems
 
 
@@ -1005,12 +997,8 @@ def auto_fetch(config):
 def auto_loop(path):
     """Runs auto_round every AUTO_EVERY_S while the rules file is there. The log gets what was
     ticked, and a problem once, when it begins and when it ends, not every two minutes."""
-    said, rounds = None, 0
+    said = None
     while True:
-        # Finished days change rarely, and a rule that leaves them unanswered would have its
-        # source asked every round for good: they get one round in AUTO_BACK_EVERY.
-        back = 0 if rounds % AUTO_BACK_EVERY else AUTO_BACK_DAYS
-        rounds += 1
         try:
             config = auto_config(path)
             if config is None:
@@ -1018,7 +1006,7 @@ def auto_loop(path):
             elif not os.path.exists(os.path.join(args.data, "users", config["user"], "loop.sqlite")):
                 problems = [f"no habits kept for \"{config['user']}\""]
             else:
-                wrote, problems = auto_round(store_for(config["user"]), config["rules"], auto_fetch(config), datetime.now(), back)
+                wrote, problems = auto_round(store_for(config["user"]), config["rules"], auto_fetch(config), datetime.now())
                 for line in wrote:
                     sys.stderr.write(f"auto: {line}\n")
         except Exception as e:  # nothing here may end the thread
