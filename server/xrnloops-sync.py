@@ -75,7 +75,7 @@ Habits that tick themselves (optional). With a file at --auto (default
 two minutes whether a habit's day already shows what the habit stands for, and ticks it:
 
     {"user": "alex", "hub": "http://127.0.0.1:5238", "token": "xrnhub_...",
-     "rules": [{"habit": "Weigh in", "from": "weight"},
+     "rules": [{"habit": "Weigh in", "from": "weight", "missed": "no"},
                {"habit": "Plan the day", "from": "calendar", "hours": 8},
                {"habit": "Log spending", "from": "money"},
                {"habit": "Pantry", "from": "inventory"}]}
@@ -86,8 +86,11 @@ time that has passed unless the rule adds `"planned": true`), `money` (a
 transaction entered that day, not one a repeating bill made) or `inventory` (anything done to an
 item that day). A day is the habit day, from dayStartHour to the next. A tick is an ordinary
 entry (YES_MANUAL), written over "not entered" or "no", never over a tick or a skip, and it is
-never taken back. Only today is ever written, while it is today: a day left unmet stays as it
-is, and a day that is over is never touched, whatever arrives later. See auto_round.
+never taken back. Only today is written, while it is today: a day left unmet stays as it is,
+and a day that is over is never touched, whatever arrives later. One exception, for a rule that
+says `"missed": "no"`: as its day ends, a day with nothing entered is settled once, "no" if it
+was missed (a tick if it was done in the day's last minutes), and never looked at again, so
+whatever you make of that day afterwards stays. See auto_round.
 
     python3 xrnloops-sync.py --data ~/xrnloops-sync/data --users ~/.config/xrn-sync/users \
         --web ~/xrnloops-sync/web
@@ -812,6 +815,18 @@ class Store:
         with self.lock:
             return {r[0]: json.loads(r[1]) for r in self.db.execute("SELECT uuid, data FROM habits WHERE deleted=0")}
 
+    def auto_closed(self):
+        """The last habit day auto_round settled as it ended (a date's ordinal), or None before the first."""
+        with self.lock:
+            row = self.db.execute("SELECT value FROM meta WHERE key='auto_closed'").fetchone()
+            return row[0] if row else None
+
+    def set_auto_closed(self, ordinal):
+        with self.lock:
+            self.db.execute("INSERT INTO meta(key, value) VALUES('auto_closed', ?) "
+                            "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (ordinal,))
+            self.db.commit()
+
     def entry(self, habit, day):
         """The stored entry of [habit] on [day], or None."""
         with self.lock:
@@ -918,17 +933,29 @@ def auto_round(store, rules, fetch, now):
     """One look at every rule: ticks today where it already shows what its habit stands for.
 
     [fetch] gets a hub path (with its query) as parsed JSON; [now] is this machine's time. Only
-    the habit day [now] is in is looked at and written. A day that is over keeps what it says,
-    whatever the hub knows of it since: the first version went back three days, and on its first
-    half hour turned four days marked "no" by hand into ticks. Today, a tick or a skip is left
-    alone, and a met day that says "no" or nothing is ticked. A source is asked once, and only
-    when a rule still has today to settle. A write names the version it read (baseSeq), so a
-    change that came in between wins. Returns what it wrote, and the problems it met, as text lines."""
+    the habit day [now] is in is written, while it lasts: a tick or a skip is left alone, and a
+    met day that says "no" or nothing is ticked. A day that is over keeps what it says, whatever
+    the hub knows of it since: the first version went back three days, and on its first half hour
+    turned four days marked "no" by hand into ticks.
+
+    The one write to a finished day is its closing, for rules that say "missed": "no". The first
+    round of a new day settles the day that just ended, where nothing was entered: "no", or a
+    tick if it was done after the last round saw it. It happens once: the store remembers the
+    last day closed, so a day cleared or changed by hand afterwards is never settled again, and
+    a late arrival changes nothing. Days before the first round here, and days that ended while
+    this wasn't running (but for the latest), are not closed. A closing the hub couldn't answer
+    is tried again on the next round.
+
+    A source is asked once per day looked at, and only when a rule still has that day to settle.
+    A write names the version it read (baseSeq), so a change that came in between wins. Returns
+    what it wrote, and the problems it met, as text lines."""
     start_hour = store.day_start_hour()
     today = (now - timedelta(hours=start_hour)).date()
-    day = today.isoformat()
+    ended = today - timedelta(days=1)
+    closed = store.auto_closed()
+    closing = closed is not None and closed < ended.toordinal()
     habits = store.habits()
-    answers, wrote, problems = {}, [], []
+    answers, wrote, problems, settled = {}, [], [], True
     for rule in rules:
         source = AUTO_SOURCES.get(rule.get("from"))
         uuid = auto_habit(habits, str(rule.get("habit", "")))
@@ -936,32 +963,39 @@ def auto_round(store, rules, fetch, now):
             problems.append(f"no {'source' if source is None else 'yes/no habit'} for rule {rules.index(rule) + 1}")
             continue
         path, ranged, test = source
-        stored = store.entry(uuid, day)
-        if stored and stored["value"] in (YES_AUTO, YES_MANUAL, SKIP):
-            continue
-        if path not in answers:
-            query = f"?from={day}&to={(today + timedelta(days=1)).isoformat()}" if ranged else ""
-            try:
-                answers[path] = fetch(path + query)
-            except Exception as e:  # the hub is down or refuses: nothing is known
-                answers[path] = None
-                problems.append(f"{rule.get('from')}: {e}")
-        answer = answers[path]
-        if not isinstance(answer, dict):
-            continue
-        try:
-            met = test(answer, *auto_window(today, start_hour), rule, now.astimezone())
-        except (ValueError, TypeError, AttributeError) as e:
-            problems.append(f"{rule.get('from')}: {e}")
-            continue
-        if not met:
-            continue
-        entry = {"habit": uuid, "date": day, "value": YES_MANUAL,
-                 "notes": stored["notes"] if stored else "", "mtime": int(now.timestamp() * 1000)}
-        if stored:
-            entry["baseSeq"] = stored["seq"]
-        if store.apply({"entries": [entry]})["accepted"]["entries"]:
-            wrote.append(f"{rule.get('from')} {day} yes")
+        for day in [today] + ([ended] if closing and rule.get("missed") == "no" else []):
+            over = day != today
+            stored = store.entry(uuid, day.isoformat())
+            value = stored["value"] if stored else UNKNOWN
+            if value in (YES_AUTO, YES_MANUAL, SKIP) or (over and value != UNKNOWN):
+                continue
+            asked = path + (f"?from={day.isoformat()}&to={(day + timedelta(days=1)).isoformat()}" if ranged else "")
+            if asked not in answers:
+                try:
+                    answers[asked] = fetch(asked)
+                except Exception as e:  # the hub is down or refuses: nothing is known
+                    answers[asked] = None
+                    problems.append(f"{rule.get('from')}: {e}")
+            met = None
+            if isinstance(answers[asked], dict):
+                try:
+                    met = test(answers[asked], *auto_window(day, start_hour), rule, now.astimezone())
+                except (ValueError, TypeError, AttributeError) as e:
+                    problems.append(f"{rule.get('from')}: {e}")
+            if met is None:
+                settled = settled and not over
+                continue
+            if not met and not over:
+                continue
+            new = YES_MANUAL if met else NO
+            entry = {"habit": uuid, "date": day.isoformat(), "value": new,
+                     "notes": stored["notes"] if stored else "", "mtime": int(now.timestamp() * 1000)}
+            if stored:
+                entry["baseSeq"] = stored["seq"]
+            if store.apply({"entries": [entry]})["accepted"]["entries"]:
+                wrote.append(f"{rule.get('from')} {day.isoformat()} {'yes' if met else 'no'}")
+    if closed is None or (closing and settled):
+        store.set_auto_closed(ended.toordinal())
     return wrote, problems
 
 

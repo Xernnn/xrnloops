@@ -123,6 +123,64 @@ class AutoTest(unittest.TestCase):
         self.assertEqual({"/api/v1/calendar?from=2026-11-14&to=2026-11-15", "/api/v1/money/transactions?from=2026-11-14&to=2026-11-15",
                           "/api/v1/health/weight?from=2026-11-14&to=2026-11-15"}, set(self.asked), "only today is asked about")
 
+    SCALE = [{"habit": "scale", "from": "weight", "missed": "no"}, {"habit": "spend", "from": "money"}]
+    NOTHING = {"/api/v1/health/weight": {"weighings": []}, "/api/v1/money/transactions": {"transactions": []}}
+
+    def next_morning(self, minute=5):
+        return datetime.datetime(2026, 11, 15, self.START, minute)
+
+    def test_a_missed_day_becomes_no_as_it_ends_where_the_rule_says(self):
+        self.round(self.SCALE, self.NOTHING)
+        self.assertIsNone(self.value("scale", "2026-11-14"), "not while it is today")
+        self.asked.clear()
+        wrote, _ = self.round(self.SCALE, self.NOTHING, now=self.next_morning())
+        self.assertEqual(["weight 2026-11-14 no"], wrote)
+        self.assertEqual(NO, self.value("scale", "2026-11-14"))
+        self.assertIsNone(self.value("spend", "2026-11-14"), "a rule that doesn't say so stays unanswered")
+        self.assertIn("/api/v1/health/weight?from=2026-11-14&to=2026-11-15", self.asked)
+        self.assertNotIn("/api/v1/money/transactions?from=2026-11-14&to=2026-11-15", self.asked)
+
+    def test_a_weighing_in_the_days_last_minutes_closes_it_as_a_tick(self):
+        self.round(self.SCALE, self.NOTHING)
+        late = {**self.NOTHING, "/api/v1/health/weight": {"weighings": [{"at": self.at(15, 2, 59)}]}}
+        self.round(self.SCALE, late, now=self.next_morning())
+        self.assertEqual(YES_MANUAL, self.value("scale", "2026-11-14"))
+
+    def test_a_day_is_closed_once_and_what_is_made_of_it_afterwards_stays(self):
+        self.round(self.SCALE, self.NOTHING)
+        self.round(self.SCALE, self.NOTHING, now=self.next_morning())
+        # Cleared by hand, and the scale's record arrives late: neither brings the day back.
+        self.store.apply({"entries": [{"habit": "scale", "date": "2026-11-14", "value": -1, "notes": "", "mtime": 2_000_000_000_000}]})
+        late = {**self.NOTHING, "/api/v1/health/weight": {"weighings": [{"at": self.at(14, 22)}]}}
+        self.asked.clear()
+        self.assertEqual(([], []), self.round(self.SCALE, late, now=self.next_morning(9)))
+        self.assertEqual(-1, self.value("scale", "2026-11-14"))
+        self.assertNotIn("/api/v1/health/weight?from=2026-11-14&to=2026-11-15", self.asked, "it isn't even asked about")
+
+    def test_closing_leaves_what_was_entered_by_hand(self):
+        self.round(self.SCALE, self.NOTHING)
+        self.store.apply({"entries": [{"habit": "scale", "date": "2026-11-14", "value": SKIP, "notes": "", "mtime": 5}]})
+        self.assertEqual(([], []), self.round(self.SCALE, self.NOTHING, now=self.next_morning()))
+        self.assertEqual(SKIP, self.value("scale", "2026-11-14"))
+
+    def test_days_from_before_it_ran_are_not_closed(self):
+        # Turned on today: yesterday was missed and stays unanswered. Only from now.
+        self.assertEqual(([], []), self.round(self.SCALE, self.NOTHING))
+        self.assertIsNone(self.value("scale", "2026-11-13"))
+        # Down for two days: the day that just ended is closed, the one before it is not.
+        self.round(self.SCALE, self.NOTHING, now=datetime.datetime(2026, 11, 17, 8, 0))
+        self.assertEqual(NO, self.value("scale", "2026-11-16"))
+        self.assertIsNone(self.value("scale", "2026-11-15"))
+        self.assertIsNone(self.value("scale", "2026-11-14"))
+
+    def test_a_closing_the_hub_cannot_answer_is_tried_again(self):
+        self.round(self.SCALE, self.NOTHING)
+        down = {**self.NOTHING, "/api/v1/health/weight": OSError("refused")}
+        self.round(self.SCALE, down, now=self.next_morning())
+        self.assertIsNone(self.value("scale", "2026-11-14"), "not knowing isn't a missed day")
+        self.round(self.SCALE, self.NOTHING, now=self.next_morning(7))
+        self.assertEqual(NO, self.value("scale", "2026-11-14"))
+
     def test_an_unmet_day_is_left_as_it_is(self):
         nothing = {"/api/v1/health/weight": {"weighings": []}}
         self.assertEqual(([], []), self.round([{"habit": "scale", "from": "weight"}], nothing))
