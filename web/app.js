@@ -1035,6 +1035,18 @@ function listLayout() {
 /** Monday-based week of a day, for the gap between weeks. */
 const weekOf = (day) => day - ((L.dayDate(day).getUTCDay() + 6) % 7);
 
+/** The list's day columns' heads. Only the number of a marked day (the 1st, the 15th) is marked. */
+function listHeads(order, gaps, today, months) {
+  return order.map((d, i) => {
+    const date = L.dayDate(d);
+    const monthStarts = date.getUTCDate() === 1 || (i === 0 && months);
+    return h("div", { class: "day" + (d === today ? " today" : "") + (gaps[i] ? " wk" : "") },
+      monthStarts && h("span", { class: "mo" }, monthShort.format(date).toUpperCase()),
+      h("span", { class: "wd" }, weekdayShort.format(date).toUpperCase()),
+      h("span", { class: "dn" + (L.markedDay(d) ? " mark" : "") }, date.getUTCDate()));
+  });
+}
+
 function listView() {
   const today = L.todayNum();
   const lay = listLayout();
@@ -1046,14 +1058,7 @@ function listView() {
   const head = h("div", { class: "lrow head" },
     h("div", { class: "who" }, h("span", { class: "today-label" }, h("b", {}, "Today"), lay.name >= 170 && dateDay.format(L.dayDate(today)))),
     lay.nums && h("div", { class: "nums" }, h("span", {}, "SCORE"), h("span", {}, "STREAK")),
-    h("div", { class: "days" }, order.map((d, i) => {
-      const date = L.dayDate(d);
-      const monthStarts = date.getUTCDate() === 1 || (i === 0 && lay.days > 7);
-      return h("div", { class: "day" + (d === today ? " today" : "") + (gaps[i] ? " wk" : "") },
-        monthStarts && h("span", { class: "mo" }, monthShort.format(date).toUpperCase()),
-        h("span", { class: "wd" }, weekdayShort.format(date).toUpperCase()),
-        h("span", { class: "dn" }, date.getUTCDate()));
-    })));
+    h("div", { class: "days" }, listHeads(order, gaps, today, lay.days > 7)));
 
   const anyArchived = [...state.habits.values()].some((x) => !x.deleted && x.data.archived);
   const list = habits.length
@@ -2320,7 +2325,7 @@ function reviewSummary(week, before) {
 function dayHeads(days, today) {
   return days.map((d) => h("div", { class: "wk-day" + (d === today ? " today" : "") + (d > today ? " future" : "") },
     h("span", {}, weekdayShort.format(L.dayDate(d)).toUpperCase()),
-    h("b", {}, L.dayDate(d).getUTCDate())));
+    h("b", { class: L.markedDay(d) ? "mark" : null }, L.dayDate(d).getUTCDate())));
 }
 
 /** One habit's day: a block in its colour, joined to the day before and after when both are done. */
@@ -2471,4 +2476,4 @@ async function boot() {
 boot();
 
 // For web/test, which runs this file under node on stand-ins for a browser.
-export { blocksWeek, checkChoices, distinctEvents, formHabit, ingest, loginView, numberChoices, numberSheet, prefs, settingsPanel, signIn, state, tapDay, weekReview, weekScore };
+export { blocksWeek, checkChoices, dayHeads, distinctEvents, formHabit, listHeads, ingest, loginView, numberChoices, numberSheet, prefs, settingsPanel, signIn, state, tapDay, weekReview, weekScore };

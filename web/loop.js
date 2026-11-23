@@ -59,6 +59,12 @@ export function dayDate(n) {
   return new Date(n * DAY_MS);
 }
 
+/** The days a day header marks: the 1st and the 15th of every month, as on the phone (isMarkedDay). */
+export function markedDay(n) {
+  const date = dayDate(n).getUTCDate();
+  return date === 1 || date === 15;
+}
+
 function monthLength(n) {
   const d = dayDate(n);
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
