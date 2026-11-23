@@ -210,6 +210,11 @@ button.unlock:hover { opacity: 0.7; }
 .day .dn { display: block; font-size: 15px; font-weight: 700; color: var(--muted); }
 .day.today .wd, .day.today .dn { color: var(--text); }
 .day.today::after { content: ""; position: absolute; left: 50%; bottom: -3px; width: 18px; height: 3px; margin-left: -9px; border-radius: 2px; background: var(--accent); }
+/* The 1st and the 15th: a marker behind the number only. The ring is a shadow, so the row keeps its height. */
+.day .dn.mark, .wk-head .wk-day b.mark {
+  display: inline-block; padding: 0 7px; border-radius: 999px; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 25%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
 .day .mo { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; }
 
 /* A day: Loop's glyphs in the habit's colour (--c), drawn as the phone draws them. */

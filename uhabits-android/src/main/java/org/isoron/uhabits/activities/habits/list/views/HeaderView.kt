@@ -31,6 +31,7 @@ import org.isoron.platform.time.getToday
 import org.isoron.uhabits.R
 import org.isoron.uhabits.activities.common.views.ScrollableChart
 import org.isoron.uhabits.core.preferences.Preferences
+import org.isoron.uhabits.core.ui.screens.habits.list.isMarkedDay
 import org.isoron.uhabits.core.utils.MidnightTimer
 import org.isoron.uhabits.utils.dim
 import org.isoron.uhabits.utils.dp
@@ -100,6 +101,11 @@ class HeaderView(
         setScrollDirection(direction)
     }
 
+    private companion object {
+        /** How strong the marker's fill is: the accent at a quarter. */
+        const val MARK_FILL_ALPHA = 0x40 shl 24
+    }
+
     private inner class Drawer {
         private val rect = RectF()
         private val dateFormatter = JavaLocalDateFormatter(Locale.getDefault())
@@ -111,6 +117,10 @@ class HeaderView(
             typeface = XrnFonts.bold(context) // xrnloops: MiSans (XRNLOOPS.md)
             color = sres.getColor(R.attr.contrast60)
         }
+
+        // xrnloops: the 1st and the 15th wear a marker behind their number (XRNLOOPS.md).
+        private val markRect = RectF()
+        private val markPaint = Paint().apply { isAntiAlias = true }
 
         fun draw(canvas: Canvas) {
             val today = getToday()
@@ -147,6 +157,15 @@ class HeaderView(
                 val y1 = rect.centerY() - 0.25 * em
                 val y2 = rect.centerY() + 1.25 * em
                 canvas.drawText(dayOfWeek, rect.centerX(), y1.toFloat(), paint)
+                if (date.isMarkedDay()) {
+                    // Only the number: the weekday keeps its colour, and today its brightness.
+                    val accent = sres.getColor(R.attr.colorAccent)
+                    val middle = y2.toFloat() + (paint.ascent() + paint.descent()) / 2
+                    markRect.set(rect.centerX() - 1.1f * em, middle - 0.8f * em, rect.centerX() + 1.1f * em, middle + 0.8f * em)
+                    markPaint.color = accent and 0x00FFFFFF or MARK_FILL_ALPHA
+                    canvas.drawRoundRect(markRect, markRect.height() / 2, markRect.height() / 2, markPaint)
+                    paint.color = accent
+                }
                 canvas.drawText(dayOfMonth, rect.centerX(), y2.toFloat(), paint)
             }
         }
