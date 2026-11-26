@@ -145,6 +145,16 @@
                 android:title="@string/xrnsync_now"
                 app:iconSpaceReserved="false" />
 
+        <Preference
+                android:key="xrnsync_autostart"
+                android:title="@string/xrnsync_autostart"
+                app:iconSpaceReserved="false" />
+
+        <Preference
+                android:key="xrnsync_battery"
+                android:title="@string/xrnsync_battery"
+                app:iconSpaceReserved="false" />
+
     </PreferenceCategory>
 
     <PreferenceCategory

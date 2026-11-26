@@ -102,8 +102,22 @@ object XrnSyncPreferences {
             }
             true
         }
+        fragment.findPreference(KEY_AUTOSTART)?.setOnPreferenceClickListener { pref ->
+            XrnBackground.openAutostart(pref.context)
+            true
+        }
+        fragment.findPreference(KEY_BATTERY)?.setOnPreferenceClickListener { pref ->
+            XrnBackground.askBattery(pref.context)
+            true
+        }
         refresh(fragment)
     }
+
+    /** Back on the settings screen (from the Autostart or Battery page): show what they say now. */
+    fun resumed(fragment: PreferenceFragmentCompat) = refresh(fragment)
+
+    private const val KEY_AUTOSTART = "xrnsync_autostart"
+    private const val KEY_BATTERY = "xrnsync_battery"
 
     private fun changed(fragment: PreferenceFragmentCompat, sync: XrnSync) {
         sync.requestSync(500)
@@ -112,6 +126,15 @@ object XrnSyncPreferences {
     }
 
     private fun refresh(fragment: PreferenceFragmentCompat) {
+        fragment.findPreference(KEY_AUTOSTART)?.let { pref ->
+            // Only Xiaomi's can be read; elsewhere the row isn't shown.
+            val on = XrnBackground.autostart(pref.context)
+            pref.isVisible = on != null
+            pref.setSummary(if (on == true) R.string.xrnsync_on else R.string.xrnsync_off)
+        }
+        fragment.findPreference(KEY_BATTERY)?.let { pref ->
+            pref.setSummary(if (XrnBackground.batteryExempt(pref.context)) R.string.xrnsync_unrestricted else R.string.xrnsync_restricted)
+        }
         val settings = XrnSync.instance?.settings ?: return
         val password = fragment.findPreference(XrnSyncSettings.KEY_PASSWORD)
         password?.setSummary(if (settings.password.isEmpty()) R.string.xrnsync_password_unset else R.string.xrnsync_password_set)

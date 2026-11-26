@@ -161,6 +161,7 @@ class SettingsFragment : PreferenceFragmentCompat(), OnSharedPreferenceChangeLis
         ringtoneManager = RingtoneManager(requireActivity())
         sharedPrefs = preferenceManager.sharedPreferences
         sharedPrefs!!.registerOnSharedPreferenceChangeListener(this)
+        XrnSyncPreferences.resumed(this) // xrnloops: Autostart and Battery, as they are now
         if (!prefs.isDeveloper) {
             val devCategory = findPreference("devCategory") as PreferenceCategory
             devCategory.isVisible = false
