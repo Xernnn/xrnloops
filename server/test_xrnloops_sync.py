@@ -209,7 +209,25 @@ class AutoTest(unittest.TestCase):
         self.round([{"habit": "scale", "from": "weight"}], {"/api/v1/health/weight": {"weighings": [{"at": self.at(14, 8)}]}})
         changed = self.store.changes(seq)["entries"]
         self.assertEqual([("scale", "2026-11-14", YES_MANUAL)], [(e["habit"], e["date"], e["value"]) for e in changed])
-        self.assertEqual(int(self.now.timestamp() * 1000), changed[0]["mtime"])
+        self.assertEqual(int(datetime.datetime(2026, 11, 14, self.START).timestamp() * 1000), changed[0]["mtime"], "stamped at the day's start")
+
+    def test_a_hand_entry_made_offline_before_the_tick_still_wins(self):
+        # 08:30 on the phone, without signal: the day set to "skip". 09:02: the server ticks it.
+        made = int(datetime.datetime(2026, 11, 14, 8, 30).timestamp() * 1000)
+        self.round([{"habit": "scale", "from": "weight"}], {"/api/v1/health/weight": {"weighings": [{"at": self.at(14, 9)}]}},
+                   now=datetime.datetime(2026, 11, 14, 9, 2))
+        self.assertEqual(YES_MANUAL, self.value("scale", "2026-11-14"))
+        # 10:00: the phone's entry arrives, with no baseSeq, as the phone and the web app send them.
+        result = self.store.apply({"entries": [{"habit": "scale", "date": "2026-11-14", "value": SKIP, "notes": "", "mtime": made}]})
+        self.assertEqual(1, len(result["accepted"]["entries"]))
+        self.assertEqual(SKIP, self.value("scale", "2026-11-14"))
+
+    def test_a_tick_over_a_no_is_stamped_just_past_it(self):
+        late = int(datetime.datetime(2026, 11, 14, 20, 0).timestamp() * 1000)
+        self.store.apply({"entries": [{"habit": "scale", "date": "2026-11-14", "value": NO, "notes": "", "mtime": late}]})
+        self.round([{"habit": "scale", "from": "weight"}], {"/api/v1/health/weight": {"weighings": [{"at": self.at(14, 8)}]}})
+        entry = self.store.entry("scale", "2026-11-14")
+        self.assertEqual((YES_MANUAL, late + 1), (entry["value"], entry["mtime"]))
 
     def test_the_calendar_ticks_at_eight_hours_counting_overlaps_once(self):
         def events(*spans):
