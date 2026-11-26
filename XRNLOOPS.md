@@ -146,6 +146,13 @@ next to the users file, which xrnrule-sync shares, so one sign-in covers both pa
 password ends every session. Signing out ends that one cookie on every server that takes it
 (since 2026-11-18): its SHA-256 goes on `signed-out.json` beside `session.key`, which xrnhub,
 xrnrule-sync and xrninsta also write to (under an flock on `signed-out.json.lock`) and refuse.
+A device may sign in with a device token instead of the password (since 2026-11-26):
+`Authorization: Bearer xrndev_<id>_<secret>`, a login of its own that the server's owner makes
+for one device and the services it uses, and revokes on its own. The tokens are in
+`device-tokens.json` beside the users file, as a SHA-256 of each secret, read again whenever it
+changes; a token for other services only gets 403, a wrong one counts as a wrong password, and
+none can be traded for the web app's cookie. When each was last used goes to
+`device-seen/xrnloops.json` beside it, at most every 10 minutes.
 Every answer carries `X-Frame-Options: DENY`, `nosniff`,
 `no-referrer` and a CSP that runs only the web app's own files (index.html's inline script by
 hash, worked out at start), and gzip bodies are unpacked only up to the 32 MB limit.
