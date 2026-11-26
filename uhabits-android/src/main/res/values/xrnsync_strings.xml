@@ -13,6 +13,12 @@
     <string name="xrnsync_never">Not synced yet</string>
     <string name="xrnsync_running">Syncing…</string>
     <string name="xrnsync_last">%1$s · %2$s</string>
+    <string name="xrnsync_autostart">Autostart</string>
+    <string name="xrnsync_battery">Battery</string>
+    <string name="xrnsync_on">On</string>
+    <string name="xrnsync_off">Off</string>
+    <string name="xrnsync_unrestricted">Unrestricted</string>
+    <string name="xrnsync_restricted">Restricted</string>
 
     <!-- The habit list's toolbar while sync is failing. -->
     <string name="xrnsync_trouble">Sync isn\'t working</string>

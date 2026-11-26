@@ -60,8 +60,8 @@ android {
     }
 
     defaultConfig {
-        versionCode = 20309
-        versionName = "2.3.9"
+        versionCode = 20310
+        versionName = "2.3.10"
         minSdk = 28
         targetSdk = 36
         // xrnloops: its own app id so it installs next to the store Loop (XRNLOOPS.md).
@@ -180,4 +180,29 @@ dependencies {
     testImplementation(libs.json)
     // xrnloops: the number sheet drawn and driven in a JVM test, with no phone (NumberSheetShotsTest).
     testImplementation(libs.robolectric)
+}
+
+// xrnloops: the Android jar Robolectric runs the tests on comes through Gradle, which retries and
+// caches it with everything else (and CI's setup-gradle keeps that cache), and Robolectric runs
+// offline. Left to fetch it from Maven Central itself during the run, it failed 3 of 40 CI runs on
+// a network blip (MavenArtifactFetcher, 2026-11). The versions are the ones Robolectric (libs.versions
+// "robolectric") pairs with SDK 34 (the tests' @Config) and SDK 35 (the target, for the rest); a new
+// Robolectric may want others, and then says which jar it couldn't find.
+// One configuration each: in one, Gradle would settle the two versions of the same jar on the later.
+val robolectricJarVersions = listOf("14-robolectric-10818077-i7", "15-robolectric-12650502-i7")
+val robolectricAndroid = robolectricJarVersions.map { version ->
+    configurations.create("robolectricAndroid-$version") { isTransitive = false }.also {
+        dependencies.add(it.name, "org.robolectric:android-all-instrumented:$version")
+    }
+}
+
+val robolectricJars = tasks.register<Sync>("robolectricJars") {
+    robolectricAndroid.forEach { from(it) }
+    into(layout.buildDirectory.dir("robolectric-jars"))
+}
+
+tasks.withType<Test>().configureEach {
+    dependsOn(robolectricJars)
+    systemProperty("robolectric.offline", "true")
+    systemProperty("robolectric.dependency.dir", layout.buildDirectory.dir("robolectric-jars").get().asFile.path)
 }

@@ -1134,8 +1134,13 @@ def auto_round(store, rules, fetch, now):
             if not met and not over:
                 continue
             new = YES_MANUAL if met else NO
+            # Stamped at the start of the habit day (or just past what is stored), not now: a
+            # hand entry for the day made on a device that was offline arrives later with an
+            # earlier mtime, and it must still win, as "never over a tick or a skip" says.
+            # baseSeq keeps this write from beating what the server already has.
+            since = int(auto_window(day, start_hour)[0].timestamp() * 1000)
             entry = {"habit": uuid, "date": day.isoformat(), "value": new,
-                     "notes": stored["notes"] if stored else "", "mtime": int(now.timestamp() * 1000)}
+                     "notes": stored["notes"] if stored else "", "mtime": max(since, stored["mtime"] + 1 if stored else since)}
             if stored:
                 entry["baseSeq"] = stored["seq"]
             if store.apply({"entries": [entry]})["accepted"]["entries"]:
